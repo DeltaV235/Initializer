@@ -6,6 +6,8 @@
 
 PWD=$(pwd)
 
-source assets/00-assets-index.sh
+source 100-assets/00-assets-index.sh
+
+source 101-get-system-info/00-get-system-info-main.sh
 
 bash ./01-change-package-download-mirror-to-local.sh
