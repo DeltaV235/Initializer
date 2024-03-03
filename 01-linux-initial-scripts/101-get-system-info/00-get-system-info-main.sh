@@ -18,4 +18,4 @@ source "${PWD}"/101-get-system-info/03-get-cpu-info.sh
 # shellcheck source=./04-get-memory-info.sh
 source "${PWD}"/101-get-system-info/04-get-memory-info.sh
 
-echo -e "${LIGHT_BLUE}--------------------------------------------------------------------------${NC}"
+echo -e "${LIGHT_BLUE}${DIVIDING_LINE}${NC}"
