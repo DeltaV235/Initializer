@@ -6,3 +6,4 @@
 
 # shellcheck source=./01-ansi-escape-code.sh
 source "${PWD}"/100-assets/01-ansi-escape-code.sh
+source "${PWD}"/100-assets/02-constant.sh
