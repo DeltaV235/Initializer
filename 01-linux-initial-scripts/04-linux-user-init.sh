@@ -2,7 +2,7 @@
 
 ### description: create user by input username
 ### create time: 2020-10-01 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 # import terminal color
 source assets/00-assets-index.sh

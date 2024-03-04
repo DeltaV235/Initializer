@@ -1,8 +1,8 @@
 #!/bin/bash
 
-### description: get cpu information
+### description: get cpu information, including model name and processors
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 if [[ ${OS_NAME} == *"macOS"* ]]; then
   CPU_INFO_STRING_FOR_MACOS=$(sysctl -a | grep machdep.cpu)

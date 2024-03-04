@@ -1,8 +1,8 @@
 #!/bin/bash
 
-### description: get distribution name
+### description: get package manager
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 if [[ $(echo "${OS_NAME}" | awk '{print tolower($0)}' | grep "^ubuntu") ]]; then
   PACKAGE_MANAGER="apt"

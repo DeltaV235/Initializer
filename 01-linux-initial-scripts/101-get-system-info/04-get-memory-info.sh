@@ -1,9 +1,8 @@
 #!/bin/bash
 
-### script name: 05-get-memory-info.sh
 ### description: get memory information
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 if [[ ${OS_NAME} == *"macOS"* ]]; then
   MEMORY_SIZE=$(sysctl hw.memsize | cut -d " " -f2)

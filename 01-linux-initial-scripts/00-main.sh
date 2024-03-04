@@ -2,7 +2,7 @@
 
 ### description: main script, the entry point of program
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 PWD=$(pwd)
 

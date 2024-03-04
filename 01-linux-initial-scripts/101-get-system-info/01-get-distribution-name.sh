@@ -2,7 +2,7 @@
 
 ### description: get distribution name
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 KERNEL_NAME=$(uname -s)
 if [ "$KERNEL_NAME" == "Darwin" ]; then

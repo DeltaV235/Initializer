@@ -1,8 +1,8 @@
 #!/bin/bash
 
-### description: get system info
+### description: get system information
 ### create time: 2020-10-03 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 echo -e "${LIGHT_BLUE}--------------------------- SYSTEM INFORMATION ---------------------------${NC}"
 

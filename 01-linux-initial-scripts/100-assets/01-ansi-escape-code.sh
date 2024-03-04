@@ -1,8 +1,8 @@
 #!/bin/bash
 
-### description: ansi escape
+### description: ansi escape code
 ### create time: 2020-10-02 (yyyy-MM-dd)
-### author: deltaV235
+### author: DeltaV235
 
 BLACK="\033[0;30m"
 RED="\033[0;31m"
