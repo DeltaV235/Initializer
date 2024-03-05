@@ -10,6 +10,8 @@ elif [[ $(echo "${OS_NAME}" | awk '{print tolower($0)}' | grep "^centos") ]]; th
   PACKAGE_MANAGER="yum"
 elif [ "$(command -v brew)" ]; then
   PACKAGE_MANAGER="brew"
+else
+  PACKAGE_MANAGER="unknown"
 fi
 
 echo -e "${LIGHT_CYAN}Package Manager: ${NC}${PACKAGE_MANAGER}"
