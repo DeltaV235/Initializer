@@ -14,7 +14,13 @@ complete_break() {
   clear
 }
 
-source 100-assets/00-assets-index.sh
+# import terminal color and constants
+source 00-assets/00-assets-index.sh
+
+# init check
+if [ "$(command -v brew)" ]; then
+  BREW_INSTALLED_LABEL=" ${LIGHT_GREEN}(Installed)${NC}"
+fi
 
 bash ./01-change-package-download-mirror-to-local.sh
 
@@ -24,6 +30,11 @@ clear
 
 echo -e "${BLUE}${DIVIDING_LINE}${NC}"
 echo "1. System Information"
+echo -e "2. Install Package Manager(Homebrew)""${BREW_INSTALLED_LABEL}"
+echo "3. Change Package Manager Source"
+echo "4. Create User"
+echo "5. Install Package by Package Manager"
+echo "6. Personal Configurations"
 echo -e "${BLUE}${DIVIDING_LINE}${NC}"
 echo "0. Update Shell Script"
 echo -e "${BLUE}${DIVIDING_LINE}${NC}"
