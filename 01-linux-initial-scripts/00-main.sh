@@ -34,7 +34,7 @@ read -p "Please enter the number you want to execute: " choice
 case $choice in
   1)
     clear
-    source 101-get-system-info/00-get-system-info-main.sh
+    source 01-get-system-info/00-get-system-info-main.sh
     ;;
   x)
     clear
