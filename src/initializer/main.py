@@ -10,11 +10,8 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from app import InitializerApp
-from config_manager import ConfigManager
+from .app import InitializerApp
+from .config_manager import ConfigManager
 
 
 console = Console()

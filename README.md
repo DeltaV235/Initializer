@@ -29,7 +29,7 @@ cd Initializer
 2. **Run the setup script:**
 
 ```bash
-./setup.sh
+./install.sh
 ```
 
 3. **Launch the application:**

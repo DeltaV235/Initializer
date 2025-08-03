@@ -62,7 +62,7 @@
 
 ### ✅ 部署工具
 
-- [x] 自动安装脚本 (setup.sh)
+- [x] 自动安装脚本 (install.sh)
 - [x] 运行脚本 (run.sh)
 - [x] 依赖管理 (requirements.txt)
 - [x] 项目配置 (pyproject.toml)
@@ -148,7 +148,7 @@
 
 ```bash
 # 1. 设置环境
-./setup.sh
+./install.sh
 
 # 2. 运行应用
 ./run.sh
@@ -283,7 +283,7 @@ ls -la config/
 
 ```bash
 # 确保脚本可执行
-chmod +x setup.sh run.sh
+chmod +x install.sh run.sh
 ```
 
 ## 📈 性能优化

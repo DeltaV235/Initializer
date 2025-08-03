@@ -4,7 +4,7 @@
 
 ### ⚠️ NEVER RUN SCRIPTS LOCALLY
 - **NEVER** execute any project scripts on the local development machine
-- **NEVER** run ./setup.sh, ./run.sh, or python main.py locally
+- **NEVER** run ./install.sh, ./run.sh, or python main.py locally
 - **NEVER** install dependencies or create virtual environments locally
 - **NEVER** suggest running any project scripts on the local machine
 
@@ -32,7 +32,7 @@ ssh root@192.168.0.33
 
 # Then execute in remote environment
 cd ~/Initializer
-./setup.sh
+./install.sh
 ./run.sh
 python main.py
 ```
@@ -48,17 +48,17 @@ python main.py
 - src/ - Python source code (edit locally)
 - config/ - YAML configuration files (edit locally)
 - legacy/ - Old bash scripts (reference only)
-- setup.sh, run.sh, main.py - Executable scripts (REMOTE ONLY)
+- install.sh, run.sh, main.py - Executable scripts (REMOTE ONLY)
 
 ### File Types by Location
 - **Local editing**: .py, .yaml, .md, .sh source files
-- **Remote execution**: setup.sh, run.sh, main.py
+- **Remote execution**: install.sh, run.sh, main.py
 - **Documentation**: README.md, DEVELOPMENT.md
 
 ## 🚫 FORBIDDEN ACTIONS
 
 ### Never suggest these commands:
-- `./setup.sh` (locally)
+- `./install.sh` (locally)
 - `./run.sh` (locally) 
 - `python main.py` (locally)
 - `pip install -r requirements.txt` (locally)
@@ -68,7 +68,7 @@ python main.py
 ### Always suggest instead:
 1. Sync to remote: `rsync -avz ... root@192.168.0.33:~/Initializer/`
 2. SSH to remote: `ssh root@192.168.0.33`
-3. Execute remotely: `cd ~/Initializer && ./setup.sh`
+3. Execute remotely: `cd ~/Initializer && ./install.sh`
 
 ## 📚 PROJECT CONTEXT
 

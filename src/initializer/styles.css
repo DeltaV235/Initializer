@@ -10,11 +10,11 @@ Screen {
 #title {
     dock: top;
     width: 100%;
-    height: 3;
+    height: 1;
     content-align: center middle;
+    text-align: center;
     text-style: bold;
     color: $accent;
-    background: $surface;
 }
 
 #subtitle {
@@ -23,7 +23,6 @@ Screen {
     height: 1;
     content-align: center middle;
     color: $text-muted;
-    background: $surface;
 }
 
 /* Main container */
@@ -35,6 +34,34 @@ Screen {
 #content-area {
     layout: horizontal;
     height: 1fr;
+}
+
+/* Left panel styles */
+#left-panel {
+    width: 40%;
+    min-width: 30;
+    border-right: solid $primary;
+    padding-right: 1;
+}
+
+/* Right panel styles */
+#right-panel {
+    width: 60%;
+    min-width: 40;
+    padding-left: 1;
+}
+
+#submenu-content {
+    height: 1fr;
+    padding: 1;
+    border: solid $secondary;
+    background: $surface;
+}
+
+/* Left panel button styles */
+#left-panel Button {
+    width: 100%;
+    margin-bottom: 1;
 }
 
 /* Panel styles */
@@ -81,8 +108,8 @@ Button {
 }
 
 Button.-primary {
-    background: $primary;
-    color: $text;
+    color: $accent;
+    text-style: bold;
 }
 
 Button.-error {
@@ -136,14 +163,3 @@ Footer {
     color: $text;
 }
 
-/* Responsive design */
-@media (max-width: 80) {
-    #content-area {
-        layout: vertical;
-    }
-    
-    #menu-panel, #status-panel, #side-panel {
-        width: 100%;
-        height: auto;
-    }
-}

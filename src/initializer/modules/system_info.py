@@ -109,7 +109,7 @@ class SystemInfoModule:
                     lines = f.readlines()
                     for line in lines:
                         if "model name" in line:
-                            info["Model"] = line.split(":")[1].strip()
+                            info["CPU Model"] = line.split(":")[1].strip()
                             break
                         if "cpu cores" in line:
                             info["CPU Cores"] = line.split(":")[1].strip()
@@ -259,7 +259,7 @@ class SystemInfoModule:
         if EXTENDED_INFO_AVAILABLE:
             cpu_usage = psutil.cpu_percent(interval=0.1)
             mem_usage = psutil.virtual_memory().percent
-            lines.append(f"CPU: {psutil.cpu_count()} cores ({cpu_usage:.1f}% used)")
+            lines.append(f"CPU: {psutil.cpu_count()} Cores ({cpu_usage:.1f}% used)")
             lines.append(f"Memory: {mem_usage:.1f}% used")
             
             disk_usage = psutil.disk_usage('/').percent
@@ -272,9 +272,9 @@ class SystemInfoModule:
         return "\n".join(lines)
     
     def _format_bytes(self, bytes_value: int) -> str:
-        """Format bytes into human readable format."""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        """Format bytes into human readable format using binary units."""
+        for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
             if bytes_value < 1024.0:
                 return f"{bytes_value:.1f} {unit}"
             bytes_value /= 1024.0
-        return f"{bytes_value:.1f} PB"
+        return f"{bytes_value:.1f} PiB"

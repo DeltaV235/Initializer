@@ -10,7 +10,7 @@
 **此项目严格要求远端执行！所有脚本必须在远端服务器 192.168.0.33 上运行。**
 
 ### 禁止本地执行
-- ❌ ./setup.sh
+- ❌ ./install.sh
 - ❌ ./run.sh  
 - ❌ python main.py
 - ❌ 创建本地虚拟环境
@@ -23,7 +23,7 @@ rsync -avz --exclude='venv/' --exclude='initializer-venv/' ./ root@192.168.0.33:
 # 2. 远端执行
 ssh root@192.168.0.33
 cd ~/Initializer
-./setup.sh
+./install.sh
 ./run.sh
 ```
 
@@ -37,7 +37,7 @@ config/           # YAML 配置文件 (本地编辑)
   ├── app.yaml    # 应用配置
   └── presets/    # 预设配置
 legacy/           # 原始 Bash 脚本 (参考)
-setup.sh          # 安装脚本 (仅远端执行)
+install.sh          # 安装脚本 (仅远端执行)
 run.sh            # 启动脚本 (仅远端执行)
 main.py           # 程序入口 (仅远端执行)
 ```

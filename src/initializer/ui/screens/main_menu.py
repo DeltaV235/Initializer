@@ -20,9 +20,11 @@ class MainMenuScreen(Screen):
         ("4", "user_management", "User Management"),
         ("s", "settings", "Settings"),
         ("q", "quit", "Quit"),
+        ("enter", "select_item", "Select"),
     ]
     
-    system_status = reactive("")
+    selected_item = reactive("")
+    submenu_content = reactive("")
     
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
@@ -35,13 +37,12 @@ class MainMenuScreen(Screen):
         with Container(id="main-container"):
             # Title section
             yield Static(f"🚀 {self.app_config.name}", id="title")
-            yield Static(f"v{self.app_config.version} by {self.app_config.author}", id="subtitle")
             yield Rule()
             
-            # Main content area
+            # Main content area with left-right split
             with Horizontal(id="content-area"):
-                # Left panel - Menu options
-                with Vertical(id="menu-panel"):
+                # Left panel - Main menu
+                with Vertical(id="left-panel"):
                     yield Label("📋 Main Menu", classes="panel-title")
                     
                     if self.modules_config.get("system_info", {}).enabled:
@@ -61,39 +62,17 @@ class MainMenuScreen(Screen):
                     yield Button("❓ Help", id="help")
                     yield Button("❌ Exit", id="exit", variant="error")
                 
-                # Right panel - System status
-                with Vertical(id="status-panel"):
-                    yield Label("📈 System Status", classes="panel-title")
-                    yield Static(self.system_status, id="status-content")
-                    
-                    yield Label("🔧 Quick Actions", classes="panel-title")
-                    yield Button("🔄 Refresh Status", id="refresh", size=Button.size(width=20))
-                    yield Button("💾 Save Config", id="save-config", size=Button.size(width=20))
+                # Right panel - Submenu/Details
+                with Vertical(id="right-panel"):
+                    yield Label("详细信息", classes="panel-title", id="submenu-title")
+                    yield Static(self.submenu_content, id="submenu-content")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
-        self.update_system_status()
+        # Set initial submenu content
+        self.update_submenu_content("system-info")
     
-    def update_system_status(self) -> None:
-        """Update system status information."""
-        try:
-            import platform
-            import psutil
-            
-            # Get basic system information
-            status_lines = [
-                f"OS: {platform.system()} {platform.release()}",
-                f"CPU: {psutil.cpu_count()} cores ({psutil.cpu_percent():.1f}% used)",
-                f"Memory: {psutil.virtual_memory().percent:.1f}% used",
-                f"Disk: {psutil.disk_usage('/').percent:.1f}% used",
-            ]
-            
-            self.system_status = "\n".join(status_lines)
-            
-        except ImportError:
-            self.system_status = "System information unavailable\n(psutil not installed)"
-        except Exception as e:
-            self.system_status = f"Error getting system info:\n{str(e)}"
+
     
     @on(Button.Pressed, "#system-info")
     def action_system_info(self) -> None:
@@ -133,13 +112,71 @@ class MainMenuScreen(Screen):
     def action_exit(self) -> None:
         """Exit the application."""
         self.app.exit()
+    
+    def update_submenu_content(self, option_id: str) -> None:
+        """Update the right panel content based on selected option."""
+        content_map = {
+            "system-info": """**📊 系统信息**
+
+• 查看系统详细信息
+• CPU、内存、磁盘状态
+• 网络接口信息
+• 系统发行版信息
+
+按 Enter 进入系统信息模块""",
+            
+            "homebrew": """**🍺 Homebrew 管理**
+
+• 安装 Homebrew 包管理器
+• 配置国内镜像源
+• 管理已安装包
+• 更新和清理
+
+按 Enter 进入 Homebrew 管理""",
+            
+            "package-manager": """**📦 包管理器**
+
+• 检测系统包管理器
+• 配置软件源镜像
+• 安装常用软件包
+• 系统更新管理
+
+按 Enter 进入包管理器模块""",
+            
+            "user-management": """**👤 用户管理**
+
+• 创建和管理用户账户
+• 配置用户权限
+• SSH 密钥管理
+• 用户组设置
+
+按 Enter 进入用户管理""",
+            
+            "settings": """**⚙️ 设置**
+
+• 应用配置选项
+• 主题和显示设置
+• 模块启用/禁用
+• 导入/导出配置
+
+按 Enter 进入设置""",
+            
+            "help": """**❓ 帮助**
+
+• 使用说明和文档
+• 快捷键列表
+• 常见问题解答
+• 关于信息
+
+按 Enter 查看帮助""",
+            
+            "exit": """**❌ 退出**
+
+• 退出应用程序
+• 保存当前配置
+• 清理临时文件
+
+按 Enter 退出应用程序"""
+        }
         
-    @on(Button.Pressed, "#refresh")
-    def action_refresh(self) -> None:
-        """Refresh system status."""
-        self.update_system_status()
-        
-    @on(Button.Pressed, "#save-config")
-    def action_save_config(self) -> None:
-        """Save current configuration."""
-        self.app.bell()  # Placeholder for save functionality
+        self.submenu_content = content_map.get(option_id, "请选择一个选项查看详细信息")

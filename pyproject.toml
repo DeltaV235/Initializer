@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-initializer = "src.main:main"
+initializer = "initializer.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -32,6 +32,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.black]
 line-length = 88

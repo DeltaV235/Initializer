@@ -10,7 +10,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header
 from textual.screen import Screen
 
-from config_manager import ConfigManager
+from .config_manager import ConfigManager
 
 
 class InitializerApp(App):
@@ -34,7 +34,7 @@ class InitializerApp(App):
         self.config_manager = config_manager
         self.preset = preset
         self.headless = headless
-        self.debug = debug
+        self.debug_mode = debug
         self.console = Console()
         
         # Load configuration
@@ -54,10 +54,10 @@ class InitializerApp(App):
         """Apply a configuration preset."""
         try:
             preset_config = self.config_manager.load_preset(preset_name)
-            if self.debug:
+            if self.debug_mode:
                 self.console.print(f"[green]Applied preset: {preset_name}[/green]")
         except FileNotFoundError:
-            if self.debug:
+            if self.debug_mode:
                 self.console.print(f"[yellow]Preset not found: {preset_name}[/yellow]")
         
     def compose(self) -> ComposeResult:
@@ -68,17 +68,17 @@ class InitializerApp(App):
     def on_mount(self) -> None:
         """Called when app starts."""
         # Push the main screen
-        from ui.screens.main_menu import MainMenuScreen
+        from .ui.screens.main_menu import MainMenuScreen
         self.push_screen(MainMenuScreen(self.config_manager))
         
     async def action_settings(self) -> None:
         """Show settings screen."""
-        from ui.screens.settings import SettingsScreen
+        from .ui.screens.settings import SettingsScreen
         self.push_screen(SettingsScreen(self.config_manager))
         
     async def action_help(self) -> None:
         """Show help screen."""
-        from ui.screens.help import HelpScreen
+        from .ui.screens.help import HelpScreen
         self.push_screen(HelpScreen(self.config_manager))
         
     def action_quit(self) -> None:
