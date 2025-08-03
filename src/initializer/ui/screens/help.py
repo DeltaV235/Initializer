@@ -15,6 +15,12 @@ class HelpScreen(Screen):
     BINDINGS = [
         ("escape", "back", "Back"),
         ("q", "back", "Back"),
+        ("enter", "select_item", "Select"),
+        # Vim-like navigation
+        ("h", "nav_left", "Left"),
+        ("j", "nav_down", "Down"),
+        ("k", "nav_up", "Up"),
+        ("l", "nav_right", "Right"),
     ]
     
     def __init__(self, config_manager: ConfigManager):
@@ -29,10 +35,16 @@ class HelpScreen(Screen):
 
 ## Keyboard Shortcuts
 
-- **q** or **Escape**: Go back/quit
-- **1-4**: Quick menu navigation
-- **s**: Settings
-- **h**: Help
+### Navigation
+- **H/J/K/L**: Vim-style navigation (Left/Down/Up/Right)
+- **Enter**: Select/Activate focused item
+- **Tab**: Move to next focusable element
+
+### Actions
+- **Q** or **Escape**: Go back/quit
+- **1-4**: Quick menu navigation (Main Menu)
+- **S**: Settings
+- **?**: Help
 - **Ctrl+C**: Quit application
 
 ## Features
@@ -84,3 +96,32 @@ Version {self.app_config.version}
     def action_back(self) -> None:
         """Go back to main menu."""
         self.app.pop_screen()
+    
+    # Vim-like navigation actions
+    def action_nav_left(self) -> None:
+        """Navigate left (h key)."""
+        self.focus_previous()
+    
+    def action_nav_down(self) -> None:
+        """Navigate down (j key)."""
+        self.focus_next()
+    
+    def action_nav_up(self) -> None:
+        """Navigate up (k key)."""
+        self.focus_previous()
+    
+    def action_nav_right(self) -> None:
+        """Navigate right (l key)."""
+        self.focus_next()
+    
+    def action_select_item(self) -> None:
+        """Select current focused item (enter key)."""
+        focused = self.focused
+        if focused and hasattr(focused, 'press'):
+            focused.press()
+        elif focused:
+            try:
+                if hasattr(focused, 'action_select'):
+                    focused.action_select()
+            except AttributeError:
+                pass

@@ -55,12 +55,14 @@ class SystemInfoModule:
     def get_package_manager_info(self) -> Dict[str, str]:
         """Detect available package managers."""
         package_managers = {
-            "apt": "Debian/Ubuntu APT",
-            "yum": "Red Hat YUM",
-            "dnf": "Fedora DNF", 
-            "pacman": "Arch Pacman",
-            "zypper": "openSUSE Zypper",
+            "apt": "APT (Debian/Ubuntu)",
+            "yum": "YUM (RHEL/CentOS)",
+            "dnf": "DNF (Fedora)", 
+            "pacman": "Pacman (Arch)",
+            "zypper": "Zypper (openSUSE)",
             "brew": "Homebrew",
+            "pkg": "FreeBSD pkg",
+            "portage": "Portage (Gentoo)",
         }
         
         detected = {}
@@ -69,18 +71,66 @@ class SystemInfoModule:
             if shutil.which(pm):
                 try:
                     # Get version information
-                    result = subprocess.run(
-                        [pm, "--version"], 
-                        capture_output=True, 
-                        text=True, 
-                        timeout=5
-                    )
-                    version = result.stdout.split('\n')[0] if result.returncode == 0 else "Unknown"
-                    detected[description] = version
-                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-                    detected[description] = "Detected (version unknown)"
+                    if pm == "apt":
+                        result = subprocess.run(
+                            ["apt", "--version"], 
+                            capture_output=True, 
+                            text=True, 
+                            timeout=5
+                        )
+                    elif pm == "yum":
+                        result = subprocess.run(
+                            ["yum", "--version"], 
+                            capture_output=True, 
+                            text=True, 
+                            timeout=5
+                        )
+                    elif pm == "pacman":
+                        result = subprocess.run(
+                            ["pacman", "--version"], 
+                            capture_output=True, 
+                            text=True, 
+                            timeout=5
+                        )
+                    else:
+                        result = subprocess.run(
+                            [pm, "--version"], 
+                            capture_output=True, 
+                            text=True, 
+                            timeout=5
+                        )
                     
-        return detected if detected else {"None": "No package managers detected"}
+                    if result.returncode == 0:
+                        version_line = result.stdout.split('\n')[0]
+                        # Extract just the version number for cleaner display
+                        if pm == "apt":
+                            version = version_line.split()[1] if len(version_line.split()) > 1 else "已安装"
+                        elif pm == "pacman":
+                            version = version_line.split()[2] if len(version_line.split()) > 2 else "已安装"
+                        else:
+                            version = version_line[:50]  # Limit length
+                        detected[description] = f"✓ {version}"
+                    else:
+                        detected[description] = "✓ 已安装"
+                        
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+                    detected[description] = "✓ 已检测到"
+        
+        # If no package managers detected, try to guess from the distribution
+        if not detected:
+            try:
+                if Path("/etc/debian_version").exists():
+                    detected["APT (Debian/Ubuntu)"] = "? 可能存在但未检测到"
+                elif Path("/etc/redhat-release").exists():
+                    detected["YUM/DNF (Red Hat)"] = "? 可能存在但未检测到"
+                elif Path("/etc/arch-release").exists():
+                    detected["Pacman (Arch)"] = "? 可能存在但未检测到"
+                else:
+                    detected["未知"] = "无可用包管理器"
+            except Exception:
+                detected["检测失败"] = "无法检测包管理器"
+                    
+        return detected
     
     def get_cpu_info(self) -> Dict[str, str]:
         """Get CPU information."""
@@ -251,25 +301,88 @@ class SystemInfoModule:
         """Get a quick status summary for display."""
         lines = []
         
-        # Distribution
-        dist_info = self.get_distribution_info()
-        lines.append(f"OS: {dist_info.get('Distribution', 'Unknown')} {dist_info.get('Distro Version', '')}")
-        
-        # CPU and Memory
-        if EXTENDED_INFO_AVAILABLE:
-            cpu_usage = psutil.cpu_percent(interval=0.1)
-            mem_usage = psutil.virtual_memory().percent
-            lines.append(f"CPU: {psutil.cpu_count()} Cores ({cpu_usage:.1f}% used)")
-            lines.append(f"Memory: {mem_usage:.1f}% used")
+        try:
+            # Distribution
+            dist_info = self.get_distribution_info()
+            os_name = dist_info.get('Distribution', 'Unknown')
+            os_version = dist_info.get('Distro Version', '')
+            if os_name == 'Unknown':
+                os_name = dist_info.get('System', 'Linux')
+            lines.append(f"OS: {os_name} {os_version}".strip())
             
-            disk_usage = psutil.disk_usage('/').percent
-            lines.append(f"Disk: {disk_usage:.1f}% used")
-        else:
-            lines.append("CPU: Information unavailable")
-            lines.append("Memory: Information unavailable")
-            lines.append("Disk: Information unavailable")
+            # Architecture
+            arch = dist_info.get('Architecture', dist_info.get('Machine', 'Unknown'))
+            lines.append(f"架构: {arch}")
             
-        return "\n".join(lines)
+            # CPU and Memory
+            if EXTENDED_INFO_AVAILABLE:
+                try:
+                    cpu_count = psutil.cpu_count() or 'Unknown'
+                    cpu_usage = psutil.cpu_percent(interval=0.1)
+                    lines.append(f"CPU: {cpu_count} 核心 ({cpu_usage:.1f}% 使用中)")
+                    
+                    mem = psutil.virtual_memory()
+                    mem_total = self._format_bytes(mem.total)
+                    mem_used = self._format_bytes(mem.used)
+                    lines.append(f"内存: {mem_used}/{mem_total} ({mem.percent:.1f}%)")
+                    
+                    disk_usage = psutil.disk_usage('/').percent
+                    lines.append(f"磁盘: {disk_usage:.1f}% 使用中")
+                except Exception as e:
+                    lines.append(f"系统资源: 获取失败 ({str(e)[:30]})")
+            else:
+                # Fallback methods
+                try:
+                    # Try to get CPU info from /proc/cpuinfo
+                    with open("/proc/cpuinfo", "r") as f:
+                        cpu_lines = f.readlines()
+                        cpu_count = len([line for line in cpu_lines if line.startswith("processor")])
+                        lines.append(f"CPU: {cpu_count} 核心")
+                        
+                        # Try to get CPU model
+                        for line in cpu_lines:
+                            if "model name" in line:
+                                model = line.split(":")[1].strip()
+                                if len(model) > 40:
+                                    model = model[:37] + "..."
+                                lines.append(f"型号: {model}")
+                                break
+                except Exception:
+                    lines.append("CPU: 信息无法获取")
+                
+                try:
+                    # Try to get memory info from /proc/meminfo
+                    with open("/proc/meminfo", "r") as f:
+                        for line in f:
+                            if "MemTotal:" in line:
+                                total_kb = int(line.split()[1])
+                                total_mb = total_kb // 1024
+                                lines.append(f"内存: {total_mb} MB")
+                                break
+                except Exception:
+                    lines.append("内存: 信息无法获取")
+                
+                try:
+                    # Try to get disk info using df command
+                    result = subprocess.run(
+                        ["df", "-h", "/"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        disk_lines = result.stdout.strip().split('\n')
+                        if len(disk_lines) > 1:
+                            fields = disk_lines[1].split()
+                            if len(fields) >= 5:
+                                lines.append(f"磁盘: {fields[2]}/{fields[1]} ({fields[4]})")
+                except Exception:
+                    lines.append("磁盘: 信息无法获取")
+            
+        except Exception as e:
+            lines = [f"系统信息获取失败: {str(e)}"]
+            
+        return "\n".join(lines) if lines else "无系统信息可显示"
     
     def _format_bytes(self, bytes_value: int) -> str:
         """Format bytes into human readable format using binary units."""
