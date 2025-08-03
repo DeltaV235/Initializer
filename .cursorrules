@@ -1,0 +1,135 @@
+# Cursor AI Rules for Linux System Initializer Project
+
+## 🚨 CRITICAL EXECUTION RULES
+
+### ⚠️ NEVER RUN SCRIPTS LOCALLY
+- **NEVER** execute any project scripts on the local development machine
+- **NEVER** run ./setup.sh, ./run.sh, or python main.py locally
+- **NEVER** install dependencies or create virtual environments locally
+- **NEVER** suggest running any project scripts on the local machine
+
+### ✅ CORRECT WORKFLOW
+- All scripts MUST be executed on remote server (192.168.0.33)
+- Use rsync to sync code to remote server first
+- SSH to remote server before executing any scripts
+- Always remind user to execute on remote server
+
+## 📋 STANDARD COMMANDS
+
+### File Synchronization (Local execution OK)
+```bash
+rsync -avz --exclude='venv/' --exclude='initializer-venv/' \
+  --exclude='__pycache__/' --exclude='*.pyc' \
+  --exclude='.git/' --exclude='.idea/' \
+  --exclude='logs/' --exclude='.DS_Store' \
+  ./ root@192.168.0.33:~/Initializer/
+```
+
+### Remote Execution (Remote server only)
+```bash
+# SSH to remote server first
+ssh root@192.168.0.33
+
+# Then execute in remote environment
+cd ~/Initializer
+./setup.sh
+./run.sh
+python main.py
+```
+
+## 🛠️ DEVELOPMENT GUIDELINES
+
+### Code Changes
+- Edit source code locally: src/, config/, *.py, *.sh files
+- Test changes ONLY on remote server after syncing
+- Never create local virtual environments for this project
+
+### Project Structure
+- src/ - Python source code (edit locally)
+- config/ - YAML configuration files (edit locally)
+- legacy/ - Old bash scripts (reference only)
+- setup.sh, run.sh, main.py - Executable scripts (REMOTE ONLY)
+
+### File Types by Location
+- **Local editing**: .py, .yaml, .md, .sh source files
+- **Remote execution**: setup.sh, run.sh, main.py
+- **Documentation**: README.md, DEVELOPMENT.md
+
+## 🚫 FORBIDDEN ACTIONS
+
+### Never suggest these commands:
+- `./setup.sh` (locally)
+- `./run.sh` (locally) 
+- `python main.py` (locally)
+- `pip install -r requirements.txt` (locally)
+- `python -m venv venv` (locally for this project)
+- Any system-level installation commands locally
+
+### Always suggest instead:
+1. Sync to remote: `rsync -avz ... root@192.168.0.33:~/Initializer/`
+2. SSH to remote: `ssh root@192.168.0.33`
+3. Execute remotely: `cd ~/Initializer && ./setup.sh`
+
+## 📚 PROJECT CONTEXT
+
+### Purpose
+Linux System Initializer - TUI application for automated Linux system setup using Python + Rich + Textual + YAML configuration.
+
+### Architecture
+- Modern Python project with pyproject.toml
+- Textual-based TUI interface
+- YAML-driven configuration system
+- Modular design with preset support
+
+### Key Dependencies
+- rich, textual, pyyaml, click, psutil, distro
+- Development: pytest, black, flake8, mypy
+
+### Virtual Environment
+- Name: `initializer-venv` (not `venv`)
+- Created on remote server only
+- Never create locally for this project
+
+## 🎯 AI ASSISTANT BEHAVIOR
+
+### When user asks to run scripts:
+1. **STOP** and remind about remote execution rule
+2. Provide rsync command to sync code first
+3. Provide SSH and remote execution commands
+4. Reference project documentation for guidelines
+
+### When suggesting code changes:
+1. Focus on editing source files locally
+2. Always mention syncing to remote after changes
+3. Never suggest testing locally
+4. Guide user through remote testing process
+
+### When user reports errors:
+1. Ask if error occurred on remote server
+2. If local execution attempted, redirect to remote
+3. Help debug remote environment issues
+4. Provide remote-specific solutions
+
+## 📖 REFERENCE DOCUMENTS
+
+- README.md - Project documentation
+- DEVELOPMENT.md - Development guide
+- .cursor/instructions.md - Project context for AI
+
+## 🔄 WORKFLOW REMINDERS
+
+### Every coding session:
+1. Edit code locally
+2. Sync to remote with rsync
+3. SSH to remote server
+4. Execute and test remotely
+
+### Every suggestion:
+1. Check if it involves script execution
+2. Ensure remote execution if needed
+3. Provide complete workflow steps
+4. Reference rule documentation
+
+---
+
+**REMEMBER: This project REQUIRES remote execution. Local script execution is FORBIDDEN.**

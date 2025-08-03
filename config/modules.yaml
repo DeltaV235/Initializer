@@ -1,0 +1,49 @@
+modules:
+  system_info:
+    enabled: true
+    auto_refresh: true
+    export_formats: ["json", "yaml", "txt"]
+    components:
+      - distribution
+      - package_manager
+      - cpu_info
+      - memory_info
+      - disk_info
+      - network_info
+
+  homebrew:
+    enabled: true
+    auto_install: false
+    sources:
+      - name: "Official"
+        url: "https://github.com/Homebrew/brew"
+      - name: "Tuna Mirror"
+        url: "https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
+    default_packages:
+      - git
+      - curl
+      - wget
+      - vim
+
+  package_manager:
+    enabled: true
+    supported:
+      - apt
+      - yum
+      - dnf
+      - pacman
+    mirrors:
+      apt:
+        - name: "Tuna"
+          url: "https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+        - name: "Aliyun"
+          url: "https://mirrors.aliyun.com/ubuntu/"
+      yum:
+        - name: "Tuna CentOS"
+          url: "https://mirrors.tuna.tsinghua.edu.cn/centos/"
+
+  user_management:
+    enabled: true
+    create_sudo_user: true
+    default_shell: "/bin/bash"
+    copy_skel: true

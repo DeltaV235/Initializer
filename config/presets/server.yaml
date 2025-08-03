@@ -1,0 +1,32 @@
+# Server preset configuration
+name: "Headless Server Setup"
+description: "Optimized configuration for headless servers"
+
+enabled_modules:
+  - system_info
+  - package_manager
+  - user_management
+
+package_manager:
+  update_sources: true
+  install_essential_packages: true
+  essential_packages:
+    - curl
+    - wget
+    - git
+    - vim
+    - htop
+    - screen
+    - tmux
+
+user_management:
+  create_admin_user: true
+  setup_ssh_keys: true
+  disable_root_login: true
+
+homebrew:
+  enabled: false  # Typically not needed on servers
+
+ui:
+  animation: false  # Disable animations for better performance over SSH
+  simplified_interface: true

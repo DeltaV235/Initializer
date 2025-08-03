@@ -1,0 +1,49 @@
+# Desktop preset configuration
+name: "Desktop Workstation Setup"
+description: "Configuration optimized for desktop/workstation environments"
+
+enabled_modules:
+  - system_info
+  - homebrew
+  - package_manager
+  - user_management
+
+homebrew:
+  enabled: true
+  auto_install: true
+  default_packages:
+    - git
+    - curl
+    - wget
+    - vim
+    - htop
+    - tree
+    - jq
+    - fzf
+    - bat
+    - exa
+
+package_manager:
+  update_sources: true
+  install_development_tools: true
+  essential_packages:
+    - build-essential
+    - curl
+    - wget
+    - git
+    - vim
+    - htop
+    - tree
+    - unzip
+    - software-properties-common
+
+user_management:
+  create_admin_user: false
+  setup_ssh_keys: true
+  configure_shell: true
+  shell_preference: "zsh"
+
+ui:
+  theme: "default"
+  animation: true
+  show_tips: true

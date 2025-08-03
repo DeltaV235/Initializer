@@ -1,0 +1,15 @@
+# Core dependencies
+rich>=13.0.0
+textual>=0.41.0
+pyyaml>=6.0.0
+click>=8.0.0
+
+# System information
+psutil>=5.9.0
+distro>=1.8.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=1.0.0

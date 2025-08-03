@@ -1,0 +1,27 @@
+# Minimal preset configuration
+name: "Minimal Setup"
+description: "Minimal configuration for basic system setup"
+
+enabled_modules:
+  - system_info
+  - package_manager
+
+homebrew:
+  enabled: false
+
+package_manager:
+  update_sources: true
+  install_essential_packages: true
+  essential_packages:
+    - curl
+    - wget
+    - git
+    - vim
+
+user_management:
+  enabled: false
+
+ui:
+  theme: "light"
+  animation: false
+  simplified_interface: true

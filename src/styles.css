@@ -1,0 +1,149 @@
+/* Linux System Initializer TUI Styles */
+
+/* Global styles */
+Screen {
+    layers: base overlay;
+    overflow: hidden;
+}
+
+/* Title styles */
+#title {
+    dock: top;
+    width: 100%;
+    height: 3;
+    content-align: center middle;
+    text-style: bold;
+    color: $accent;
+    background: $surface;
+}
+
+#subtitle {
+    dock: top;
+    width: 100%;
+    height: 1;
+    content-align: center middle;
+    color: $text-muted;
+    background: $surface;
+}
+
+/* Main container */
+#main-container {
+    layout: vertical;
+    height: 100%;
+}
+
+#content-area {
+    layout: horizontal;
+    height: 1fr;
+}
+
+/* Panel styles */
+.panel {
+    border: solid $primary;
+    margin: 1;
+    padding: 1;
+}
+
+.panel-title {
+    text-style: bold;
+    color: $accent;
+    margin-bottom: 1;
+}
+
+/* Menu panel */
+#menu-panel {
+    width: 50%;
+    min-width: 30;
+}
+
+#menu-panel Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+/* Status panel */
+#status-panel {
+    width: 50%;
+    min-width: 30;
+}
+
+#status-content {
+    height: auto;
+    border: solid $secondary;
+    padding: 1;
+    margin-bottom: 1;
+    background: $surface;
+}
+
+/* Button styles */
+Button {
+    height: 3;
+}
+
+Button.-primary {
+    background: $primary;
+    color: $text;
+}
+
+Button.-error {
+    background: $error;
+    color: $text;
+}
+
+Button:hover {
+    text-style: bold;
+}
+
+/* Data table styles */
+DataTable {
+    height: 1fr;
+    width: 1fr;
+}
+
+DataTable > .datatable--header {
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+DataTable > .datatable--odd-row {
+    background: $surface;
+}
+
+DataTable > .datatable--even-row {
+    background: $panel;
+}
+
+/* Side panel */
+#side-panel {
+    width: 30%;
+    min-width: 20;
+}
+
+#side-panel Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+/* Footer and header */
+Header {
+    background: $primary;
+    color: $text;
+}
+
+Footer {
+    background: $secondary;
+    color: $text;
+}
+
+/* Responsive design */
+@media (max-width: 80) {
+    #content-area {
+        layout: vertical;
+    }
+    
+    #menu-panel, #status-panel, #side-panel {
+        width: 100%;
+        height: auto;
+    }
+}

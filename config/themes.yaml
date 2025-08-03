@@ -1,0 +1,30 @@
+themes:
+  default:
+    primary: "blue"
+    secondary: "cyan"
+    success: "green"
+    warning: "yellow"
+    error: "red"
+    background: "black"
+    text: "white"
+    accent: "magenta"
+    
+  dark:
+    primary: "#61AFEF"
+    secondary: "#56B6C2"
+    success: "#98C379"
+    warning: "#E5C07B"
+    error: "#E06C75"
+    background: "#282C34"
+    text: "#ABB2BF"
+    accent: "#C678DD"
+    
+  light:
+    primary: "#0078D4"
+    secondary: "#107C10"
+    success: "#00BCF2"
+    warning: "#FFB900"
+    error: "#E74856"
+    background: "#FFFFFF"
+    text: "#000000"
+    accent: "#881798"

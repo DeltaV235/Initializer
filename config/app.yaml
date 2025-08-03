@@ -1,0 +1,26 @@
+app:
+  name: "Linux System Initializer"
+  version: "2.0.0"
+  author: "DeltaV235"
+  description: "Modern TUI for Linux system initialization"
+
+ui:
+  theme: "default"
+  animation: true
+  refresh_rate: 10
+  terminal:
+    min_width: 80
+    min_height: 24
+  
+logging:
+  level: "INFO"
+  file: "logs/initializer.log"
+  max_size: "10MB"
+  backup_count: 5
+
+features:
+  auto_detect: true
+  parallel_execution: true
+  backup_configs: true
+  recovery_mode: true
+  headless_mode: true
