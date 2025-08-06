@@ -2,17 +2,39 @@
 
 ## 🚨 CRITICAL EXECUTION RULES
 
-### ⚠️ NEVER RUN SCRIPTS LOCALLY
+### 🔍 ENVIRONMENT DETECTION
+**Important**: Check the user's environment before applying execution rules:
+- **WSL (Windows Subsystem for Linux)**: Shell contains `wsl.exe` or OS shows `win32` with Linux environment
+- **Standard Windows/Mac**: Regular desktop environments
+- **Linux Native**: Direct Linux installations
+
+### ⚠️ EXECUTION RESTRICTIONS (Environment-Dependent)
+
+#### For NON-WSL environments:
 - **NEVER** execute any project scripts on the local development machine
 - **NEVER** run ./install.sh, ./run.sh, or python main.py locally
 - **NEVER** install dependencies or create virtual environments locally
 - **NEVER** suggest running any project scripts on the local machine
 
+#### For WSL environments:
+- ✅ **ALLOWED**: Local testing and development
+- ✅ **ALLOWED**: Creating virtual environments for testing
+- ✅ **ALLOWED**: Running scripts locally for development/testing
+- ⚠️ **RECOMMENDED**: Still prefer remote execution for production
+
 ### ✅ CORRECT WORKFLOW
+
+#### Default (Remote Execution):
 - All scripts MUST be executed on remote server (192.168.0.33)
 - Use rsync to sync code to remote server first
 - SSH to remote server before executing any scripts
 - Always remind user to execute on remote server
+
+#### WSL Exception:
+- Local testing and development is permitted
+- Can create `initializer-venv` locally for testing
+- Can run `./install.sh`, `./run.sh`, `python main.py` locally
+- Still recommend final testing on remote server
 
 ## 📋 STANDARD COMMANDS
 
@@ -41,8 +63,10 @@ python main.py
 
 ### Code Changes
 - Edit source code locally: src/, config/, *.py, *.sh files
-- Test changes ONLY on remote server after syncing
-- Never create local virtual environments for this project
+- **WSL**: Can test changes locally before remote deployment
+- **Non-WSL**: Test changes ONLY on remote server after syncing
+- **WSL**: Can create local virtual environments for testing
+- **Non-WSL**: Never create local virtual environments for this project
 
 ### Project Structure
 - src/ - Python source code (edit locally)
@@ -57,7 +81,7 @@ python main.py
 
 ## 🚫 FORBIDDEN ACTIONS
 
-### Never suggest these commands:
+### For NON-WSL environments only:
 - `./install.sh` (locally)
 - `./run.sh` (locally) 
 - `python main.py` (locally)
@@ -65,7 +89,17 @@ python main.py
 - `python -m venv venv` (locally for this project)
 - Any system-level installation commands locally
 
-### Always suggest instead:
+### For WSL environments:
+- ✅ All above commands are **ALLOWED** for local testing
+- ⚠️ **RECOMMEND** running final tests on remote server
+
+### Suggested workflow:
+#### For WSL users:
+1. **Local testing**: `./install.sh`, `./run.sh`, `python main.py`
+2. **Remote verification**: Sync and test on remote server
+3. **Best practice**: Test locally first, verify remotely
+
+#### For non-WSL users:
 1. Sync to remote: `rsync -avz ... root@192.168.0.33:~/Initializer/`
 2. SSH to remote: `ssh root@192.168.0.33`
 3. Execute remotely: `cd ~/Initializer && ./install.sh`
@@ -87,12 +121,26 @@ Linux System Initializer - TUI application for automated Linux system setup usin
 
 ### Virtual Environment
 - Name: `initializer-venv` (not `venv`)
-- Created on remote server only
-- Never create locally for this project
+- **WSL**: Can be created locally for testing
+- **Non-WSL**: Created on remote server only
+- **WSL**: Local venv allowed for development/testing
+- **Non-WSL**: Never create locally for this project
 
 ## 🎯 AI ASSISTANT BEHAVIOR
 
+### Environment Detection First:
+1. **Check user environment** (WSL vs non-WSL)
+2. **Apply appropriate rules** based on detected environment
+3. **Inform user** of available options based on their environment
+
 ### When user asks to run scripts:
+#### For WSL users:
+1. **OFFER** local testing option first
+2. **RECOMMEND** remote verification after local testing
+3. Provide both local and remote execution commands
+4. Suggest best practice workflow
+
+#### For non-WSL users:
 1. **STOP** and remind about remote execution rule
 2. Provide rsync command to sync code first
 3. Provide SSH and remote execution commands
@@ -100,11 +148,18 @@ Linux System Initializer - TUI application for automated Linux system setup usin
 
 ### When suggesting code changes:
 1. Focus on editing source files locally
-2. Always mention syncing to remote after changes
-3. Never suggest testing locally
-4. Guide user through remote testing process
+2. **WSL**: Suggest local testing before remote deployment
+3. **Non-WSL**: Always mention syncing to remote after changes
+4. **WSL**: Can suggest testing locally
+5. **Non-WSL**: Guide user through remote testing process
 
 ### When user reports errors:
+#### For WSL users:
+1. Help debug local environment issues first
+2. If local fails, suggest remote testing
+3. Provide environment-specific solutions
+
+#### For non-WSL users:
 1. Ask if error occurred on remote server
 2. If local execution attempted, redirect to remote
 3. Help debug remote environment issues
@@ -132,4 +187,7 @@ Linux System Initializer - TUI application for automated Linux system setup usin
 
 ---
 
-**REMEMBER: This project REQUIRES remote execution. Local script execution is FORBIDDEN.**
+**REMEMBER**: 
+- **WSL users**: Can test locally, but verify remotely for production
+- **Non-WSL users**: This project REQUIRES remote execution. Local script execution is FORBIDDEN.
+- **Always check user environment** before applying execution rules
