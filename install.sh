@@ -291,7 +291,7 @@ echo ""
 ### Check current status
 echo -e "${BLUE}📋 Current installation status:${NC}"
 
-# Check Python version
+# Step 1: Check Python version
 python_ok=false
 if command -v python3 &>/dev/null; then
     python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
@@ -308,61 +308,66 @@ else
     echo -e "  ❌ Python: ${RED}Not found${NC}"
 fi
 
-# Check if virtual environment exists
+# Step 2: Check if venv can be created (functional test)
+venv_functional=false
+if [ "$python_ok" = true ]; then
+    echo -e "  🧪 Testing virtual environment creation..."
+    test_venv="test-venv-$$"
+    if python3 -m venv "$test_venv" &>/dev/null; then
+        rm -rf "$test_venv" &>/dev/null
+        echo -e "  ✅ Virtual environment creation: ${GREEN}Working${NC}"
+        venv_functional=true
+    else
+        rm -rf "$test_venv" &>/dev/null
+        echo -e "  ❌ Virtual environment creation: ${RED}Failed${NC}"
+        echo -e "     ${YELLOW}(missing python3-venv or system dependencies)${NC}"
+    fi
+fi
+
+# Step 3: Check if project virtual environment exists
 if [ -d "$VENV_NAME" ]; then
-    echo -e "  ✅ Virtual environment: ${GREEN}Found${NC} ($VENV_NAME)"
+    echo -e "  ✅ Project virtual environment: ${GREEN}Found${NC} ($VENV_NAME)"
     venv_exists=true
 else
-    echo -e "  ❌ Virtual environment: ${RED}Not found${NC}"
+    echo -e "  ❌ Project virtual environment: ${RED}Not found${NC}"
     venv_exists=false
 fi
 
-# Check if package is installed
+# Step 4: Check if project package is installed
 package_installed=false
 if [ "$venv_exists" = true ]; then
     # Check in virtual environment
     if source "$VENV_NAME/bin/activate" 2>/dev/null && pip show initializer &>/dev/null; then
         package_version=$(pip show initializer | grep "Version:" | cut -d' ' -f2)
-        echo -e "  ✅ Python package: ${GREEN}Installed${NC} (v$package_version) [venv]"
+        echo -e "  ✅ Project package: ${GREEN}Installed${NC} (v$package_version) [venv]"
         package_installed=true
     else
-        echo -e "  ❌ Python package: ${RED}Not installed in venv${NC}"
+        echo -e "  ❌ Project package: ${RED}Not installed in venv${NC}"
     fi
 else
     # Check in global environment if venv doesn't exist
     if command -v python3 &>/dev/null && python3 -m pip show initializer &>/dev/null 2>&1; then
         package_version=$(python3 -m pip show initializer | grep "Version:" | cut -d' ' -f2)
-        echo -e "  ✅ Python package: ${GREEN}Installed${NC} (v$package_version) [global]"
+        echo -e "  ✅ Project package: ${GREEN}Installed${NC} (v$package_version) [global]"
         package_installed=true
     else
-        echo -e "  ❌ Python package: ${RED}Not installed${NC}"
+        echo -e "  ❌ Project package: ${RED}Not installed${NC}"
     fi
 fi
 
-# Check if command is available
+# Step 5: Check if command line tool is available
 if command -v initializer &>/dev/null; then
-    echo -e "  ✅ Command 'initializer': ${GREEN}Available${NC}"
-    command_available=true
+    echo -e "  ✅ Command line tool (initializer): ${GREEN}Available in PATH${NC}"
+    command_line_tool_available=true
 else
-    echo -e "  ❌ Command 'initializer': ${RED}Not available${NC}"
-    command_available=false
-fi
-
-# Check venv module availability
-venv_module_ok=false
-if [ "$python_ok" = true ]; then
-    if python3 -c "import venv" &>/dev/null; then
-        echo -e "  ✅ Python venv module: ${GREEN}Available${NC}"
-        venv_module_ok=true
-    else
-        echo -e "  ❌ Python venv module: ${RED}Not available${NC}"
-    fi
+    echo -e "  ❌ Command line tool (initializer): ${RED}Not available in PATH${NC}"
+    command_line_tool_available=false
 fi
 
 echo ""
 
 ### Check if everything is already installed
-if [ "$python_ok" = true ] && [ "$venv_exists" = true ] && [ "$package_installed" = true ] && [ "$command_available" = true ]; then
+if [ "$python_ok" = true ] && [ "$venv_exists" = true ] && [ "$package_installed" = true ] && [ "$command_line_tool_available" = true ]; then
     echo -e "${GREEN}✅ Everything is already installed and working!${NC}"
     echo ""
     echo -e "${BLUE}💡 You can now run:${NC}"
@@ -385,7 +390,7 @@ if [ "$python_ok" = false ]; then
     echo -e "  🔧 Python installation: ${YELLOW}Python 3.8+ will be installed${NC}"
 fi
 
-if [ "$venv_module_ok" = false ]; then
+if [ "$venv_functional" = false ]; then
     echo -e "  🔧 System packages: ${YELLOW}python3-venv, python3-dev, python3-pip${NC}"
 fi
 
@@ -402,7 +407,7 @@ if [ "$package_installed" = false ]; then
     fi
 fi
 
-if [ "$command_available" = false ]; then
+if [ "$command_line_tool_available" = false ]; then
     echo -e "  🔗 Command line tool: ${YELLOW}initializer${NC}"
 fi
 
@@ -423,7 +428,7 @@ fi
 
 # Check if any installation is needed and perform network connectivity check once
 NEEDS_INSTALLATION=false
-if [ "$python_ok" = false ] || [ "$venv_module_ok" = false ]; then
+if [ "$python_ok" = false ] || [ "$venv_functional" = false ]; then
     NEEDS_INSTALLATION=true
     echo ""
     echo -e "${BLUE}🔍 Checking package manager connectivity before installation...${NC}"
@@ -493,9 +498,13 @@ if [ "$python_ok" = false ]; then
                     python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
                     echo -e "${GREEN}✅ Python $python_version is now available${NC}"
                     python_ok=true
-                    # Re-check venv module availability after Python installation
-                    if python3 -c "import venv" &>/dev/null; then
-                        venv_module_ok=true
+                    # Re-check venv functionality after Python installation
+                    test_venv_recheck="test-venv-recheck-$$"
+                    if python3 -m venv "$test_venv_recheck" &>/dev/null; then
+                        rm -rf "$test_venv_recheck" &>/dev/null
+                        venv_functional=true
+                    else
+                        rm -rf "$test_venv_recheck" &>/dev/null
                     fi
                 fi
             else
@@ -545,9 +554,13 @@ if [ "$python_ok" = false ]; then
                         python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
                         echo -e "${GREEN}✅ Python $python_version is now available${NC}"
                         python_ok=true
-                        # Re-check venv module availability after Python installation
-                        if python3 -c "import venv" &>/dev/null; then
-                            venv_module_ok=true
+                        # Re-check venv functionality after Python installation
+                        test_venv_recheck2="test-venv-recheck2-$$"
+                        if python3 -m venv "$test_venv_recheck2" &>/dev/null; then
+                            rm -rf "$test_venv_recheck2" &>/dev/null
+                            venv_functional=true
+                        else
+                            rm -rf "$test_venv_recheck2" &>/dev/null
                         fi
                     fi
                 else
@@ -590,7 +603,7 @@ if [ "$python_ok" = false ]; then
 fi
 
 # Install system dependencies if needed (Step 2: venv, dev, pip packages)
-if [ "$python_ok" = true ] && [ "$venv_module_ok" = false ]; then
+if [ "$python_ok" = true ] && [ "$venv_functional" = false ]; then
     echo -e "${BLUE}🔍 Installing system dependencies...${NC}"
     echo ""
     
@@ -700,6 +713,8 @@ if python3 -m venv "$final_test_venv" &> /dev/null; then
     rm -rf "$final_test_venv" &> /dev/null
     echo "✅ Virtual environment functionality confirmed"
 else
+    # Clean up any partially created directory
+    rm -rf "$final_test_venv" &> /dev/null
     echo "❌ Virtual environment creation still fails after installation"
     echo "💡 Possible issues:"
     echo "   - Incomplete package installation"
@@ -716,8 +731,10 @@ if [ ! -d "$VENV_NAME" ]; then
     if python3 -m venv "$VENV_NAME"; then
         echo "✅ Virtual environment created successfully"
     else
+        # Clean up any partially created directory
+        rm -rf "$VENV_NAME" &> /dev/null
         echo "❌ Failed to create virtual environment"
-        echo "💡 Try running: rm -rf $VENV_NAME && ./install.sh"
+        echo "💡 Try running: ./install.sh"
         exit 1
     fi
 fi
