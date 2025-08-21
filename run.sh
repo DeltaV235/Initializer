@@ -3,7 +3,7 @@
 ### Linux System Initializer Run Script
 ### Activates virtual environment and runs the application
 
-VENV_NAME="initializer-venv"
+VENV_NAME=".venv"
 
 # Check if virtual environment exists
 if [ ! -d "$VENV_NAME" ]; then

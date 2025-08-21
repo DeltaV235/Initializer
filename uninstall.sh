@@ -5,7 +5,7 @@
 
 set -e
 
-VENV_NAME="initializer-venv"
+VENV_NAME=".venv"
 PROJECT_NAME="Linux System Initializer"
 
 # Colors for output

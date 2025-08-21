@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-VENV_NAME="initializer-venv"
+VENV_NAME=".venv"
 PROJECT_NAME="Linux System Initializer"
 
 # Global variable to track if mirror fix has been applied
@@ -725,7 +725,7 @@ else
 fi
 
 # Create virtual environment if it doesn't exist
-VENV_NAME="initializer-venv"
+VENV_NAME=".venv"
 if [ ! -d "$VENV_NAME" ]; then
     echo "📦 Creating virtual environment ($VENV_NAME)..."
     if python3 -m venv "$VENV_NAME"; then

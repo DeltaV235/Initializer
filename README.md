@@ -41,7 +41,7 @@ cd Initializer
 **Or manually:**
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python main.py
 ```
 
