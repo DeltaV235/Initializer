@@ -89,6 +89,7 @@ ${DRY_RUN} && RSYNC_FLAGS+=("-n") || true
 ${DELETE} && RSYNC_FLAGS+=("--delete") || true
 
 EXCLUDES=(
+  "--exclude=.venv/"
   "--exclude=venv/"
   "--exclude=initializer-venv/"
   "--exclude=__pycache__/"
