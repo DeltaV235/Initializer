@@ -227,12 +227,13 @@ apply_ubuntu_mirror_fix() {
 apply_aliyun_sources() {
     local target_file="$1"
     local use_sudo="$2"
+    local template_path="config/aliyun-sources.list.template"
     
     echo "   → Configuring Aliyun mirror sources..."
     
     # Check if template file exists
-    if [ ! -f "aliyun-sources.list.template" ]; then
-        echo "❌ Template file 'aliyun-sources.list.template' not found!"
+    if [ ! -f "$template_path" ]; then
+        echo "❌ Template file '$template_path' not found!"
         echo "💡 Please ensure the template file is in the project directory."
         exit 1
     fi
@@ -242,9 +243,9 @@ apply_aliyun_sources() {
         
         # Use the template file and replace codename
         if [ "$use_sudo" = "sudo" ]; then
-            sed "s/{CODENAME}/$codename/g" aliyun-sources.list.template | sudo tee "$target_file" > /dev/null
+            sed "s/{CODENAME}/$codename/g" "$template_path" | sudo tee "$target_file" > /dev/null
         else
-            sed "s/{CODENAME}/$codename/g" aliyun-sources.list.template > "$target_file"
+            sed "s/{CODENAME}/$codename/g" "$template_path" > "$target_file"
         fi
     else
         echo "❌ lsb_release command not found - cannot determine Ubuntu codename"
