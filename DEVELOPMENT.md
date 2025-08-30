@@ -86,7 +86,7 @@
            # 实现包安装逻辑
    ```
 
-2. **包管理器模块**
+1. **包管理器模块**
 
    ```python
    # src/modules/package_manager.py
@@ -101,7 +101,7 @@
            # 安装系统包
    ```
 
-3. **用户管理模块**
+1. **用户管理模块**
 
    ```python
    # src/modules/user_manager.py
@@ -320,3 +320,30 @@ def load_module_when_needed():
 
 核心功能已实现，界面框架已搭建，配置系统已完善。
 剩余工作主要是具体业务逻辑的实现和测试优化。
+
+## 🚀 同步与远端执行
+
+### 默认工作流（非 WSL 环境）
+
+1. 使用同步脚本：
+
+```bash
+tools/sync-to-remote.sh                 # 默认同步到 root@192.168.0.33:~/Initializer
+tools/sync-to-remote.sh -n              # 预览（Dry-Run）
+tools/sync-to-remote.sh -d              # 同步并删除远端多余文件
+tools/sync-to-remote.sh -H 192.168.0.33 -u root -D ~/Initializer
+```
+
+2. 远端执行：
+
+```bash
+ssh root@192.168.0.33
+cd ~/Initializer
+./install.sh
+./run.sh
+```
+
+### WSL 环境
+
+- 允许本地测试（install.sh / run.sh / python main.py）
+- 仍建议通过 `tools/sync-to-remote.sh` 同步并在远端验证

@@ -58,6 +58,33 @@ Options:
   --help                  Show this message and exit
 ```
 
+## 🔗 Remote Sync and Execution
+
+- Non-WSL/macOS/Windows: execute scripts on the remote server.
+- Use `tools/sync-to-remote.sh` to sync to `root@192.168.0.33:~/Initializer`.
+
+```bash
+# Sync with defaults
+tools/sync-to-remote.sh
+
+# Dry run
+tools/sync-to-remote.sh -n
+
+# Custom host/user/destination
+tools/sync-to-remote.sh -H 192.168.0.33 -u root -D ~/Initializer
+```
+
+Then on the remote:
+
+```bash
+ssh root@192.168.0.33
+cd ~/Initializer
+./install.sh
+./run.sh
+```
+
+WSL users may test locally, but verify on remote.
+
 ## 📋 Modules
 
 ### System Information
