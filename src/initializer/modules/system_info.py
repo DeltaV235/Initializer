@@ -71,34 +71,12 @@ class SystemInfoModule:
             if shutil.which(pm):
                 try:
                     # Get version information
-                    if pm == "apt":
-                        result = subprocess.run(
-                            ["apt", "--version"], 
-                            capture_output=True, 
-                            text=True, 
-                            timeout=5
-                        )
-                    elif pm == "yum":
-                        result = subprocess.run(
-                            ["yum", "--version"], 
-                            capture_output=True, 
-                            text=True, 
-                            timeout=5
-                        )
-                    elif pm == "pacman":
-                        result = subprocess.run(
-                            ["pacman", "--version"], 
-                            capture_output=True, 
-                            text=True, 
-                            timeout=5
-                        )
-                    else:
-                        result = subprocess.run(
-                            [pm, "--version"], 
-                            capture_output=True, 
-                            text=True, 
-                            timeout=5
-                        )
+                    result = subprocess.run(
+                        [pm, "--version"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
                     
                     if result.returncode == 0:
                         version_line = result.stdout.split('\n')[0]
