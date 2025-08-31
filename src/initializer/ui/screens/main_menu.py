@@ -31,7 +31,7 @@ class MainMenuScreen(Screen):
     ]
     
     selected_item = reactive("")
-    submenu_content = reactive("")
+    submenu_content = reactive("**🔄 正在加载系统信息...**\n\n请稍候，正在检测系统状态...")
     
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
@@ -79,51 +79,150 @@ class MainMenuScreen(Screen):
         """Initialize when screen is mounted."""
         # Set initial system status content
         self.update_system_status()
+        # Start periodic refresh timer (every 5 seconds)
+        self.set_timer(5.0, self._refresh_system_status)
+    
+    def on_unmount(self) -> None:
+        """Clean up when screen is unmounted."""
+        # Cancel any active timers
+        try:
+            self.cancel_timer()
+        except:
+            pass
+    
+    def _refresh_system_status(self) -> None:
+        """Callback for periodic system status refresh."""
+        self.update_system_status()
+        # Schedule next refresh
+        self.set_timer(5.0, self._refresh_system_status)
+    
+    def watch_submenu_content(self, content: str) -> None:
+        """Watch for changes in submenu_content and update the UI."""
+        try:
+            submenu_widget = self.query_one("#submenu-content", Static)
+            submenu_widget.update(content)
+        except Exception:
+            # Widget might not be ready yet
+            pass
     
     def update_system_status(self) -> None:
-        """Update the right panel with current system status."""
+        """Update the right panel with detailed system information."""
         try:
-            # Get basic system information
-            quick_status = self.system_info_module.get_quick_status()
+            # Get comprehensive system information
+            all_info = self.system_info_module.get_all_info()
             
-            # Get package manager info  
-            package_managers = self.system_info_module.get_package_manager_info()
-            if package_managers:
+            # Format system information sections
+            sections = []
+            
+            # 1. Distribution Information
+            if "distribution" in all_info:
+                dist_info = all_info["distribution"]
+                dist_lines = []
+                for key, value in dist_info.items():
+                    if key in ["Distribution", "System"] and value != "Unknown":
+                        dist_lines.append(f"系统: {value}")
+                    elif key == "Distro Version" and value:
+                        dist_lines.append(f"版本: {value}")
+                    elif key == "Architecture":
+                        dist_lines.append(f"架构: {value}")
+                    elif key == "Machine" and "Architecture" not in dist_info:
+                        dist_lines.append(f"架构: {value}")
+                
+                if dist_lines:
+                    sections.append("**🖥️ 系统信息**\n" + "\n".join(dist_lines))
+            
+            # 2. CPU Information
+            if "cpu" in all_info:
+                cpu_info = all_info["cpu"]
+                cpu_lines = []
+                for key, value in cpu_info.items():
+                    if key == "Processor" and value != "Unknown":
+                        cpu_lines.append(f"处理器: {value[:40]}...")
+                    elif key == "CPU Count":
+                        cpu_lines.append(f"核心数: {value}")
+                    elif key == "Logical CPUs":
+                        cpu_lines.append(f"逻辑核心: {value}")
+                    elif key == "Current Usage":
+                        cpu_lines.append(f"当前使用率: {value}")
+                    elif key == "CPU Frequency":
+                        cpu_lines.append(f"频率: {value}")
+                
+                if cpu_lines:
+                    sections.append("**⚡ CPU信息**\n" + "\n".join(cpu_lines))
+            
+            # 3. Memory Information
+            if "memory" in all_info:
+                mem_info = all_info["memory"]
+                mem_lines = []
+                for key, value in mem_info.items():
+                    if "RAM" in key:
+                        if key == "Total RAM":
+                            mem_lines.append(f"总内存: {value}")
+                        elif key == "Used RAM":
+                            mem_lines.append(f"已用内存: {value}")
+                        elif key == "Available RAM":
+                            mem_lines.append(f"可用内存: {value}")
+                        elif key == "RAM Usage":
+                            mem_lines.append(f"内存使用率: {value}")
+                    elif "Swap" in key:
+                        if key == "Total Swap":
+                            mem_lines.append(f"交换分区: {value}")
+                        elif key == "Swap Usage":
+                            mem_lines.append(f"交换使用率: {value}")
+                
+                if mem_lines:
+                    sections.append("**💾 内存信息**\n" + "\n".join(mem_lines))
+            
+            # 4. Disk Information
+            if "disk" in all_info:
+                disk_info = all_info["disk"]
+                disk_lines = []
+                for key, value in disk_info.items():
+                    if "Root Partition" in key:
+                        if key == "Root Partition Total":
+                            disk_lines.append(f"总容量: {value}")
+                        elif key == "Root Partition Used":
+                            disk_lines.append(f"已用空间: {value}")
+                        elif key == "Root Partition Free":
+                            disk_lines.append(f"可用空间: {value}")
+                        elif key == "Root Partition Usage":
+                            disk_lines.append(f"磁盘使用率: {value}")
+                
+                if disk_lines:
+                    sections.append("**💿 磁盘信息**\n" + "\n".join(disk_lines))
+            
+            # 5. Package Manager Information
+            if "package_manager" in all_info:
+                pm_info = all_info["package_manager"]
                 pm_lines = []
-                for pm, version in package_managers.items():
+                for pm, status in pm_info.items():
                     # Truncate long version strings
-                    if len(version) > 50:
-                        version = version[:47] + "..."
-                    pm_lines.append(f"• {pm}: {version}")
-                pm_status = "\n".join(pm_lines)
-            else:
-                pm_status = "• 未检测到包管理器"
+                    if len(status) > 45:
+                        status = status[:42] + "..."
+                    pm_lines.append(f"• {pm}: {status}")
+                
+                if pm_lines:
+                    sections.append("**📦 包管理器**\n" + "\n".join(pm_lines))
             
-            # Combine all information
-            status_content = f"""**🖥️ 系统概览**
-
-{quick_status}
-
-**📦 包管理器**
-{pm_status}
-
-**⚡ 快捷键说明**
-• 1 - System Detail Information
+            # 6. Quick Help
+            help_section = """**⚡ 快捷键说明**
+• 1 - 系统详细信息
 • 2 - Homebrew 管理  
 • 3 - 包管理器设置
 • 4 - 用户管理
-• S - 设置
-• ? - 帮助
-• Q - 退出
+• S - 设置 • ? - 帮助 • Q - 退出
 
 **🎮 导航控制**
-• H/J/K/L - 方向控制 (左/下/上/右)
+• H/J/K/L - 方向控制
 • Enter - 确认选择
 
-**💡 使用提示**
-使用数字键快速访问模块，hjkl键导航界面"""
-
-            self.submenu_content = status_content
+**🔄 自动更新**
+系统信息每5秒自动刷新"""
+            
+            sections.append(help_section)
+            
+            # Combine all sections
+            self.submenu_content = "\n\n".join(sections)
             
         except ImportError as e:
             # Handle missing dependencies
@@ -212,6 +311,8 @@ pip install -r requirements.txt"""
     def action_exit(self) -> None:
         """Exit the application."""
         self.app.exit()
+    
+
     
     # Vim-like navigation actions
     def action_nav_left(self) -> None:
