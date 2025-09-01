@@ -82,31 +82,31 @@ class SystemInfoModule:
                         version_line = result.stdout.split('\n')[0]
                         # Extract just the version number for cleaner display
                         if pm == "apt":
-                            version = version_line.split()[1] if len(version_line.split()) > 1 else "已安装"
+                            version = version_line.split()[1] if len(version_line.split()) > 1 else "Installed"
                         elif pm == "pacman":
-                            version = version_line.split()[2] if len(version_line.split()) > 2 else "已安装"
+                            version = version_line.split()[2] if len(version_line.split()) > 2 else "Installed"
                         else:
                             version = version_line[:50]  # Limit length
                         detected[description] = f"✓ {version}"
                     else:
-                        detected[description] = "✓ 已安装"
+                        detected[description] = "✓ Installed"
                         
                 except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-                    detected[description] = "✓ 已检测到"
+                    detected[description] = "✓ Detected"
         
         # If no package managers detected, try to guess from the distribution
         if not detected:
             try:
                 if Path("/etc/debian_version").exists():
-                    detected["APT (Debian/Ubuntu)"] = "? 可能存在但未检测到"
+                    detected["APT (Debian/Ubuntu)"] = "? Possibly available but not detected"
                 elif Path("/etc/redhat-release").exists():
-                    detected["YUM/DNF (Red Hat)"] = "? 可能存在但未检测到"
+                    detected["YUM/DNF (Red Hat)"] = "? Possibly available but not detected"
                 elif Path("/etc/arch-release").exists():
-                    detected["Pacman (Arch)"] = "? 可能存在但未检测到"
+                    detected["Pacman (Arch)"] = "? Possibly available but not detected"
                 else:
-                    detected["未知"] = "无可用包管理器"
+                    detected["Unknown"] = "No package managers available"
             except Exception:
-                detected["检测失败"] = "无法检测包管理器"
+                detected["Detection Failed"] = "Unable to detect package managers"
                     
         return detected
     

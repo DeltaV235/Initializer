@@ -1,10 +1,11 @@
 """Main menu screen for the Linux System Initializer."""
 
+import re
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal
+from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
-from textual.widgets import Button, Static, Rule, Label
+from textual.widgets import Button, Static, Rule, Label, ProgressBar
 from textual.reactive import reactive
 
 from ...config_manager import ConfigManager
@@ -15,7 +16,6 @@ class MainMenuScreen(Screen):
     """Main menu screen with system overview."""
     
     BINDINGS = [
-        ("1", "system_info", "System Detail Information"),
         ("2", "homebrew", "Homebrew"),
         ("3", "package_manager", "Package Manager"),
         ("4", "user_management", "User Management"),
@@ -31,7 +31,6 @@ class MainMenuScreen(Screen):
     ]
     
     selected_item = reactive("")
-    submenu_content = reactive("**🔄 正在加载系统信息...**\n\n请稍候，正在检测系统状态...")
     
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
@@ -53,9 +52,6 @@ class MainMenuScreen(Screen):
                 with Vertical(id="left-panel"):
                     yield Label("📋 Main Menu", classes="panel-title")
                     
-                    if self.modules_config.get("system_info", {}).enabled:
-                        yield Button("📊 System Detail Information (1)", id="system-info")
-                    
                     if self.modules_config.get("homebrew", {}).enabled:
                         yield Button("🍺 Homebrew Management (2)", id="homebrew")
                     
@@ -72,8 +68,9 @@ class MainMenuScreen(Screen):
                 
                 # Right panel - System Status
                 with Vertical(id="right-panel"):
-                    yield Label("系统状态", classes="panel-title", id="submenu-title")
-                    yield Static(self.submenu_content, id="submenu-content")
+                    yield Label("System Status", classes="panel-title", id="submenu-title")
+                    with ScrollableContainer(id="system-info-scroll"):
+                        yield Static("🔄 Loading System Information...", id="loading-message")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -96,186 +93,182 @@ class MainMenuScreen(Screen):
         # Schedule next refresh
         self.set_timer(5.0, self._refresh_system_status)
     
-    def watch_submenu_content(self, content: str) -> None:
-        """Watch for changes in submenu_content and update the UI."""
-        try:
-            submenu_widget = self.query_one("#submenu-content", Static)
-            submenu_widget.update(content)
-        except Exception:
-            # Widget might not be ready yet
-            pass
-    
     def update_system_status(self) -> None:
-        """Update the right panel with detailed system information."""
+        """Update the right panel with detailed system information using dynamic widgets."""
         try:
             # Get comprehensive system information
             all_info = self.system_info_module.get_all_info()
             
-            # Format system information sections
-            sections = []
-            
-            # 1. Distribution Information
-            if "distribution" in all_info:
-                dist_info = all_info["distribution"]
-                dist_lines = []
-                for key, value in dist_info.items():
-                    if key in ["Distribution", "System"] and value != "Unknown":
-                        dist_lines.append(f"系统: {value}")
-                    elif key == "Distro Version" and value:
-                        dist_lines.append(f"版本: {value}")
-                    elif key == "Architecture":
-                        dist_lines.append(f"架构: {value}")
-                    elif key == "Machine" and "Architecture" not in dist_info:
-                        dist_lines.append(f"架构: {value}")
-                
-                if dist_lines:
-                    sections.append("**🖥️ 系统信息**\n" + "\n".join(dist_lines))
-            
-            # 2. CPU Information
-            if "cpu" in all_info:
-                cpu_info = all_info["cpu"]
-                cpu_lines = []
-                for key, value in cpu_info.items():
-                    if key == "Processor" and value != "Unknown":
-                        cpu_lines.append(f"处理器: {value[:40]}...")
-                    elif key == "CPU Count":
-                        cpu_lines.append(f"核心数: {value}")
-                    elif key == "Logical CPUs":
-                        cpu_lines.append(f"逻辑核心: {value}")
-                    elif key == "Current Usage":
-                        cpu_lines.append(f"当前使用率: {value}")
-                    elif key == "CPU Frequency":
-                        cpu_lines.append(f"频率: {value}")
-                
-                if cpu_lines:
-                    sections.append("**⚡ CPU信息**\n" + "\n".join(cpu_lines))
-            
-            # 3. Memory Information
-            if "memory" in all_info:
-                mem_info = all_info["memory"]
-                mem_lines = []
-                for key, value in mem_info.items():
-                    if "RAM" in key:
-                        if key == "Total RAM":
-                            mem_lines.append(f"总内存: {value}")
-                        elif key == "Used RAM":
-                            mem_lines.append(f"已用内存: {value}")
-                        elif key == "Available RAM":
-                            mem_lines.append(f"可用内存: {value}")
-                        elif key == "RAM Usage":
-                            mem_lines.append(f"内存使用率: {value}")
-                    elif "Swap" in key:
-                        if key == "Total Swap":
-                            mem_lines.append(f"交换分区: {value}")
-                        elif key == "Swap Usage":
-                            mem_lines.append(f"交换使用率: {value}")
-                
-                if mem_lines:
-                    sections.append("**💾 内存信息**\n" + "\n".join(mem_lines))
-            
-            # 4. Disk Information
-            if "disk" in all_info:
-                disk_info = all_info["disk"]
-                disk_lines = []
-                for key, value in disk_info.items():
-                    if "Root Partition" in key:
-                        if key == "Root Partition Total":
-                            disk_lines.append(f"总容量: {value}")
-                        elif key == "Root Partition Used":
-                            disk_lines.append(f"已用空间: {value}")
-                        elif key == "Root Partition Free":
-                            disk_lines.append(f"可用空间: {value}")
-                        elif key == "Root Partition Usage":
-                            disk_lines.append(f"磁盘使用率: {value}")
-                
-                if disk_lines:
-                    sections.append("**💿 磁盘信息**\n" + "\n".join(disk_lines))
-            
-            # 5. Package Manager Information
-            if "package_manager" in all_info:
-                pm_info = all_info["package_manager"]
-                pm_lines = []
-                for pm, status in pm_info.items():
-                    # Truncate long version strings
-                    if len(status) > 45:
-                        status = status[:42] + "..."
-                    pm_lines.append(f"• {pm}: {status}")
-                
-                if pm_lines:
-                    sections.append("**📦 包管理器**\n" + "\n".join(pm_lines))
-            
-            # 6. Quick Help
-            help_section = """**⚡ 快捷键说明**
-• 1 - 系统详细信息
-• 2 - Homebrew 管理  
-• 3 - 包管理器设置
-• 4 - 用户管理
-• S - 设置 • ? - 帮助 • Q - 退出
-
-**🎮 导航控制**
-• H/J/K/L - 方向控制
-• Enter - 确认选择"""
-            
-            sections.append(help_section)
-            
-            # Combine all sections
-            self.submenu_content = "\n\n".join(sections)
+            # Clear existing content and rebuild
+            self._clear_system_panel()
+            self._build_system_panel(all_info)
             
         except ImportError as e:
             # Handle missing dependencies
-            self.submenu_content = f"""**⚠️ 依赖库缺失**
-
-某些系统信息库未安装: {str(e)}
-
-**📋 基本信息**
-系统: Linux
-状态: 运行中
-
-**⚡ 快捷键说明**
-• 1 - System Detail Information
-• 2 - Homebrew 管理  
-• 3 - 包管理器设置
-• 4 - 用户管理
-• S - 设置
-• ? - 帮助
-• Q - 退出
-
-**🎮 导航控制**
-• H/J/K/L - 方向控制 (左/下/上/右)
-• Enter - 确认选择
-
-**💡 提示**
-请确保虚拟环境已激活并安装所需依赖：
-pip install -r requirements.txt"""
+            self._show_error_message(f"Missing Dependencies: {str(e)}")
             
         except Exception as e:
             # Handle other errors
-            self.submenu_content = f"""**❌ 系统状态获取失败**
+            self._show_error_message(f"System Status Failed: {str(e)[:100]}")
 
-错误详情: {str(e)[:100]}
+    def _clear_system_panel(self) -> None:
+        """Clear the system info panel."""
+        try:
+            scroll_container = self.query_one("#system-info-scroll", ScrollableContainer)
+            # Remove all children except loading message
+            children = list(scroll_container.children)
+            for child in children:
+                child.remove()
+        except Exception:
+            pass
 
-**⚡ 快捷键说明**
-• 1 - System Detail Information
-• 2 - Homebrew 管理  
-• 3 - 包管理器设置
-• 4 - 用户管理
-• S - 设置
-• ? - 帮助
-• Q - 退出
+    def _build_system_panel(self, all_info: dict) -> None:
+        """Build the system panel with dynamic widgets."""
+        scroll_container = self.query_one("#system-info-scroll", ScrollableContainer)
+        
+        # Category configuration with icons and priority fields
+        category_configs = [
+            ("distribution", "🐧 System Information", [
+                ("System", "System"),
+                ("Distribution", "Distribution"),
+                ("Distro Version", "Version"),
+                ("Architecture", "Architecture"),
+                ("Machine", "Machine"),
+            ]),
+            ("cpu", "🖥️ CPU Information", [
+                ("Processor", "Processor"),
+                ("CPU Count", "Physical Cores"),
+                ("Logical CPUs", "Logical Cores"),
+                ("Current Usage", "CPU Usage"),
+                ("CPU Frequency", "CPU Frequency"),
+            ]),
+            ("memory", "💾 Memory Information", [
+                ("Total RAM", "Total RAM"),
+                ("Available RAM", "Available RAM"),
+                ("Used RAM", "Used RAM"),
+                ("RAM Usage", "RAM Usage"),
+                ("Total Swap", "Total Swap"),
+                ("Used Swap", "Used Swap"),
+                ("Swap Usage", "Swap Usage"),
+            ]),
+            ("disk", "💽 Storage Information", [
+                ("Root Partition Total", "Total Storage"),
+                ("Root Partition Used", "Used Storage"),
+                ("Root Partition Free", "Free Storage"),
+                ("Root Partition Usage", "Storage Usage"),
+            ]),
+            ("package_manager", "📦 Package Managers", None),
+            ("network", "🌐 Network Information", [
+                ("Bytes Sent", "Network Sent"),
+                ("Bytes Received", "Network Received"),
+            ])
+        ]
+        
+        for category_key, category_title, field_mappings in category_configs:
+            if category_key not in all_info or not all_info[category_key]:
+                continue
+                
+            data = all_info[category_key]
+            
+            # Add category separator and title
+            self._add_category_section(scroll_container, category_title)
+            
+            # Add data rows
+            if field_mappings:
+                # Use priority fields
+                for eng_key, cn_key in field_mappings:
+                    if eng_key in data:
+                        self._add_data_row(scroll_container, cn_key, data[eng_key])
+            else:
+                # Add all fields (for package_manager and interface fields)
+                for key, value in data.items():
+                    display_key = self._translate_key(category_key, key)
+                    self._add_data_row(scroll_container, display_key, value)
 
-**🎮 导航控制**
-• H/J/K/L - 方向控制 (左/下/上/右)
-• Enter - 确认选择
+    def _add_category_section(self, container: ScrollableContainer, title: str) -> None:
+        """Add a category section with separator."""
+        container.mount(Rule(line_style="heavy", classes="category-separator"))
+        container.mount(Label(title, classes="category-title"))
 
-**💡 提示**
-尝试重启应用或检查系统权限"""
+    def _add_data_row(self, container: ScrollableContainer, key: str, value: str) -> None:
+        """Add a data row with appropriate widget type."""
+        if not value or str(value) == "Unknown" or not str(value).strip():
+            return
+            
+        # Check if this is a percentage field that needs progress bar
+        percentage_fields = ["CPU Usage", "RAM Usage", "Swap Usage", "Storage Usage"]
+        
+        if key in percentage_fields and "%" in str(value):
+            self._add_progress_row(container, key, str(value))
+        else:
+            self._add_info_row(container, key, str(value))
 
-    @on(Button.Pressed, "#system-info")
-    def action_system_info(self) -> None:
-        """Show system information screen."""
-        from .system_info import SystemInfoScreen
-        self.app.push_screen(SystemInfoScreen(self.config_manager))
-    
+    def _add_info_row(self, container: ScrollableContainer, key: str, value: str) -> None:
+        """Add a regular info row with two columns."""
+        row_container = Horizontal(classes="info-row")
+        container.mount(row_container)
+        row_container.mount(Label(key, classes="info-key"))
+        row_container.mount(Label(value, classes="info-value"))
+
+    def _add_progress_row(self, container: ScrollableContainer, key: str, value: str) -> None:
+        """Add a progress row with ProgressBar."""
+        # Extract percentage value
+        percentage_match = re.search(r'(\d+\.?\d*)%', value)
+        if not percentage_match:
+            self._add_info_row(container, key, value)
+            return
+            
+        percentage = float(percentage_match.group(1))
+        
+        row_container = Horizontal(classes="progress-row")
+        container.mount(row_container)
+        row_container.mount(Label(key, classes="info-key"))
+        
+        # Create progress bar
+        progress_bar = ProgressBar(total=100.0, show_percentage=False, show_eta=False)
+        progress_bar.update(progress=percentage)
+        progress_bar.add_class("info-progress")
+        
+        # Set color based on usage level
+        if percentage < 50:
+            progress_bar.add_class("progress-good")
+        elif percentage < 80:
+            progress_bar.add_class("progress-warning")
+        else:
+            progress_bar.add_class("progress-danger")
+        
+        row_container.mount(progress_bar)
+        row_container.mount(Label(f"{percentage:.1f}%", classes="progress-label"))
+
+    def _translate_key(self, category: str, key: str) -> str:
+        """Translate English keys for display."""
+        translations = {
+            "network": {
+                "Bytes Sent": "Network Sent",
+                "Bytes Received": "Network Received",
+            }
+        }
+        
+        if category in translations and key in translations[category]:
+            return translations[category][key]
+        
+        # Handle interface keys
+        if key.startswith("Interface "):
+            return key.replace("Interface ", "Network Interface ")
+        elif key.startswith("IP Address "):
+            return key.replace("IP Address ", "IP Address ")
+            
+        return key
+
+    def _show_error_message(self, message: str) -> None:
+        """Show error message in the system panel."""
+        try:
+            scroll_container = self.query_one("#system-info-scroll", ScrollableContainer)
+            self._clear_system_panel()
+            scroll_container.mount(Static(f"❌ {message}", id="error-message"))
+        except Exception:
+            pass
+
     @on(Button.Pressed, "#homebrew")
     def action_homebrew(self) -> None:
         """Show Homebrew management screen."""

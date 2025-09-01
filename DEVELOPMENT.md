@@ -41,7 +41,7 @@
 ### ✅ 用户界面
 
 - [x] 主菜单界面 (MainMenuScreen)
-- [x] 系统信息界面 (SystemInfoScreen)
+- [x] ~~系统信息界面 (SystemInfoScreen)~~ - 已整合到主菜单
 - [x] Homebrew 管理界面 (HomebrewScreen)
 - [x] 设置界面 (SettingsScreen)
 - [x] 帮助界面 (HelpScreen)
