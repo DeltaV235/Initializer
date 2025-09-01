@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Language
+- **Primary Language**: Respond in Chinese (中文) for all interactions
+- **Technical Terms**: Keep technical terms, programming keywords, and proper nouns in English
+- **Code Comments**: Follow existing code comment language conventions in the project
+
+## Development Philosophy
+- **Simplicity First**: Use simple, straightforward implementations over complex designs
+- **Avoid Over-engineering**: Implement only what is needed, avoid premature optimization
+- **Readability**: Prefer clear, readable code over clever solutions
+
 ## Project Overview
 
 Linux System Initializer is a modern Terminal User Interface (TUI) application for Linux system initialization and configuration. The project has been refactored from legacy bash scripts to a Python-based TUI using Rich/Textual framework.
