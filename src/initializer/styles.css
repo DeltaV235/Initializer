@@ -6,15 +6,17 @@ Screen {
     overflow: hidden;
 }
 
-/* Title styles */
+/* Title styles with configurator border */
 #title {
     dock: top;
     width: 100%;
-    height: 1;
+    height: 3;
     content-align: center middle;
     text-align: center;
     text-style: bold;
-    color: $accent;
+    color: $primary;
+    border: solid $primary;
+    margin: 1;
 }
 
 #subtitle {
@@ -34,105 +36,111 @@ Screen {
 #content-area {
     layout: horizontal;
     height: 1fr;
+    margin: 1;
 }
 
-/* Left panel styles */
+/* Left panel styles - Segments list */
 #left-panel {
-    width: 40%;
-    min-width: 30;
-    border-right: solid $primary;
-    padding-right: 1;
+    width: 30%;
+    min-width: 25;
+    max-width: 40;
+    padding-right: 2;
 }
 
-/* Right panel styles */
+/* Right panel styles - Settings */
 #right-panel {
-    width: 60%;
+    width: 70%;
     min-width: 40;
-    padding-left: 1;
-}
-
-#submenu-content {
-    height: 1fr;
+    border: solid $primary;
     padding: 1;
-    border: solid $secondary;
-    background: $surface;
 }
 
-/* Right panel system info styles */
-#system-info-scroll {
-    height: auto;
-}
-
-.info-row {
-    height: 1;
-    layout: horizontal;
-    margin: 0 1;
-}
-
-.info-key {
-    width: 1fr;
+/* Panel titles */
+.panel-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
     text-align: left;
 }
 
-.info-value {
-    width: 1fr;
-    text-align: right;
-}
-
-.progress-row {
-    height: 1;
-    layout: horizontal;
-    margin: 0 1;
-}
-
-.info-progress {
-    width: 20;
-    margin: 0 1;
-}
-
-.progress-label {
-    width: 8;
-    text-align: right;
-}
-
-.category-title {
-    margin: 1 0;
-    text-style: bold;
-}
-
-.category-separator {
-    margin: 1 0;
-}
-
-.progress-good {
-    color: $success;
-}
-
-.progress-warning {
-    color: $warning;
-}
-
-.progress-danger {
-    color: $error;
-}
-
-/* Left panel button styles */
-#left-panel Button {
+/* Segment buttons */
+.segment-item {
     width: 100%;
-    margin-bottom: 1;
+    margin-bottom: 0;
+    height: 1;
+    text-align: left;
+    content-align: left middle;
+    background: transparent;
+    border: none;
+    color: $text;
 }
 
-/* Panel styles */
-.panel {
-    border: solid $primary;
-    margin: 1;
-    padding: 1;
+.segment-item:hover {
+    background: transparent;
+    color: $text;
 }
 
-.panel-title {
+.segment-item.selected {
+    background: transparent;
+    color: $text;
+    text-style: none;
+}
+
+.segment-item:focus {
+    background: transparent;
+    color: $text;
+    text-style: none;
+    border: none;
+}
+
+/* Settings panel */
+#settings-scroll {
+    height: 100%;
+    width: 100%;
+}
+
+/* Settings content styles */
+.section-title {
     text-style: bold;
+    color: $primary;
+    margin: 1 0;
+}
+
+.info-key {
     color: $accent;
-    margin-bottom: 1;
+    text-style: bold;
+    margin-top: 1;
+}
+
+.info-value {
+    color: $text;
+    margin-left: 2;
+    margin-bottom: 0;
+}
+
+.info-display {
+    color: $text;
+    margin-left: 2;
+}
+
+.package-item {
+    color: $text-muted;
+    margin-left: 2;
+}
+
+.action-item {
+    color: $secondary;
+    margin-left: 2;
+}
+
+.help-item {
+    color: $text;
+    margin-left: 2;
+}
+
+.version-info {
+    color: $text-muted;
+    margin-left: 2;
 }
 
 /* Menu panel */
@@ -182,6 +190,7 @@ Button:hover {
 
 Button:focus {
     text-style: bold;
+    border: solid $accent;
 }
 
 /* Enhanced focus visibility for other elements */
