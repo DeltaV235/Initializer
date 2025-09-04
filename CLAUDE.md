@@ -146,3 +146,4 @@ python main.py --preset minimal   # Basic installation
 - Package manager module (auto-detect, mirror management)
 - User management module (user creation, SSH keys)
 - Enhanced UI components (progress bars, confirmation dialogs)
+- 所有测试由我来手动执行

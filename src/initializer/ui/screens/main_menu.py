@@ -62,7 +62,6 @@ class MainMenuScreen(Screen):
         with Container(id="main-container"):
             # Title section with configurator style
             yield Static(f"{self.app_config.name} Configurator v{self.app_config.version}", id="title")
-            yield Rule()
             
             # Main content area with left-right split
             with Horizontal(id="content-area"):
@@ -80,7 +79,8 @@ class MainMenuScreen(Screen):
                         if segment["id"] == "user_management" and segment["id"] in self.modules_config and not self.modules_config[segment["id"]].enabled:
                             continue
                         
-                        yield Button(f"{segment['name']}", id=f"segment-{segment['id']}", classes="segment-item")
+                        # Create button with fixed-width arrow indicator space
+                        yield Button(f"  {segment['name']}", id=f"segment-{segment['id']}", classes="segment-item")
                 
                 # Right panel - Settings
                 with Vertical(id="right-panel"):
@@ -330,10 +330,12 @@ class MainMenuScreen(Screen):
             try:
                 button = self.query_one(f"#segment-{segment['id']}", Button)
                 if segment['id'] == selected_id:
+                    # Use arrow in the reserved space (first 2 characters)
                     button.label = f"▶ {segment['name']}"
                     button.add_class("selected")
                 else:
-                    button.label = segment['name']
+                    # Keep the reserved space with spaces
+                    button.label = f"  {segment['name']}"
                     button.remove_class("selected")
             except:
                 pass

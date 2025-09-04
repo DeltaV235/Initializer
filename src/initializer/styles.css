@@ -45,6 +45,8 @@ Screen {
     min-width: 25;
     max-width: 40;
     padding-right: 2;
+    border: solid $primary;
+    padding: 1;
 }
 
 /* Right panel styles - Settings */
@@ -83,13 +85,11 @@ Screen {
 .segment-item.selected {
     background: transparent;
     color: $text;
-    text-style: none;
 }
 
 .segment-item:focus {
     background: transparent;
     color: $text;
-    text-style: none;
     border: none;
 }
 
