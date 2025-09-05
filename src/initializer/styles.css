@@ -14,8 +14,8 @@ Screen {
     content-align: center middle;
     text-align: center;
     text-style: bold;
-    color: $primary;
-    border: solid $primary;
+    color: cyan;
+    border: solid cyan;
     margin: 1;
 }
 
@@ -45,7 +45,7 @@ Screen {
     min-width: 25;
     max-width: 40;
     padding-right: 2;
-    border: solid $primary;
+    border: solid cyan;
     padding: 1;
 }
 
@@ -53,7 +53,7 @@ Screen {
 #right-panel {
     width: 70%;
     min-width: 40;
-    border: solid $primary;
+    border: solid cyan;
     padding: 1;
 }
 
@@ -162,7 +162,7 @@ Screen {
 
 #status-content {
     height: auto;
-    border: solid $secondary;
+    border: solid cyan;
     padding: 1;
     margin-bottom: 1;
     background: $surface;
@@ -190,7 +190,7 @@ Button:hover {
 
 Button:focus {
     text-style: bold;
-    border: solid $accent;
+    border: solid cyan;
 }
 
 /* Enhanced focus visibility for other elements */

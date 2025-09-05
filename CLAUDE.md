@@ -147,3 +147,4 @@ python main.py --preset minimal   # Basic installation
 - User management module (user creation, SSH keys)
 - Enhanced UI components (progress bars, confirmation dialogs)
 - 所有测试由我来手动执行
+- 如果在非 WSL 环境下开发，在完成修改之后，自动执行 @tools/sync-to-remote.sh 来将变更同步到远端
