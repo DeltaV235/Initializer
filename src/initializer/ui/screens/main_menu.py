@@ -1,11 +1,12 @@
 """Main menu screen for the Linux System Initializer."""
 
 import re
-from textual import on
+import asyncio
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar, ListView, ListItem
+from textual.widgets import Button, Static, Rule, Label, ProgressBar, ListView, ListItem, LoadingIndicator
 from textual.reactive import reactive
 from textual.message import Message
 
@@ -34,6 +35,25 @@ class MainMenuScreen(Screen):
     
     selected_segment = reactive("system_info")
     
+    # Cache and loading states for each segment
+    system_info_cache = reactive(None)
+    system_info_loading = reactive(False)
+    
+    homebrew_cache = reactive(None)
+    homebrew_loading = reactive(False)
+    
+    package_manager_cache = reactive(None)
+    package_manager_loading = reactive(False)
+    
+    user_management_cache = reactive(None)
+    user_management_loading = reactive(False)
+    
+    settings_cache = reactive(None)
+    settings_loading = reactive(False)
+    
+    help_cache = reactive(None)
+    help_loading = reactive(False)
+    
     # Define segments configuration
     SEGMENTS = [
         {"id": "system_info", "name": "System Info"},
@@ -56,6 +76,7 @@ class MainMenuScreen(Screen):
         if old_value != new_value:
             self.update_settings_panel()
             self._update_segment_buttons(new_value)
+            self._update_panel_title(new_value)
         
     def compose(self) -> ComposeResult:
         """Compose the configurator interface."""
@@ -84,7 +105,6 @@ class MainMenuScreen(Screen):
                 
                 # Right panel - Settings
                 with Vertical(id="right-panel"):
-                    yield Label("Settings", classes="panel-title", id="settings-title")
                     with ScrollableContainer(id="settings-scroll"):
                         yield Static("Select a segment to view settings", id="settings-content")
     
@@ -94,12 +114,30 @@ class MainMenuScreen(Screen):
         self.update_settings_panel()
         # Initialize button states
         self._update_segment_buttons(self.selected_segment)
+        # Initialize panel title
+        self._update_panel_title(self.selected_segment)
         # Set initial focus to the selected segment button
         try:
             initial_button = self.query_one(f"#segment-{self.selected_segment}", Button)
             initial_button.focus()
         except:
             pass
+        
+        # Schedule immediate content update after mount to ensure it's visible
+        self.call_after_refresh(self._initial_content_load)
+    
+    def _initial_content_load(self) -> None:
+        """Load initial content for the default selected segment."""
+        # Force update the settings panel again to ensure content is visible
+        self.update_settings_panel()
+        self.refresh()
+    
+    def refresh_system_info(self) -> None:
+        """Refresh system information cache."""
+        self.system_info_cache = None
+        self.system_info_loading = False
+        if self.selected_segment == "system_info":
+            self.update_settings_panel()
     
     def update_settings_panel(self) -> None:
         """Update the settings panel based on selected segment."""
@@ -133,49 +171,157 @@ class MainMenuScreen(Screen):
     
     def _build_system_info_settings(self, container: ScrollableContainer) -> None:
         """Build system information settings panel."""
-        # Get system info
-        all_info = self.system_info_module.get_all_info()
-        
-        container.mount(Label("System Information Configuration", classes="section-title"))
-        container.mount(Rule())
-        
-        container.mount(Label("► Enabled", classes="info-key"))
-        container.mount(Static("✓ System information collection is enabled", classes="info-value"))
-        
-        container.mount(Label("► Export Format", classes="info-key"))  
-        container.mount(Static("JSON, YAML, TXT formats supported", classes="info-value"))
-        
-        container.mount(Label("► Auto-refresh", classes="info-key"))
-        container.mount(Static("Every 5 seconds", classes="info-value"))
-        
-        # Show current system status
-        container.mount(Rule())
+        # Show title
         container.mount(Label("Current System Status", classes="section-title"))
         
-        # Show key system metrics
+        # Check if we have cached data and not currently loading
+        if self.system_info_cache and not self.system_info_loading:
+            self._display_system_info(container, self.system_info_cache)
+        elif self.system_info_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading system information...", classes="info-display"))
+        else:
+            # Start loading system info asynchronously
+            self.system_info_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading system information...", classes="info-display"))
+            # Start the background task
+            self._load_system_info()
+    
+    def _display_system_info(self, container: ScrollableContainer, all_info: dict) -> None:
+        """Display system information in the container."""
+        # Handle error case
+        if "error" in all_info:
+            container.mount(Label(f"Error loading system info: {all_info['error']}", classes="info-display"))
+            return
+        
+        # Distribution information
         if "distribution" in all_info:
             dist_info = all_info["distribution"]
             if "System" in dist_info:
                 container.mount(Label(f"System: {dist_info['System']}", classes="info-display"))
             if "Distribution" in dist_info:
                 container.mount(Label(f"Distribution: {dist_info['Distribution']}", classes="info-display"))
+            if "Machine" in dist_info:
+                container.mount(Label(f"Architecture: {dist_info['Machine']}", classes="info-display"))
         
-        if "cpu" in all_info and "Current Usage" in all_info["cpu"]:
-            container.mount(Label(f"CPU Usage: {all_info['cpu']['Current Usage']}", classes="info-display"))
+        # CPU information
+        if "cpu" in all_info:
+            cpu_info = all_info["cpu"]
+            if "CPU Count" in cpu_info:
+                container.mount(Label(f"CPU Cores: {cpu_info['CPU Count']}", classes="info-display"))
+            if "Current Usage" in cpu_info:
+                container.mount(Label(f"CPU Usage: {cpu_info['Current Usage']}", classes="info-display"))
         
-        if "memory" in all_info and "RAM Usage" in all_info["memory"]:
-            container.mount(Label(f"Memory Usage: {all_info['memory']['RAM Usage']}", classes="info-display"))
+        # Memory information
+        if "memory" in all_info:
+            memory_info = all_info["memory"]
+            if "Total RAM" in memory_info:
+                container.mount(Label(f"Total RAM: {memory_info['Total RAM']}", classes="info-display"))
+            if "RAM Usage" in memory_info:
+                container.mount(Label(f"Memory Usage: {memory_info['RAM Usage']}", classes="info-display"))
+        
+        # Disk information
+        if "disk" in all_info:
+            disk_info = all_info["disk"]
+            if "Root Partition Usage" in disk_info:
+                container.mount(Label(f"Disk Usage: {disk_info['Root Partition Usage']}", classes="info-display"))
+            if "Root Partition Free" in disk_info:
+                container.mount(Label(f"Free Space: {disk_info['Root Partition Free']}", classes="info-display"))
+        
+        # Network information
+        if "network" in all_info:
+            network_info = all_info["network"]
+            # Show first network interface IP
+            for key, value in network_info.items():
+                if key.startswith("Interface") and not key.endswith("lo"):
+                    container.mount(Label(f"{key}: {value}", classes="info-display"))
+                    break  # Show only the first active interface
+        
+        # Package managers
+        if "package_manager" in all_info:
+            pkg_info = all_info["package_manager"]
+            if pkg_info:
+                container.mount(Label("", classes="info-display"))  # Add spacing
+                container.mount(Label("Package Managers:", classes="info-key"))
+                for pm_name, pm_status in list(pkg_info.items())[:3]:  # Show first 3
+                    container.mount(Label(f"  {pm_name}: {pm_status}", classes="info-display"))
     
-    def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
-        """Build Homebrew settings panel."""
-        container.mount(Label("Homebrew Configuration", classes="section-title"))
-        container.mount(Rule())
-        
-        homebrew_config = self.modules_config.get("homebrew")
-        if homebrew_config is None:
-            homebrew_config = {"enabled": True, "auto_install": False, "packages": []}
-        else:
-            homebrew_config = homebrew_config.settings
+    @work(exclusive=True, thread=True)
+    async def _load_system_info(self) -> None:
+        """Load system information in background thread."""
+        try:
+            # Get system info in background thread (this may take time)
+            all_info = self.system_info_module.get_all_info()
+            
+            # Update cache and loading state on main thread using app.call_from_thread
+            def update_ui():
+                self.system_info_cache = all_info
+                self.system_info_loading = False
+                
+                # Refresh the panel if we're still on system_info segment
+                if self.selected_segment == "system_info":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.system_info_loading = False
+                self.system_info_cache = {"error": str(e)}
+                if self.selected_segment == "system_info":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    @work(exclusive=True, thread=True)
+    async def _load_homebrew_info(self) -> None:
+        """Load Homebrew information in background thread."""
+        try:
+            # Get homebrew config (this may involve checking system state)
+            homebrew_config = self.modules_config.get("homebrew")
+            if homebrew_config is None:
+                homebrew_config = {"enabled": True, "auto_install": False, "packages": []}
+            else:
+                homebrew_config = homebrew_config.settings
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.homebrew_cache = homebrew_config
+                self.homebrew_loading = False
+                
+                # Refresh the panel if we're still on homebrew segment
+                if self.selected_segment == "homebrew":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.homebrew_loading = False
+                self.homebrew_cache = {"error": str(e)}
+                if self.selected_segment == "homebrew":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_homebrew_info(self, container: ScrollableContainer, homebrew_config: dict) -> None:
+        """Display Homebrew information in the container."""
+        # Handle error case
+        if "error" in homebrew_config:
+            container.mount(Label(f"Error loading Homebrew info: {homebrew_config['error']}", classes="info-display"))
+            return
         
         container.mount(Label("► Status", classes="info-key"))
         status = "Enabled" if homebrew_config.get("enabled", True) else "Disabled"
@@ -197,16 +343,48 @@ class MainMenuScreen(Screen):
         else:
             container.mount(Static("No packages configured", classes="info-value"))
     
-    def _build_package_manager_settings(self, container: ScrollableContainer) -> None:
-        """Build Package Manager settings panel."""
-        container.mount(Label("Package Manager Configuration", classes="section-title"))
-        container.mount(Rule())
-        
-        pkg_config = self.modules_config.get("package_manager")
-        if pkg_config is None:
-            pkg_config = {"auto_detect": True, "mirror_management": False}
-        else:
-            pkg_config = pkg_config.settings
+    @work(exclusive=True, thread=True)
+    async def _load_package_manager_info(self) -> None:
+        """Load Package Manager information in background thread."""
+        try:
+            # Get package manager config
+            pkg_config = self.modules_config.get("package_manager")
+            if pkg_config is None:
+                pkg_config = {"auto_detect": True, "mirror_management": False}
+            else:
+                pkg_config = pkg_config.settings
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.package_manager_cache = pkg_config
+                self.package_manager_loading = False
+                
+                # Refresh the panel if we're still on package_manager segment
+                if self.selected_segment == "package_manager":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.package_manager_loading = False
+                self.package_manager_cache = {"error": str(e)}
+                if self.selected_segment == "package_manager":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_package_manager_info(self, container: ScrollableContainer, pkg_config: dict) -> None:
+        """Display Package Manager information in the container."""
+        # Handle error case
+        if "error" in pkg_config:
+            container.mount(Label(f"Error loading Package Manager info: {pkg_config['error']}", classes="info-display"))
+            return
         
         container.mount(Label("► Auto-detect", classes="info-key"))
         auto_detect = "Yes" if pkg_config.get("auto_detect", True) else "No"
@@ -220,16 +398,48 @@ class MainMenuScreen(Screen):
         managers = ["apt", "yum", "dnf", "pacman", "zypper"]
         container.mount(Static(", ".join(managers), classes="info-value"))
     
-    def _build_user_management_settings(self, container: ScrollableContainer) -> None:
-        """Build User Management settings panel."""
-        container.mount(Label("User Management Configuration", classes="section-title"))
-        container.mount(Rule())
-        
-        user_config = self.modules_config.get("user_management")
-        if user_config is None:
-            user_config = {"user_creation": True, "ssh_keys": True, "sudo_management": True}
-        else:
-            user_config = user_config.settings
+    @work(exclusive=True, thread=True)
+    async def _load_user_management_info(self) -> None:
+        """Load User Management information in background thread."""
+        try:
+            # Get user management config
+            user_config = self.modules_config.get("user_management")
+            if user_config is None:
+                user_config = {"user_creation": True, "ssh_keys": True, "sudo_management": True}
+            else:
+                user_config = user_config.settings
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.user_management_cache = user_config
+                self.user_management_loading = False
+                
+                # Refresh the panel if we're still on user_management segment
+                if self.selected_segment == "user_management":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.user_management_loading = False
+                self.user_management_cache = {"error": str(e)}
+                if self.selected_segment == "user_management":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_user_management_info(self, container: ScrollableContainer, user_config: dict) -> None:
+        """Display User Management information in the container."""
+        # Handle error case
+        if "error" in user_config:
+            container.mount(Label(f"Error loading User Management info: {user_config['error']}", classes="info-display"))
+            return
         
         container.mount(Label("► User Creation", classes="info-key"))
         user_creation = "Enabled" if user_config.get("user_creation", True) else "Disabled"
@@ -243,21 +453,59 @@ class MainMenuScreen(Screen):
         sudo_access = "Configurable" if user_config.get("sudo_management", True) else "Manual"
         container.mount(Static(f"{sudo_access}", classes="info-value"))
     
-    def _build_app_settings(self, container: ScrollableContainer) -> None:
-        """Build application settings panel."""
-        container.mount(Label("Application Settings", classes="section-title"))
-        container.mount(Rule())
+    @work(exclusive=True, thread=True)
+    async def _load_settings_info(self) -> None:
+        """Load Settings information in background thread."""
+        try:
+            # Get app config settings
+            settings_info = {
+                "theme": self.app_config.get("theme", "default"),
+                "debug": self.app_config.get("debug", False),
+                "auto_save": self.app_config.get("auto_save", True)
+            }
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.settings_cache = settings_info
+                self.settings_loading = False
+                
+                # Refresh the panel if we're still on settings segment
+                if self.selected_segment == "settings":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.settings_loading = False
+                self.settings_cache = {"error": str(e)}
+                if self.selected_segment == "settings":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_settings_info(self, container: ScrollableContainer, settings_info: dict) -> None:
+        """Display Settings information in the container."""
+        # Handle error case
+        if "error" in settings_info:
+            container.mount(Label(f"Error loading Settings: {settings_info['error']}", classes="info-display"))
+            return
         
         container.mount(Label("► Theme", classes="info-key"))
-        current_theme = self.app_config.get("theme", "default")
+        current_theme = settings_info.get("theme", "default")
         container.mount(Static(f"{current_theme.title()}", classes="info-value"))
         
         container.mount(Label("► Debug Mode", classes="info-key"))
-        debug_mode = "Enabled" if self.app_config.get("debug", False) else "Disabled"
+        debug_mode = "Enabled" if settings_info.get("debug", False) else "Disabled"
         container.mount(Static(f"{debug_mode}", classes="info-value"))
         
         container.mount(Label("► Auto-save", classes="info-key"))
-        auto_save = "Enabled" if self.app_config.get("auto_save", True) else "Disabled"
+        auto_save = "Enabled" if settings_info.get("auto_save", True) else "Disabled"
         container.mount(Static(f"{auto_save}", classes="info-value"))
         
         container.mount(Rule())
@@ -266,10 +514,47 @@ class MainMenuScreen(Screen):
         container.mount(Static("• Export configuration", classes="action-item"))
         container.mount(Static("• Reset to defaults", classes="action-item"))
     
-    def _build_help_content(self, container: ScrollableContainer) -> None:
-        """Build help content panel."""
-        container.mount(Label("Help & Documentation", classes="section-title"))
-        container.mount(Rule())
+    @work(exclusive=True, thread=True)
+    async def _load_help_info(self) -> None:
+        """Load Help information in background thread."""
+        try:
+            # Get help info
+            help_info = {
+                "app_name": self.app_config.name,
+                "app_version": self.app_config.version
+            }
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.help_cache = help_info
+                self.help_loading = False
+                
+                # Refresh the panel if we're still on help segment
+                if self.selected_segment == "help":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.help_loading = False
+                self.help_cache = {"error": str(e)}
+                if self.selected_segment == "help":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_help_info(self, container: ScrollableContainer, help_info: dict) -> None:
+        """Display Help information in the container."""
+        # Handle error case
+        if "error" in help_info:
+            container.mount(Label(f"Error loading Help: {help_info['error']}", classes="info-display"))
+            return
         
         container.mount(Label("► Keyboard Shortcuts", classes="info-key"))
         container.mount(Static("q - Quit application", classes="help-item"))
@@ -287,8 +572,108 @@ class MainMenuScreen(Screen):
         
         container.mount(Rule())
         container.mount(Label("Version Information", classes="section-title"))
-        container.mount(Static(f"Application: {self.app_config.name} v{self.app_config.version}", classes="version-info"))
+        container.mount(Static(f"Application: {help_info['app_name']} v{help_info['app_version']}", classes="version-info"))
         container.mount(Static("Framework: Rich/Textual", classes="version-info"))
+    
+    def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
+        """Build Homebrew settings panel."""
+        container.mount(Label("Homebrew Configuration", classes="section-title"))
+        container.mount(Rule())
+        
+        # Check if we have cached data and not currently loading
+        if self.homebrew_cache and not self.homebrew_loading:
+            self._display_homebrew_info(container, self.homebrew_cache)
+        elif self.homebrew_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading Homebrew configuration...", classes="info-display"))
+        else:
+            # Start loading homebrew info asynchronously
+            self.homebrew_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading Homebrew configuration...", classes="info-display"))
+            # Start the background task
+            self._load_homebrew_info()
+    
+    def _build_package_manager_settings(self, container: ScrollableContainer) -> None:
+        """Build Package Manager settings panel."""
+        container.mount(Label("Package Manager Configuration", classes="section-title"))
+        container.mount(Rule())
+        
+        # Check if we have cached data and not currently loading
+        if self.package_manager_cache and not self.package_manager_loading:
+            self._display_package_manager_info(container, self.package_manager_cache)
+        elif self.package_manager_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading package manager configuration...", classes="info-display"))
+        else:
+            # Start loading package manager info asynchronously
+            self.package_manager_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading package manager configuration...", classes="info-display"))
+            # Start the background task
+            self._load_package_manager_info()
+    
+    def _build_user_management_settings(self, container: ScrollableContainer) -> None:
+        """Build User Management settings panel."""
+        container.mount(Label("User Management Configuration", classes="section-title"))
+        container.mount(Rule())
+        
+        # Check if we have cached data and not currently loading
+        if self.user_management_cache and not self.user_management_loading:
+            self._display_user_management_info(container, self.user_management_cache)
+        elif self.user_management_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading user management configuration...", classes="info-display"))
+        else:
+            # Start loading user management info asynchronously
+            self.user_management_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading user management configuration...", classes="info-display"))
+            # Start the background task
+            self._load_user_management_info()
+    
+    def _build_app_settings(self, container: ScrollableContainer) -> None:
+        """Build application settings panel."""
+        container.mount(Label("Application Settings", classes="section-title"))
+        container.mount(Rule())
+        
+        # Check if we have cached data and not currently loading
+        if self.settings_cache and not self.settings_loading:
+            self._display_settings_info(container, self.settings_cache)
+        elif self.settings_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading application settings...", classes="info-display"))
+        else:
+            # Start loading settings info asynchronously
+            self.settings_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading application settings...", classes="info-display"))
+            # Start the background task
+            self._load_settings_info()
+    
+    def _build_help_content(self, container: ScrollableContainer) -> None:
+        """Build help content panel."""
+        container.mount(Label("Help & Documentation", classes="section-title"))
+        container.mount(Rule())
+        
+        # Check if we have cached data and not currently loading
+        if self.help_cache and not self.help_loading:
+            self._display_help_info(container, self.help_cache)
+        elif self.help_loading:
+            # Show loading indicator
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading help documentation...", classes="info-display"))
+        else:
+            # Start loading help info asynchronously
+            self.help_loading = True
+            container.mount(LoadingIndicator())
+            container.mount(Label("Loading help documentation...", classes="info-display"))
+            # Start the background task
+            self._load_help_info()
     
     def _show_error_message(self, message: str) -> None:
         """Show error message in the settings panel."""
@@ -313,6 +698,8 @@ class MainMenuScreen(Screen):
             
             # Update button styles to show selection
             self._update_segment_buttons(segment_id)
+            # Update panel title
+            self._update_panel_title(segment_id)
     
     def _handle_focus_change(self) -> None:
         """Handle focus changes on segment buttons."""
@@ -323,6 +710,7 @@ class MainMenuScreen(Screen):
                 self.selected_segment = segment_id
                 self.update_settings_panel()
                 self._update_segment_buttons(segment_id)
+                self._update_panel_title(segment_id)
     
     def _update_segment_buttons(self, selected_id: str) -> None:
         """Update segment button styles to show selection."""
@@ -340,36 +728,46 @@ class MainMenuScreen(Screen):
             except:
                 pass
     
+    def _update_panel_title(self, selected_id: str) -> None:
+        """Update the right panel title based on selected segment."""
+        # Title label has been removed - this method is kept for compatibility
+        pass
+    
     # Legacy action methods for backward compatibility
     def action_homebrew(self) -> None:
         """Show Homebrew settings."""
         self.selected_segment = "homebrew"
         self.update_settings_panel()
         self._update_segment_buttons("homebrew")
+        self._update_panel_title("homebrew")
         
     def action_package_manager(self) -> None:
         """Show package manager settings."""
         self.selected_segment = "package_manager" 
         self.update_settings_panel()
         self._update_segment_buttons("package_manager")
+        self._update_panel_title("package_manager")
         
     def action_user_management(self) -> None:
         """Show user management settings."""
         self.selected_segment = "user_management"
         self.update_settings_panel()
         self._update_segment_buttons("user_management")
+        self._update_panel_title("user_management")
         
     def action_settings(self) -> None:
         """Show application settings."""
         self.selected_segment = "settings"
         self.update_settings_panel()
         self._update_segment_buttons("settings")
+        self._update_panel_title("settings")
         
     def action_help(self) -> None:
         """Show help content."""
         self.selected_segment = "help"
         self.update_settings_panel()
         self._update_segment_buttons("help")
+        self._update_panel_title("help")
     
     def action_quit(self) -> None:
         """Exit the application."""
