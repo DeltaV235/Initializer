@@ -35,14 +35,15 @@ class SystemInfoScreen(Screen):
     def compose(self) -> ComposeResult:
         """Compose the system information interface."""
         with Container():
-            yield Static("📊 System Information", id="title")
+            yield Static("📊 System Status", id="title")
             yield Rule()
             
             with Horizontal():
                 # Main content
                 with Vertical(id="main-content", classes="panel"):
                     yield Label("System Details")
-                    yield DataTable(id="system-table")
+                    # Add cursor="row" for better navigation, zebra_stripes for readability
+                    yield DataTable(id="system-table", cursor_type="row", zebra_stripes=True)
                     
                 # Side panel
                 with Vertical(id="side-panel", classes="panel"):
@@ -57,23 +58,72 @@ class SystemInfoScreen(Screen):
         self.load_system_info()
     
     def load_system_info(self) -> None:
-        """Load and display system information."""
+        """Load and display all system information."""
         table = self.query_one("#system-table", DataTable)
         table.clear(columns=True)
         
-        # Add columns
-        table.add_columns("Component", "Information")
+        # Add columns with specific widths for better display
+        table.add_column("Category", width=45)
+        table.add_column("Information", width=55)
         
-        # Get system information
+        # Get all system information
         info = self.system_info.get_all_info()
         
-        # Add rows
-        for category, data in info.items():
-            if isinstance(data, dict):
+        # Define category display names and order
+        category_order = ["distribution", "cpu", "memory", "disk", "network", "package_manager"]
+        category_names = {
+            "distribution": "🖥️ System",
+            "package_manager": "📦 Package Managers", 
+            "cpu": "🎯 CPU",
+            "memory": "💾 Memory",
+            "disk": "💿 Storage",
+            "network": "🌐 Network",
+        }
+        
+        # Track total rows added
+        row_count = 0
+        
+        # Process categories in a specific order for better organization
+        for category in category_order:
+            if category not in info:
+                continue
+                
+            data = info[category]
+            display_name = category_names.get(category, category.title())
+            
+            # Add category separator (except for the first category)
+            if row_count > 0:
+                table.add_row("", "")  # Empty row as separator
+                row_count += 1
+            
+            if isinstance(data, dict) and data:  # Check if dict is not empty
+                # Add each item in the category
                 for key, value in data.items():
-                    table.add_row(f"{category.title()} - {key}", str(value))
-            else:
-                table.add_row(category.title(), str(data))
+                    # Skip empty values
+                    if not value or (isinstance(value, str) and not value.strip()):
+                        continue
+                        
+                    # Format the key for better readability
+                    formatted_key = f"{display_name} - {key}"
+                    
+                    # Handle long values by truncating if necessary
+                    str_value = str(value)
+                    if len(str_value) > 80:
+                        str_value = str_value[:77] + "..."
+                    
+                    table.add_row(formatted_key, str_value)
+                    row_count += 1
+            elif data:  # Non-dict data that's not empty
+                table.add_row(display_name, str(data))
+                row_count += 1
+        
+        # Add a final row showing total count
+        if row_count > 0:
+            table.add_row("", "")
+            table.add_row("📊 Total Items Displayed", str(row_count - 1))  # -1 to exclude this row
+        
+        # Set focus to the table for better navigation
+        table.focus()
     
     @on(Button.Pressed, "#refresh")
     def action_refresh(self) -> None:

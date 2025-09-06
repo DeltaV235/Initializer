@@ -18,7 +18,7 @@ class MainMenuScreen(Screen):
     """Main menu screen with configurator interface."""
     
     BINDINGS = [
-        ("1", "select_segment", "System Info"),
+        ("1", "select_segment", "System Status"),
         ("2", "select_segment", "Homebrew"),
         ("3", "select_segment", "Package Manager"),
         ("4", "select_segment", "User Management"),
@@ -56,7 +56,7 @@ class MainMenuScreen(Screen):
     
     # Define segments configuration
     SEGMENTS = [
-        {"id": "system_info", "name": "System Info"},
+        {"id": "system_info", "name": "System Status"},
         {"id": "homebrew", "name": "Homebrew"},
         {"id": "package_manager", "name": "Package Manager"},
         {"id": "user_management", "name": "User Management"},
@@ -172,7 +172,7 @@ class MainMenuScreen(Screen):
     def _build_system_info_settings(self, container: ScrollableContainer) -> None:
         """Build system information settings panel."""
         # Show title
-        container.mount(Label("Current System Status", classes="section-title"))
+        container.mount(Label("System Status", classes="section-title"))
         
         # Check if we have cached data and not currently loading
         if self.system_info_cache and not self.system_info_loading:
@@ -190,14 +190,16 @@ class MainMenuScreen(Screen):
             self._load_system_info()
     
     def _display_system_info(self, container: ScrollableContainer, all_info: dict) -> None:
-        """Display system information in the container."""
+        """Display comprehensive system information in the container."""
         # Handle error case
         if "error" in all_info:
             container.mount(Label(f"Error loading system info: {all_info['error']}", classes="info-display"))
             return
         
-        # Distribution information
+        # System & Distribution Information
         if "distribution" in all_info:
+            container.mount(Label("🖥️ System", classes="info-key"))
+            
             dist_info = all_info["distribution"]
             if "System" in dist_info:
                 container.mount(Label(f"System: {dist_info['System']}", classes="info-display"))
@@ -205,47 +207,96 @@ class MainMenuScreen(Screen):
                 container.mount(Label(f"Distribution: {dist_info['Distribution']}", classes="info-display"))
             if "Machine" in dist_info:
                 container.mount(Label(f"Architecture: {dist_info['Machine']}", classes="info-display"))
+            if "Release" in dist_info:
+                container.mount(Label(f"Kernel: {dist_info['Release']}", classes="info-display"))
+            if "Distro Version" in dist_info and dist_info["Distro Version"]:
+                container.mount(Label(f"Version: {dist_info['Distro Version']}", classes="info-display"))
         
-        # CPU information
+        # CPU Information
         if "cpu" in all_info:
+            container.mount(Label("", classes="info-display"))  # Spacing
+            container.mount(Label("🎯 CPU", classes="info-key"))
+            
             cpu_info = all_info["cpu"]
             if "CPU Count" in cpu_info:
                 container.mount(Label(f"CPU Cores: {cpu_info['CPU Count']}", classes="info-display"))
+            if "Logical CPUs" in cpu_info:
+                container.mount(Label(f"Logical CPUs: {cpu_info['Logical CPUs']}", classes="info-display"))
             if "Current Usage" in cpu_info:
                 container.mount(Label(f"CPU Usage: {cpu_info['Current Usage']}", classes="info-display"))
+            if "CPU Frequency" in cpu_info:
+                container.mount(Label(f"CPU Frequency: {cpu_info['CPU Frequency']}", classes="info-display"))
+            if "Processor" in cpu_info and cpu_info["Processor"]:
+                container.mount(Label(f"Processor: {cpu_info['Processor']}", classes="info-display"))
         
-        # Memory information
+        # Memory Information  
         if "memory" in all_info:
+            container.mount(Label("", classes="info-display"))  # Spacing
+            container.mount(Label("💾 Memory", classes="info-key"))
+            
             memory_info = all_info["memory"]
             if "Total RAM" in memory_info:
                 container.mount(Label(f"Total RAM: {memory_info['Total RAM']}", classes="info-display"))
+            if "Available RAM" in memory_info:
+                container.mount(Label(f"Available RAM: {memory_info['Available RAM']}", classes="info-display"))
+            if "Used RAM" in memory_info:
+                container.mount(Label(f"Used RAM: {memory_info['Used RAM']}", classes="info-display"))
             if "RAM Usage" in memory_info:
                 container.mount(Label(f"Memory Usage: {memory_info['RAM Usage']}", classes="info-display"))
+            if "Total Swap" in memory_info and memory_info["Total Swap"] != "0.0 B":
+                container.mount(Label(f"Swap: {memory_info.get('Used Swap', '0')} / {memory_info['Total Swap']}", classes="info-display"))
         
-        # Disk information
+        # Disk Information
         if "disk" in all_info:
+            container.mount(Label("", classes="info-display"))  # Spacing
+            container.mount(Label("💿 Storage", classes="info-key"))
+            
             disk_info = all_info["disk"]
             if "Root Partition Usage" in disk_info:
                 container.mount(Label(f"Disk Usage: {disk_info['Root Partition Usage']}", classes="info-display"))
             if "Root Partition Free" in disk_info:
                 container.mount(Label(f"Free Space: {disk_info['Root Partition Free']}", classes="info-display"))
+            if "Root Partition Total" in disk_info:
+                container.mount(Label(f"Total Space: {disk_info['Root Partition Total']}", classes="info-display"))
+            
+            # Show additional partitions
+            partition_count = 0
+            for key in disk_info:
+                if key.startswith("Partition") and " (" in key:
+                    partition_count += 1
+                    if partition_count <= 2:  # Show up to 2 additional partitions
+                        mount_point = key.split("(")[1].rstrip(")")
+                        container.mount(Label(f"Mount {mount_point}: {disk_info[key]}", classes="info-display"))
         
-        # Network information
+        # Network Information
         if "network" in all_info:
+            container.mount(Label("", classes="info-display"))  # Spacing
+            container.mount(Label("🌐 Network", classes="info-key"))
+            
             network_info = all_info["network"]
-            # Show first network interface IP
+            # Show network interfaces
+            interface_count = 0
             for key, value in network_info.items():
-                if key.startswith("Interface") and not key.endswith("lo"):
-                    container.mount(Label(f"{key}: {value}", classes="info-display"))
-                    break  # Show only the first active interface
+                if key.startswith("Interface") and "lo" not in key.lower():
+                    interface_count += 1
+                    if interface_count <= 3:  # Show up to 3 interfaces
+                        container.mount(Label(f"{key}: {value}", classes="info-display"))
+            
+            # Show network statistics if available
+            if "Bytes Sent" in network_info:
+                container.mount(Label(f"Network Sent: {network_info['Bytes Sent']}", classes="info-display"))
+            if "Bytes Received" in network_info:
+                container.mount(Label(f"Network Received: {network_info['Bytes Received']}", classes="info-display"))
         
-        # Package managers
+        # Package Managers
         if "package_manager" in all_info:
             pkg_info = all_info["package_manager"]
             if pkg_info:
-                container.mount(Label("", classes="info-display"))  # Add spacing
-                container.mount(Label("Package Managers:", classes="info-key"))
-                for pm_name, pm_status in list(pkg_info.items())[:3]:  # Show first 3
+                container.mount(Label("", classes="info-display"))  # Spacing
+                container.mount(Label("📦 Package Managers", classes="info-key"))
+                
+                # Show all detected package managers
+                for pm_name, pm_status in pkg_info.items():
                     container.mount(Label(f"  {pm_name}: {pm_status}", classes="info-display"))
     
     @work(exclusive=True, thread=True)
@@ -564,7 +615,7 @@ class MainMenuScreen(Screen):
         container.mount(Static("Enter - Select item", classes="help-item"))
         
         container.mount(Label("► Segments", classes="info-key"))
-        container.mount(Static("System Info - View system information", classes="help-item"))
+        container.mount(Static("System Status - View system information", classes="help-item"))
         container.mount(Static("Homebrew - Manage Homebrew packages", classes="help-item"))
         container.mount(Static("Package Manager - Configure package managers", classes="help-item"))
         container.mount(Static("User Management - Manage users and SSH keys", classes="help-item"))
