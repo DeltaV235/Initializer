@@ -53,7 +53,7 @@ class SystemInfoModule:
         return info
     
     def get_package_manager_info(self) -> Dict[str, str]:
-        """Detect available package managers."""
+        """Detect available package managers and their sources."""
         package_managers = {
             "apt": "APT (Debian/Ubuntu)",
             "yum": "YUM (RHEL/CentOS)",
@@ -83,11 +83,43 @@ class SystemInfoModule:
                         # Extract just the version number for cleaner display
                         if pm == "apt":
                             version = version_line.split()[1] if len(version_line.split()) > 1 else "Installed"
+                            detected[description] = f"✓ {version}"
+                            
+                            # Add APT sources information
+                            apt_sources = self._get_apt_sources()
+                            if apt_sources:
+                                detected[f"{description} - Sources"] = apt_sources
+                                
                         elif pm == "pacman":
                             version = version_line.split()[2] if len(version_line.split()) > 2 else "Installed"
+                            detected[description] = f"✓ {version}"
+                            
+                            # Add Pacman mirror information
+                            pacman_mirrors = self._get_pacman_mirrors()
+                            if pacman_mirrors:
+                                detected[f"{description} - Mirrors"] = pacman_mirrors
+                                
+                        elif pm in ["yum", "dnf"]:
+                            version = version_line[:50]  # Limit length
+                            detected[description] = f"✓ {version}"
+                            
+                            # Add YUM/DNF repository information
+                            repos = self._get_yum_dnf_repos(pm)
+                            if repos:
+                                detected[f"{description} - Repos"] = repos
+                                
+                        elif pm == "brew":
+                            version = version_line[:50]
+                            detected[description] = f"✓ {version}"
+                            
+                            # Add Homebrew sources information
+                            brew_sources = self._get_homebrew_sources()
+                            if brew_sources:
+                                detected[f"{description} - Sources"] = brew_sources
+                                
                         else:
                             version = version_line[:50]  # Limit length
-                        detected[description] = f"✓ {version}"
+                            detected[description] = f"✓ {version}"
                     else:
                         detected[description] = "✓ Installed"
                         
@@ -109,6 +141,129 @@ class SystemInfoModule:
                 detected["Detection Failed"] = "Unable to detect package managers"
                     
         return detected
+    
+    def _get_apt_sources(self) -> str:
+        """Get APT sources information."""
+        try:
+            # Check main sources.list
+            sources_files = ["/etc/apt/sources.list"]
+            
+            # Check sources.list.d directory
+            sources_d = Path("/etc/apt/sources.list.d")
+            if sources_d.exists():
+                sources_files.extend([str(f) for f in sources_d.glob("*.list")])
+            
+            apt_sources = []
+            for sources_file in sources_files:
+                try:
+                    with open(sources_file, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith('#') and line.startswith('deb'):
+                                parts = line.split()
+                                if len(parts) >= 2:
+                                    url = parts[1]
+                                    # Extract domain from URL
+                                    if '://' in url:
+                                        domain = url.split('://')[1].split('/')[0]
+                                        if domain not in apt_sources:
+                                            apt_sources.append(domain)
+                except (PermissionError, FileNotFoundError):
+                    continue
+            
+            if apt_sources:
+                return ", ".join(apt_sources[:3])  # Show first 3
+        except Exception:
+            pass
+        return ""
+    
+    def _get_pacman_mirrors(self) -> str:
+        """Get Pacman mirror information."""
+        try:
+            pacman_conf = "/etc/pacman.conf"
+            mirrorlist = "/etc/pacman.d/mirrorlist"
+            
+            mirrors = []
+            for conf_file in [pacman_conf, mirrorlist]:
+                try:
+                    with open(conf_file, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith('Server =') and not line.startswith('#'):
+                                url = line.split('=', 1)[1].strip()
+                                if '://' in url:
+                                    domain = url.split('://')[1].split('/')[0]
+                                    if domain not in mirrors:
+                                        mirrors.append(domain)
+                except (PermissionError, FileNotFoundError):
+                    continue
+            
+            if mirrors:
+                return ", ".join(mirrors[:3])  # Show first 3
+        except Exception:
+            pass
+        return ""
+    
+    def _get_yum_dnf_repos(self, cmd: str) -> str:
+        """Get YUM/DNF repository information."""
+        try:
+            result = subprocess.run(
+                [cmd, "repolist", "enabled"], 
+                capture_output=True, 
+                text=True, 
+                timeout=10
+            )
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')[2:]  # Skip header
+                repos = []
+                for line in lines:
+                    if line.strip():
+                        parts = line.split()
+                        if parts:
+                            repo_name = parts[0]
+                            if repo_name not in repos:
+                                repos.append(repo_name)
+                
+                if repos:
+                    return ", ".join(repos[:3])  # Show first 3
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return ""
+    
+    def _get_homebrew_sources(self) -> str:
+        """Get Homebrew source information."""
+        try:
+            # Check Homebrew core tap
+            result = subprocess.run(
+                ["brew", "tap"], 
+                capture_output=True, 
+                text=True, 
+                timeout=10
+            )
+            if result.returncode == 0:
+                taps = result.stdout.strip().split('\n')
+                core_taps = [tap for tap in taps if 'core' in tap or 'homebrew' in tap]
+                if core_taps:
+                    return ", ".join(core_taps[:2])
+                    
+            # Check HOMEBREW_BOTTLE_DOMAIN environment variable
+            result = subprocess.run(
+                ["brew", "config"], 
+                capture_output=True, 
+                text=True, 
+                timeout=5
+            )
+            
+            for line in result.stdout.split('\n'):
+                if 'HOMEBREW_BOTTLE_DOMAIN' in line and ':' in line:
+                    domain = line.split(':', 1)[1].strip()
+                    if domain:
+                        return f"Bottles: {domain}"
+                    break
+                        
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return ""
     
     def get_cpu_info(self) -> Dict[str, str]:
         """Get CPU information."""
@@ -198,27 +353,80 @@ class SystemInfoModule:
             for i, partition in enumerate(partitions[:3]):  # Limit to first 3
                 try:
                     usage = psutil.disk_usage(partition.mountpoint)
-                    info[f"Partition {i+1} ({partition.mountpoint})"] = (
+                    # Shorten mountpoint display for better formatting
+                    mount_display = partition.mountpoint
+                    if len(mount_display) > 15:
+                        mount_display = mount_display[:12] + "..."
+                    
+                    info[f"Mount {mount_display}"] = (
                         f"{self._format_bytes(usage.used)} / {self._format_bytes(usage.total)} "
                         f"({usage.percent:.1f}%)"
                     )
                 except:
                     continue
         else:
-            # Fallback method
+            # Fallback method - get more detailed disk information
             try:
+                # Get all mounted filesystems
                 result = subprocess.run(
-                    ["df", "-h", "/"], 
+                    ["df", "-h"], 
                     capture_output=True, 
                     text=True, 
                     timeout=5
                 )
                 if result.returncode == 0:
-                    lines = result.stdout.strip().split('\n')
-                    if len(lines) > 1:
-                        fields = lines[1].split()
-                        if len(fields) >= 5:
-                            info["Root Partition"] = f"{fields[2]} / {fields[1]} ({fields[4]})"
+                    lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                    partition_count = 0
+                    root_processed = False
+                    
+                    for line in lines:
+                        fields = line.split()
+                        if len(fields) >= 6:
+                            filesystem = fields[0]
+                            total = fields[1]
+                            used = fields[2]
+                            avail = fields[3]
+                            use_percent = fields[4]
+                            mountpoint = fields[5]
+                            
+                            # Skip special filesystems
+                            if any(skip in filesystem for skip in ['/dev/loop', 'tmpfs', 'udev', 'devpts', 'sysfs', 'proc']):
+                                continue
+                            
+                            # Handle root partition specially
+                            if mountpoint == '/' and not root_processed:
+                                info["Root Partition Total"] = total
+                                info["Root Partition Used"] = used
+                                info["Root Partition Free"] = avail
+                                info["Root Partition Usage"] = use_percent
+                                root_processed = True
+                            else:
+                                # Format mountpoint for display
+                                if len(mountpoint) > 15:
+                                    mount_display = mountpoint[:12] + "..."
+                                else:
+                                    mount_display = mountpoint
+                                    
+                                info[f"Mount {mount_display}"] = f"{used} / {total} ({use_percent})"
+                            
+                            partition_count += 1
+                            if partition_count >= 4:  # Limit total partitions
+                                break
+                                
+                if not info:
+                    # Simple fallback
+                    result = subprocess.run(
+                        ["df", "-h", "/"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        lines = result.stdout.strip().split('\n')
+                        if len(lines) > 1:
+                            fields = lines[1].split()
+                            if len(fields) >= 5:
+                                info["Root Partition"] = f"{fields[2]} / {fields[1]} ({fields[4]})"
             except:
                 info["Disk Info"] = "Unavailable"
                 
@@ -264,11 +472,21 @@ class SystemInfoModule:
                 
         return info
     
+    def get_repository_sources(self) -> Dict[str, str]:
+        """Get additional repository sources not covered by package managers."""
+        sources = {}
+        
+        # Only add sources that aren't already covered in package manager info
+        # This can be used for additional or custom repository sources
+        
+        return sources
+    
     def get_all_info(self) -> Dict[str, Dict[str, str]]:
         """Get all system information."""
         return {
             "distribution": self.get_distribution_info(),
             "package_manager": self.get_package_manager_info(),
+            "repository_sources": self.get_repository_sources(),
             "cpu": self.get_cpu_info(),
             "memory": self.get_memory_info(),
             "disk": self.get_disk_info(),

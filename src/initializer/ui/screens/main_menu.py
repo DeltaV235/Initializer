@@ -252,21 +252,25 @@ class MainMenuScreen(Screen):
             container.mount(Label("💿 Storage", classes="info-key"))
             
             disk_info = all_info["disk"]
-            if "Root Partition Usage" in disk_info:
-                container.mount(Label(f"Disk Usage: {disk_info['Root Partition Usage']}", classes="info-display"))
-            if "Root Partition Free" in disk_info:
-                container.mount(Label(f"Free Space: {disk_info['Root Partition Free']}", classes="info-display"))
-            if "Root Partition Total" in disk_info:
-                container.mount(Label(f"Total Space: {disk_info['Root Partition Total']}", classes="info-display"))
             
-            # Show additional partitions
-            partition_count = 0
-            for key in disk_info:
-                if key.startswith("Partition") and " (" in key:
-                    partition_count += 1
-                    if partition_count <= 2:  # Show up to 2 additional partitions
-                        mount_point = key.split("(")[1].rstrip(")")
-                        container.mount(Label(f"Mount {mount_point}: {disk_info[key]}", classes="info-display"))
+            # Display all disk information dynamically
+            for key, value in disk_info.items():
+                if not value or (isinstance(value, str) and not value.strip()):
+                    continue
+                    
+                # Format the display based on key type
+                if "Usage" in key:
+                    container.mount(Label(f"Disk Usage: {value}", classes="info-display"))
+                elif "Free" in key:
+                    container.mount(Label(f"Free Space: {value}", classes="info-display"))
+                elif "Total" in key:
+                    container.mount(Label(f"Total Space: {value}", classes="info-display"))
+                elif key.startswith("Mount"):
+                    container.mount(Label(f"{key}: {value}", classes="info-display"))
+                elif "Available" in key:
+                    container.mount(Label(f"{key}: {value}", classes="info-display"))
+                elif "Partition" in key:
+                    container.mount(Label(f"{key}: {value}", classes="info-display"))
         
         # Network Information
         if "network" in all_info:
@@ -288,14 +292,14 @@ class MainMenuScreen(Screen):
             if "Bytes Received" in network_info:
                 container.mount(Label(f"Network Received: {network_info['Bytes Received']}", classes="info-display"))
         
-        # Package Managers
+        # Package Managers & Sources
         if "package_manager" in all_info:
             pkg_info = all_info["package_manager"]
             if pkg_info:
                 container.mount(Label("", classes="info-display"))  # Spacing
                 container.mount(Label("📦 Package Managers", classes="info-key"))
                 
-                # Show all detected package managers
+                # Show all detected package managers and their sources
                 for pm_name, pm_status in pkg_info.items():
                     container.mount(Label(f"  {pm_name}: {pm_status}", classes="info-display"))
     
