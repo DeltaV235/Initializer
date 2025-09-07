@@ -151,10 +151,22 @@ class MainMenuScreen(Screen):
         try:
             settings_container = self.query_one("#settings-scroll", ScrollableContainer)
             
-            # Clear existing content
+            # Clear existing content completely
             children = list(settings_container.children)
             for child in children:
-                child.remove()
+                try:
+                    child.remove()
+                except Exception:
+                    pass
+            
+            # Reset package manager focus state and cleanup when switching segments
+            if self.selected_segment != "package_manager":
+                self._pm_focused_item = None
+                if hasattr(self, '_pm_unique_suffix'):
+                    del self._pm_unique_suffix
+            
+            # Force a refresh to ensure widgets are fully cleared
+            self.refresh()
             
             # Add content based on selected segment
             if self.selected_segment == "system_info":
@@ -459,8 +471,12 @@ class MainMenuScreen(Screen):
         primary = pkg_info.get("primary")
         if primary:
             container.mount(Label("Available Package Managers", classes="section-title"))
+            # Use unique IDs to avoid conflicts
+            import time
+            unique_suffix = str(int(time.time() * 1000))[-6:]  # Use timestamp for uniqueness
+            
             # Create clickable static text for the package manager
-            pm_text = Static(f"  {primary.name.upper()}", id="pm-manager-item", classes="pm-item-text")
+            pm_text = Static(f"  {primary.name.upper()}", id=f"pm-manager-item-{unique_suffix}", classes="pm-item-text")
             container.mount(pm_text)
             
             container.mount(Rule())
@@ -472,29 +488,33 @@ class MainMenuScreen(Screen):
                 source = primary.current_source
                 if len(source) > 60:
                     source = source[:57] + "..."
-                source_text = Static(f"  {source}", id="pm-source-item", classes="pm-item-text")
+                source_text = Static(f"  {source}", id=f"pm-source-item-{unique_suffix}", classes="pm-item-text")
                 container.mount(source_text)
             else:
-                source_text = Static("  Not configured", id="pm-source-item", classes="pm-item-text")
+                source_text = Static("  Not configured", id=f"pm-source-item-{unique_suffix}", classes="pm-item-text")
                 container.mount(source_text)
         else:
             container.mount(Label("No package managers detected", classes="info-display"))
             
-        # Store the primary PM for later use
+        # Store the primary PM and unique suffix for later use
         if hasattr(self, '_primary_pm'):
             del self._primary_pm
         if primary:
             self._primary_pm = primary
+            self._pm_unique_suffix = unique_suffix
             
-        # Initialize focus state
+        # Initialize focus state - reset it each time we rebuild the panel
         self._pm_focused_item = None  # Track which item has focus
         self._update_pm_focus_indicators()
     
     def _update_pm_focus_indicators(self) -> None:
         """Update arrow indicators for package manager items."""
+        if not hasattr(self, '_pm_unique_suffix'):
+            return
+            
         try:
-            # Update package manager item
-            pm_item = self.query_one("#pm-manager-item", Static)
+            # Update package manager item using unique ID
+            pm_item = self.query_one(f"#pm-manager-item-{self._pm_unique_suffix}", Static)
             if hasattr(self, '_primary_pm') and self._primary_pm:
                 if self._pm_focused_item == "manager":
                     pm_item.update(f"▶ {self._primary_pm.name.upper()}")
@@ -504,8 +524,8 @@ class MainMenuScreen(Screen):
             pass
             
         try:
-            # Update source item
-            source_item = self.query_one("#pm-source-item", Static)
+            # Update source item using unique ID
+            source_item = self.query_one(f"#pm-source-item-{self._pm_unique_suffix}", Static)
             if hasattr(self, '_primary_pm') and self._primary_pm:
                 source = self._primary_pm.current_source or "Not configured"
                 if len(source) > 60:
@@ -867,8 +887,11 @@ class MainMenuScreen(Screen):
     def handle_segment_selection(self, event: Button.Pressed) -> None:
         """Handle segment button selection."""
         button_id = event.button.id
+        
         if button_id and button_id.startswith("segment-"):
             segment_id = button_id.replace("segment-", "")
+            
+            # Update segment selection and switch to right panel
             self.selected_segment = segment_id
             self.update_settings_panel()
             
@@ -876,6 +899,10 @@ class MainMenuScreen(Screen):
             self._update_segment_buttons(segment_id)
             # Update panel title
             self._update_panel_title(segment_id)
+            
+            # When a segment button is pressed (Enter key), switch to right panel
+            self.action_nav_right()
+            
         elif button_id == "open-pm-config":
             # Open package manager configuration screen
             from .package_manager import PackageManagerScreen
@@ -1044,6 +1071,13 @@ class MainMenuScreen(Screen):
                 right_container = self.query_one("#settings-scroll", ScrollableContainer)
                 right_container.focus()
                 self._update_panel_focus(is_left_focused=False)
+                
+                # If switching to package manager section, initialize focus
+                if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                    # Always set initial focus when switching to right panel
+                    self._pm_focused_item = "manager"
+                    self._update_pm_focus_indicators()
+                    
             except:
                 # If right panel doesn't have focusable elements, stay in left
                 pass
@@ -1147,10 +1181,11 @@ class MainMenuScreen(Screen):
             
             # If switching to package manager section, initialize focus
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
-                if not hasattr(self, '_pm_focused_item') or self._pm_focused_item is None:
-                    self._pm_focused_item = "manager"
-                    self._update_pm_focus_indicators()
-        except:
+                # Always set initial focus when switching to right panel
+                self._pm_focused_item = "manager"
+                self._update_pm_focus_indicators()
+            
+        except Exception:
             pass
     
     def _is_focus_in_left_panel(self) -> bool:
@@ -1229,6 +1264,14 @@ class MainMenuScreen(Screen):
     def action_select_item(self) -> None:
         """Select current focused item (enter key)."""
         focused = self.focused
+        
+        # Check if we're in the left panel (segments)
+        is_in_left = self._is_focus_in_left_panel()
+        
+        if is_in_left:
+            # In left panel: Enter acts like Tab/L key - switch to right panel
+            self.action_nav_right()
+            return
         
         # Check if we're in package manager section with focused items
         if self.selected_segment == "package_manager" and hasattr(self, '_pm_focused_item') and self._pm_focused_item:
