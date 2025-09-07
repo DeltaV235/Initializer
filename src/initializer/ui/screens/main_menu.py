@@ -12,6 +12,7 @@ from textual.message import Message
 
 from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
+from ...modules.package_manager import PackageManagerDetector
 
 
 class MainMenuScreen(Screen):
@@ -19,8 +20,8 @@ class MainMenuScreen(Screen):
     
     BINDINGS = [
         ("1", "select_segment", "System Status"),
-        ("2", "select_segment", "Homebrew"),
-        ("3", "select_segment", "Package Manager"),
+        ("2", "select_segment", "Package Manager"),
+        ("3", "select_segment", "Homebrew"),
         ("4", "select_segment", "User Management"),
         ("5", "select_segment", "Settings"),
         ("s", "select_segment", "Settings"),
@@ -58,8 +59,8 @@ class MainMenuScreen(Screen):
     # Define segments configuration
     SEGMENTS = [
         {"id": "system_info", "name": "System Status"},
-        {"id": "homebrew", "name": "Homebrew"},
         {"id": "package_manager", "name": "Package Manager"},
+        {"id": "homebrew", "name": "Homebrew"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},
     ]
@@ -410,16 +411,21 @@ class MainMenuScreen(Screen):
     async def _load_package_manager_info(self) -> None:
         """Load Package Manager information in background thread."""
         try:
-            # Get package manager config
-            pkg_config = self.modules_config.get("package_manager")
-            if pkg_config is None:
-                pkg_config = {"auto_detect": True, "mirror_management": False}
-            else:
-                pkg_config = pkg_config.settings
+            # Detect package managers and get their info
+            detector = PackageManagerDetector()
+            package_managers = detector.package_managers
+            primary_pm = detector.get_primary_package_manager()
+            
+            # Build package manager info
+            pkg_info = {
+                "package_managers": package_managers,
+                "primary": primary_pm,
+                "count": len(package_managers)
+            }
             
             # Update cache and loading state on main thread using call_from_thread
             def update_ui():
-                self.package_manager_cache = pkg_config
+                self.package_manager_cache = pkg_info
                 self.package_manager_loading = False
                 
                 # Refresh the panel if we're still on package_manager segment
@@ -442,24 +448,111 @@ class MainMenuScreen(Screen):
             
             self.app.call_from_thread(update_error)
     
-    def _display_package_manager_info(self, container: ScrollableContainer, pkg_config: dict) -> None:
+    def _display_package_manager_info(self, container: ScrollableContainer, pkg_info: dict) -> None:
         """Display Package Manager information in the container."""
         # Handle error case
-        if "error" in pkg_config:
-            container.mount(Label(f"Error loading Package Manager info: {pkg_config['error']}", classes="info-display"))
+        if "error" in pkg_info:
+            container.mount(Label(f"Error loading Package Manager info: {pkg_info['error']}", classes="info-display"))
             return
         
-        container.mount(Label("► Auto-detect", classes="info-key"))
-        auto_detect = "Yes" if pkg_config.get("auto_detect", True) else "No"
-        container.mount(Static(f"{auto_detect}", classes="info-value"))
+        # Show primary package manager (available managers)
+        primary = pkg_info.get("primary")
+        if primary:
+            container.mount(Label("Available Package Managers", classes="section-title"))
+            # Create clickable static text for the package manager
+            pm_text = Static(f"  {primary.name.upper()}", id="pm-manager-item", classes="pm-item-text")
+            container.mount(pm_text)
+            
+            container.mount(Rule())
+            
+            # Show current source (clickable)
+            container.mount(Label("Current Source", classes="section-title"))
+            if primary.current_source:
+                # Truncate long URLs for display
+                source = primary.current_source
+                if len(source) > 60:
+                    source = source[:57] + "..."
+                source_text = Static(f"  {source}", id="pm-source-item", classes="pm-item-text")
+                container.mount(source_text)
+            else:
+                source_text = Static("  Not configured", id="pm-source-item", classes="pm-item-text")
+                container.mount(source_text)
+        else:
+            container.mount(Label("No package managers detected", classes="info-display"))
+            
+        # Store the primary PM for later use
+        if hasattr(self, '_primary_pm'):
+            del self._primary_pm
+        if primary:
+            self._primary_pm = primary
+            
+        # Initialize focus state
+        self._pm_focused_item = None  # Track which item has focus
+        self._update_pm_focus_indicators()
+    
+    def _update_pm_focus_indicators(self) -> None:
+        """Update arrow indicators for package manager items."""
+        try:
+            # Update package manager item
+            pm_item = self.query_one("#pm-manager-item", Static)
+            if hasattr(self, '_primary_pm') and self._primary_pm:
+                if self._pm_focused_item == "manager":
+                    pm_item.update(f"▶ {self._primary_pm.name.upper()}")
+                else:
+                    pm_item.update(f"  {self._primary_pm.name.upper()}")
+        except:
+            pass
+            
+        try:
+            # Update source item
+            source_item = self.query_one("#pm-source-item", Static)
+            if hasattr(self, '_primary_pm') and self._primary_pm:
+                source = self._primary_pm.current_source or "Not configured"
+                if len(source) > 60:
+                    source = source[:57] + "..."
+                if self._pm_focused_item == "source":
+                    source_item.update(f"▶ {source}")
+                else:
+                    source_item.update(f"  {source}")
+        except:
+            pass
+    
+    def _handle_pm_item_selection(self) -> None:
+        """Handle selection of package manager items."""
+        if self._pm_focused_item == "manager":
+            # Handle package manager installation (placeholder)
+            self.app.bell()
+        elif self._pm_focused_item == "source":
+            # Open source selection modal
+            self._open_source_selection_modal()
+    
+    def _navigate_pm_items(self, direction: str) -> None:
+        """Navigate between package manager items."""
+        if not hasattr(self, '_primary_pm') or not self._primary_pm:
+            return
+            
+        items = ["manager", "source"]
         
-        container.mount(Label("► Mirror Management", classes="info-key"))
-        mirror_mgmt = "Enabled" if pkg_config.get("mirror_management", False) else "Disabled"
-        container.mount(Static(f"{mirror_mgmt}", classes="info-value"))
+        if self._pm_focused_item is None:
+            # Start with first item
+            self._pm_focused_item = items[0]
+        else:
+            try:
+                current_index = items.index(self._pm_focused_item)
+                if direction == "down" and current_index < len(items) - 1:
+                    self._pm_focused_item = items[current_index + 1]
+                elif direction == "up" and current_index > 0:
+                    self._pm_focused_item = items[current_index - 1]
+            except ValueError:
+                self._pm_focused_item = items[0]
         
-        container.mount(Label("► Supported Managers", classes="info-key"))
-        managers = ["apt", "yum", "dnf", "pacman", "zypper"]
-        container.mount(Static(", ".join(managers), classes="info-value"))
+        self._update_pm_focus_indicators()
+    
+    def _is_in_pm_section(self) -> bool:
+        """Check if we're currently in the package manager section."""
+        return (self.selected_segment == "package_manager" and 
+                hasattr(self, '_pm_focused_item'))
+    
     
     @work(exclusive=True, thread=True)
     async def _load_user_management_info(self) -> None:
@@ -783,6 +876,49 @@ class MainMenuScreen(Screen):
             self._update_segment_buttons(segment_id)
             # Update panel title
             self._update_panel_title(segment_id)
+        elif button_id == "open-pm-config":
+            # Open package manager configuration screen
+            from .package_manager import PackageManagerScreen
+            self.app.push_screen(PackageManagerScreen(self.config_manager))
+    
+    def _open_source_selection_modal(self) -> None:
+        """Open modal for source selection."""
+        if not hasattr(self, '_primary_pm') or not self._primary_pm:
+            return
+            
+        from .source_selection_modal import SourceSelectionModal
+        def on_source_selected(source_url: str) -> None:
+            """Handle source selection."""
+            if source_url:
+                # Apply the selected source
+                from ...modules.package_manager import PackageManagerDetector
+                detector = PackageManagerDetector()
+                success, message = detector.change_mirror(self._primary_pm.name, source_url)
+                
+                if success:
+                    # Update the cached source and refresh display
+                    self._primary_pm.current_source = source_url
+                    self.package_manager_cache["primary"] = self._primary_pm
+                    self.update_settings_panel()
+                    # Show success message briefly
+                    self._show_temp_message(f"✅ {message}")
+                else:
+                    # Show error message
+                    self._show_temp_message(f"❌ {message}")
+        
+        modal = SourceSelectionModal(self._primary_pm, on_source_selected)
+        self.app.push_screen(modal)
+    
+    def _show_temp_message(self, message: str) -> None:
+        """Show a temporary message in the title."""
+        try:
+            title_widget = self.query_one("#title", Static)
+            original_title = title_widget.renderable
+            title_widget.update(message)
+            # Reset after 3 seconds
+            self.set_timer(3.0, lambda: title_widget.update(original_title))
+        except:
+            pass
     
     def _handle_focus_change(self) -> None:
         """Handle focus changes on segment buttons."""
@@ -964,12 +1100,17 @@ class MainMenuScreen(Screen):
             # In left panel - navigate through segment buttons
             self._navigate_segments_down()
         else:
-            # In right panel - scroll down in the content
-            try:
-                scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
-                scroll_container.scroll_down()
-            except:
-                pass
+            # In right panel
+            if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                # Navigate through package manager items
+                self._navigate_pm_items("down")
+            else:
+                # Scroll down in other sections
+                try:
+                    scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
+                    scroll_container.scroll_down()
+                except:
+                    pass
     
     def action_nav_up(self) -> None:
         """Navigate up (k key) - move to previous item in current panel."""
@@ -984,12 +1125,17 @@ class MainMenuScreen(Screen):
             # In left panel - navigate through segment buttons
             self._navigate_segments_up()
         else:
-            # In right panel - scroll up in the content
-            try:
-                scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
-                scroll_container.scroll_up()
-            except:
-                pass
+            # In right panel
+            if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                # Navigate through package manager items
+                self._navigate_pm_items("up")
+            else:
+                # Scroll up in other sections
+                try:
+                    scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
+                    scroll_container.scroll_up()
+                except:
+                    pass
     
     def action_nav_right(self) -> None:
         """Navigate right (l key) - switch to right panel."""
@@ -998,6 +1144,12 @@ class MainMenuScreen(Screen):
             right_container = self.query_one("#settings-scroll", ScrollableContainer)
             right_container.focus()
             self._update_panel_focus(is_left_focused=False)
+            
+            # If switching to package manager section, initialize focus
+            if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                if not hasattr(self, '_pm_focused_item') or self._pm_focused_item is None:
+                    self._pm_focused_item = "manager"
+                    self._update_pm_focus_indicators()
         except:
             pass
     
@@ -1077,6 +1229,12 @@ class MainMenuScreen(Screen):
     def action_select_item(self) -> None:
         """Select current focused item (enter key)."""
         focused = self.focused
+        
+        # Check if we're in package manager section with focused items
+        if self.selected_segment == "package_manager" and hasattr(self, '_pm_focused_item') and self._pm_focused_item:
+            self._handle_pm_item_selection()
+            return
+        
         if focused and hasattr(focused, 'press'):
             # For Button widgets, directly press them
             focused.press()

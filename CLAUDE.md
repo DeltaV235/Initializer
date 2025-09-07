@@ -16,6 +16,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Linux System Initializer is a modern Terminal User Interface (TUI) application for Linux system initialization and configuration. The project has been refactored from legacy bash scripts to a Python-based TUI using Rich/Textual framework.
 
+## UI/UX Design Philosophy
+
+**Keyboard-First Operation**: The entire project is designed primarily for keyboard operation. The basic logic uses arrows (▶) to indicate the current cursor position, and blue borders to show which panel currently has focus. The interface adopts a CLI-style graphical interface rather than modern UI elements, maintaining a terminal-native feel that experienced system administrators would find familiar and efficient.
+
 ## Development Commands
 
 ### Installation & Setup
