@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Tuple
 from pathlib import Path
+from datetime import datetime
 
 
 @dataclass
@@ -185,17 +186,25 @@ class PackageManagerDetector:
         """Get available mirror sources for a package manager."""
         return self.MIRROR_SOURCES.get(pm_name, {})
     
-    def change_mirror(self, pm_name: str, mirror_url: str) -> Tuple[bool, str]:
+    def change_mirror(self, pm_name: str, mirror_url: str, backup_suffix: Optional[str] = None) -> Tuple[bool, str]:
         """Change the mirror source for a package manager.
+        
+        Args:
+            pm_name: Package manager name
+            mirror_url: New mirror URL
+            backup_suffix: Optional backup suffix (if None, will generate timestamp)
         
         Returns:
             Tuple of (success, message)
         """
+        if backup_suffix is None:
+            backup_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
         try:
             if pm_name == "apt":
                 # Backup current sources.list
                 sources_file = "/etc/apt/sources.list"
-                backup_file = f"{sources_file}.bak"
+                backup_file = f"{sources_file}.bak_{backup_suffix}"
                 
                 if os.path.exists(sources_file):
                     shutil.copy2(sources_file, backup_file)
@@ -215,13 +224,20 @@ class PackageManagerDetector:
                     f.write(f"deb {mirror_url} {codename}-backports main restricted universe multiverse\n")
                     f.write(f"deb {mirror_url} {codename}-security main restricted universe multiverse\n")
                 
-                # Update package index
-                subprocess.run(["apt-get", "update"], check=True)
+                # Update package index using apt instead of apt-get
+                subprocess.run(["apt", "update"], check=True)
                 return True, f"Successfully changed APT mirror to {mirror_url}"
                 
             elif pm_name == "brew":
                 # Change Homebrew repository remote
                 brew_repo = "/usr/local/Homebrew"
+                config_file = f"{brew_repo}/.git/config"
+                backup_file = f"{config_file}.bak_{backup_suffix}"
+                
+                # Backup git config if it exists
+                if os.path.exists(config_file):
+                    shutil.copy2(config_file, backup_file)
+                
                 if os.path.exists(brew_repo):
                     subprocess.run(
                         ["git", "-C", brew_repo, "remote", "set-url", "origin", mirror_url],

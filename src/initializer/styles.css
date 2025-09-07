@@ -498,6 +498,30 @@ DataTable > .datatable--even-row {
     margin: 1 0;
 }
 
+#mirror-list {
+    width: 100%;
+    margin: 1 0;
+}
+
+.mirror-item {
+    color: $text;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    height: 1;
+    text-align: left;
+    content-align: left middle;
+}
+
+.modal-button {
+    color: $text;
+    margin: 0 1;
+    padding: 0 1;
+    text-align: center;
+    content-align: center middle;
+    height: 1;
+    min-width: 10;
+}
+
 #modal-actions {
     layout: horizontal;
     height: 3;
@@ -512,10 +536,20 @@ DataTable > .datatable--even-row {
 }
 
 .current-source-display {
-    color: $secondary;
-    margin: 0 0 1 2;
-    background: $panel;
-    padding: 0 1;
+    color: $text;
+    margin-left: 2;
+    margin-bottom: 1;
+}
+
+.current-source-none {
+    color: $text-muted;
+    margin-left: 2;
+    margin-bottom: 1;
+}
+
+.mirror-preview {
+    color: $text-muted;
+    margin-left: 2;
 }
 
 ModalScreen {
@@ -524,5 +558,100 @@ ModalScreen {
 
 ModalScreen > #modal-container {
     margin: 0;
+}
+
+ModalScreen > #confirmation-container {
+    margin: 0;
+}
+
+/* Mirror Confirmation Modal Styles */
+#confirmation-container {
+    layout: vertical;
+    width: 85%;
+    max-width: 120;
+    height: auto;
+    max-height: 85%;
+    border: solid $primary;
+    background: $surface;
+    padding: 2;
+    margin: 2;
+}
+
+#confirmation-title {
+    text-style: bold;
+    color: $primary;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#confirmation-content {
+    height: 1fr;
+    width: 100%;
+    scrollbar-size: 1 1;
+    margin: 1 0;
+}
+
+.warning-title {
+    text-style: bold;
+    color: $error;
+    text-align: center;
+    margin: 1 0;
+}
+
+.current-source {
+    color: $text;
+    margin: 0 0 1 0;
+}
+
+.new-source {
+    color: $secondary;
+    margin: 0 0 1 0;
+}
+
+.file-item {
+    color: $text;
+    margin: 0 0 1 0;
+}
+
+.backup-info {
+    color: $text-muted;
+    margin: 0 0 1 0;
+}
+
+.log-content {
+    color: $text;
+    margin: 1 0;
+    padding: 1;
+    background: $panel;
+    border: solid cyan;
+    height: auto;
+    min-height: 5;
+}
+
+#confirmation-actions {
+    dock: bottom;
+    layout: horizontal;
+    height: 3;
+    width: 100%;
+    margin-top: 1;
+    content-align: center middle;
+    background: $surface;
+    border-top: solid $primary;
+}
+
+.confirmation-button {
+    color: $text;
+    margin: 0 2;
+    padding: 0 2;
+    text-align: center;
+    content-align: center middle;
+    height: 1;
+    min-width: 16;
+    background: transparent;
+}
+
+.confirm-focused {
+    color: $primary;
+    text-style: bold;
 }
 

@@ -76,7 +76,9 @@ class MainMenuScreen(Screen):
         """React to segment selection changes."""
         if old_value != new_value:
             self.update_settings_panel()
-            self._update_segment_buttons(new_value)
+            # Only show arrow if we're in left panel focus
+            is_left_focused = self._is_focus_in_left_panel()
+            self._update_segment_buttons(new_value, show_arrow=is_left_focused)
             self._update_panel_title(new_value)
         
     def compose(self) -> ComposeResult:
@@ -117,8 +119,8 @@ class MainMenuScreen(Screen):
         """Initialize when screen is mounted."""
         # Set initial segment content
         self.update_settings_panel()
-        # Initialize button states
-        self._update_segment_buttons(self.selected_segment)
+        # Initialize button states - show arrow since we start with left panel focused
+        self._update_segment_buttons(self.selected_segment, show_arrow=True)
         # Initialize panel title
         self._update_panel_title(self.selected_segment)
         # Set initial focus to the selected segment button
@@ -505,12 +507,17 @@ class MainMenuScreen(Screen):
             
         # Initialize focus state - reset it each time we rebuild the panel
         self._pm_focused_item = None  # Track which item has focus
-        self._update_pm_focus_indicators()
+        # Don't show any arrows initially when rebuilding
+        self._update_pm_focus_indicators(clear_left_arrows=False)
     
-    def _update_pm_focus_indicators(self) -> None:
+    def _update_pm_focus_indicators(self, clear_left_arrows: bool = False) -> None:
         """Update arrow indicators for package manager items."""
         if not hasattr(self, '_pm_unique_suffix'):
             return
+        
+        # Clear left panel arrows if requested
+        if clear_left_arrows:
+            self._update_segment_buttons(self.selected_segment, show_arrow=False)
             
         try:
             # Update package manager item using unique ID
@@ -537,14 +544,82 @@ class MainMenuScreen(Screen):
         except:
             pass
     
+    def _clear_pm_focus_indicators(self) -> None:
+        """Clear all arrow indicators in package manager section."""
+        if not hasattr(self, '_pm_unique_suffix'):
+            return
+            
+        try:
+            # Clear package manager item arrow
+            pm_item = self.query_one(f"#pm-manager-item-{self._pm_unique_suffix}", Static)
+            if hasattr(self, '_primary_pm') and self._primary_pm:
+                pm_item.update(f"  {self._primary_pm.name.upper()}")
+        except:
+            pass
+            
+        try:
+            # Clear source item arrow if it exists
+            source_item = self.query_one(f"#pm-source-item-{self._pm_unique_suffix}", Static)
+            if hasattr(self, '_primary_pm') and self._primary_pm:
+                source = self._primary_pm.current_source or "Not configured"
+                if len(source) > 60:
+                    source = source[:57] + "..."
+                source_item.update(f"  {source}")
+        except:
+            pass
+    
     def _handle_pm_item_selection(self) -> None:
         """Handle selection of package manager items."""
         if self._pm_focused_item == "manager":
-            # Handle package manager installation (placeholder)
-            self.app.bell()
+            # Navigate to package manager screen for manager configuration
+            from .package_manager import PackageManagerScreen
+            self.app.push_screen(PackageManagerScreen(self.config_manager))
         elif self._pm_focused_item == "source":
-            # Open source selection modal
-            self._open_source_selection_modal()
+            # Directly show source selection modal without intermediate screen
+            self._show_source_selection_modal()
+    
+    def _show_source_selection_modal(self) -> None:
+        """Show source selection modal directly from main menu."""
+        try:
+            from ...modules.package_manager import PackageManagerDetector
+            from .source_selection_modal import SourceSelectionModal
+            from .mirror_confirmation_modal import MirrorConfirmationModal
+            
+            # Get the primary package manager
+            detector = PackageManagerDetector()
+            primary_pm = detector.get_primary_package_manager()
+            
+            if not primary_pm:
+                self._show_message("No package manager detected", error=True)
+                return
+            
+            def on_source_selected(selected_source: str):
+                # Show confirmation modal
+                def on_confirmation_result(success: bool, message: str):
+                    if success:
+                        # Update the package manager's current source
+                        primary_pm.current_source = selected_source
+                        # Refresh package manager display in main menu
+                        self._update_package_manager_info()
+                        self._show_message("Mirror source updated successfully")
+                    else:
+                        self._show_message(message, error=not success)
+                
+                # Show confirmation modal
+                try:
+                    self.app.push_screen(
+                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result)
+                    )
+                except Exception as e:
+                    self._show_message(f"Error showing confirmation: {str(e)}", error=True)
+            
+            # Show source selection modal
+            self.app.push_screen(
+                SourceSelectionModal(primary_pm, on_source_selected)
+            )
+            
+        except Exception as e:
+            self._show_message(f"Error opening source selection: {str(e)}", error=True)
     
     def _navigate_pm_items(self, direction: str) -> None:
         """Navigate between package manager items."""
@@ -566,7 +641,7 @@ class MainMenuScreen(Screen):
             except ValueError:
                 self._pm_focused_item = items[0]
         
-        self._update_pm_focus_indicators()
+        self._update_pm_focus_indicators(clear_left_arrows=True)
     
     def _is_in_pm_section(self) -> bool:
         """Check if we're currently in the package manager section."""
@@ -895,8 +970,8 @@ class MainMenuScreen(Screen):
             self.selected_segment = segment_id
             self.update_settings_panel()
             
-            # Update button styles to show selection
-            self._update_segment_buttons(segment_id)
+            # Update button styles to show selection - always show arrow when segment button is pressed
+            self._update_segment_buttons(segment_id, show_arrow=True)
             # Update panel title
             self._update_panel_title(segment_id)
             
@@ -957,19 +1032,22 @@ class MainMenuScreen(Screen):
                 self.selected_segment = segment_id
                 # watch_selected_segment will handle the rest
     
-    def _update_segment_buttons(self, selected_id: str) -> None:
+    def _update_segment_buttons(self, selected_id: str, show_arrow: bool = True) -> None:
         """Update segment button styles to show selection."""
         for segment in self.SEGMENTS:
             try:
                 button = self.query_one(f"#segment-{segment['id']}", Button)
-                if segment['id'] == selected_id:
+                if segment['id'] == selected_id and show_arrow:
                     # Use arrow in the reserved space (first 2 characters)
                     button.label = f"▶ {segment['name']}"
                     button.add_class("selected")
                 else:
                     # Keep the reserved space with spaces
                     button.label = f"  {segment['name']}"
-                    button.remove_class("selected")
+                    if segment['id'] == selected_id:
+                        button.add_class("selected")
+                    else:
+                        button.remove_class("selected")
             except:
                 pass
     
@@ -998,35 +1076,35 @@ class MainMenuScreen(Screen):
         """Show Homebrew settings."""
         self.selected_segment = "homebrew"
         self.update_settings_panel()
-        self._update_segment_buttons("homebrew")
+        self._update_segment_buttons("homebrew", show_arrow=True)
         self._update_panel_title("homebrew")
         
     def action_package_manager(self) -> None:
         """Show package manager settings."""
         self.selected_segment = "package_manager" 
         self.update_settings_panel()
-        self._update_segment_buttons("package_manager")
+        self._update_segment_buttons("package_manager", show_arrow=True)
         self._update_panel_title("package_manager")
         
     def action_user_management(self) -> None:
         """Show user management settings."""
         self.selected_segment = "user_management"
         self.update_settings_panel()
-        self._update_segment_buttons("user_management")
+        self._update_segment_buttons("user_management", show_arrow=True)
         self._update_panel_title("user_management")
         
     def action_settings(self) -> None:
         """Show application settings."""
         self.selected_segment = "settings"
         self.update_settings_panel()
-        self._update_segment_buttons("settings")
+        self._update_segment_buttons("settings", show_arrow=True)
         self._update_panel_title("settings")
         
     def action_help(self) -> None:
         """Show help content."""
         self.selected_segment = "help"
         self.update_settings_panel()
-        self._update_segment_buttons("help")
+        self._update_segment_buttons("help", show_arrow=True)
         self._update_panel_title("help")
     
     def action_quit(self) -> None:
@@ -1072,21 +1150,31 @@ class MainMenuScreen(Screen):
                 right_container.focus()
                 self._update_panel_focus(is_left_focused=False)
                 
-                # If switching to package manager section, initialize focus
+                # If switching to package manager section, initialize focus and clear left arrows
                 if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                     # Always set initial focus when switching to right panel
                     self._pm_focused_item = "manager"
-                    self._update_pm_focus_indicators()
+                    # Clear left arrows and show right arrows
+                    self._update_pm_focus_indicators(clear_left_arrows=True)
+                else:
+                    # Clear left panel arrows for other sections
+                    self._update_segment_buttons(self.selected_segment, show_arrow=False)
                     
             except:
                 # If right panel doesn't have focusable elements, stay in left
                 pass
         else:
             # Move focus back to the left panel - focus the selected segment button
+            # First, clear right panel arrows if we're in package manager section
+            if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                self._clear_pm_focus_indicators()
+            
             try:
                 selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
                 selected_button.focus()
                 self._update_panel_focus(is_left_focused=True)
+                # Show left panel arrows
+                self._update_segment_buttons(self.selected_segment, show_arrow=True)
             except:
                 # Try to focus the first available segment button
                 for segment in self.SEGMENTS:
@@ -1094,6 +1182,7 @@ class MainMenuScreen(Screen):
                         button = self.query_one(f"#segment-{segment['id']}", Button)
                         button.focus()
                         self._update_panel_focus(is_left_focused=True)
+                        self._update_segment_buttons(segment['id'], show_arrow=True)
                         break
                     except:
                         continue
@@ -1105,11 +1194,18 @@ class MainMenuScreen(Screen):
     def action_nav_left(self) -> None:
         """Navigate left (h key) - switch to left panel."""
         # H key switches to left panel
+        
+        # Clear right panel arrows if we're in package manager section
+        if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+            self._clear_pm_focus_indicators()
+        
         try:
             # Find and focus the selected segment button in left panel
             selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
             selected_button.focus()
             self._update_panel_focus(is_left_focused=True)
+            # Show left panel arrows
+            self._update_segment_buttons(self.selected_segment, show_arrow=True)
         except:
             # Try to focus the first available segment button
             for segment in self.SEGMENTS:
@@ -1117,6 +1213,7 @@ class MainMenuScreen(Screen):
                     button = self.query_one(f"#segment-{segment['id']}", Button)
                     button.focus()
                     self._update_panel_focus(is_left_focused=True)
+                    self._update_segment_buttons(segment['id'], show_arrow=True)
                     break
                 except:
                     continue
@@ -1179,11 +1276,15 @@ class MainMenuScreen(Screen):
             right_container.focus()
             self._update_panel_focus(is_left_focused=False)
             
-            # If switching to package manager section, initialize focus
+            # If switching to package manager section, initialize focus and clear left arrows
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                 # Always set initial focus when switching to right panel
                 self._pm_focused_item = "manager"
-                self._update_pm_focus_indicators()
+                # Clear left arrows and show right arrows
+                self._update_pm_focus_indicators(clear_left_arrows=True)
+            else:
+                # Clear left panel arrows for other sections
+                self._update_segment_buttons(self.selected_segment, show_arrow=False)
             
         except Exception:
             pass
@@ -1288,3 +1389,33 @@ class MainMenuScreen(Screen):
                     focused.action_select()
             except AttributeError:
                 pass
+    
+    def _update_package_manager_info(self) -> None:
+        """Update package manager information in the main menu display."""
+        try:
+            # Refresh package manager detection
+            from ...modules.package_manager import PackageManagerDetector
+            detector = PackageManagerDetector()
+            self._primary_pm = detector.get_primary_package_manager()
+            
+            # Update the package manager display in the UI
+            if hasattr(self, '_primary_pm') and self._primary_pm:
+                self._display_package_manager()
+        except Exception as e:
+            # Silently fail to avoid disrupting the UI
+            pass
+    
+    def _show_message(self, message: str, error: bool = False) -> None:
+        """Show a message to the user by updating the title."""
+        try:
+            title_widget = self.query_one("#title", Static)
+            if error:
+                title_widget.update(f"🖥️ Linux System Initializer - Error: {message}")
+            else:
+                title_widget.update(f"🖥️ Linux System Initializer - {message}")
+            
+            # Reset title after a delay
+            self.set_timer(3.0, lambda: title_widget.update("🖥️ Linux System Initializer"))
+        except Exception:
+            # Silently fail if title widget is not found
+            pass

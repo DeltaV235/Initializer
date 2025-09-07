@@ -9,6 +9,8 @@ from textual.reactive import reactive
 
 from ...config_manager import ConfigManager
 from ...modules.package_manager import PackageManagerDetector
+from .source_selection_modal import SourceSelectionModal
+from .mirror_confirmation_modal import MirrorConfirmationModal
 
 
 class PackageManagerScreen(Screen):
@@ -17,19 +19,21 @@ class PackageManagerScreen(Screen):
     BINDINGS = [
         ("escape", "back", "Back"),
         ("q", "back", "Back"),
-        ("enter", "select_item", "Select"),
         ("tab", "switch_focus", "Switch Focus"),
         # Vim-like navigation
         ("h", "nav_left", "Left"),
         ("j", "nav_down", "Down"),
         ("k", "nav_up", "Up"),
         ("l", "nav_right", "Right"),
+        ("enter", "select_current", "Select"),
     ]
     
     # Reactive properties for state management
     selected_pm = reactive(None)
     current_source = reactive("")
     loading = reactive(True)
+    focus_panel = reactive("left")  # "left" or "right"
+    left_focused_item = reactive(0)  # Index of focused item in left panel
     
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
@@ -105,30 +109,24 @@ class PackageManagerScreen(Screen):
                 pm_list.mount(Static("No package managers detected", classes="info-message"))
                 return
             
-            # Display each package manager
-            for pm in self.package_managers:
-                # Create a container for each PM entry
-                pm_container = Vertical(id=f"pm-{pm.name}", classes="pm-item")
+            # Display each package manager with arrow indicators
+            for i, pm in enumerate(self.package_managers):
+                # Create arrow indicator for CLI-style navigation
+                arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == i) else "  "
                 
                 # Package manager name and status
-                pm_info = f"📦 {pm.name.upper()}"
+                pm_info = f"{arrow}📦 {pm.name.upper()}"
                 if pm == self.primary_pm:
                     pm_info += " (Primary)"
                 
-                pm_container.mount(Label(pm_info, classes="pm-name"))
-                
-                # Show current source if available
+                # Show current source if available on the same line
                 if pm.current_source:
-                    source_text = self._truncate_source(pm.current_source)
-                    pm_container.mount(Label(f"  Source: {source_text}", classes="pm-source"))
+                    source_text = self._truncate_source(pm.current_source, 25)
+                    pm_info += f"\n    Source: {source_text}"
                 else:
-                    pm_container.mount(Label("  Source: Not configured", classes="pm-source-none"))
+                    pm_info += "\n    Source: Not configured"
                 
-                # Make it clickable
-                pm_container.mount(Button(f"Configure {pm.name}", id=f"btn-{pm.name}", classes="pm-button"))
-                
-                pm_list.mount(pm_container)
-                pm_list.mount(Rule(line_style="dotted"))
+                pm_list.mount(Static(pm_info, id=f"pm-{i}", classes="pm-item"))
                 
         except Exception as e:
             self._show_error(f"Error displaying package managers: {str(e)}")
@@ -140,7 +138,7 @@ class PackageManagerScreen(Screen):
         return source[:max_length-3] + "..."
     
     def _display_source_options(self, pm) -> None:
-        """Display mirror source options for selected package manager."""
+        """Display package manager information in the right panel."""
         try:
             source_container = self.query_one("#source-container", ScrollableContainer)
             
@@ -153,60 +151,49 @@ class PackageManagerScreen(Screen):
                 return
             
             # Show current package manager info
-            source_container.mount(Label(f"Configuring: {pm.name.upper()}", classes="section-title"))
+            source_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
             source_container.mount(Rule())
             
             # Show current source
             source_container.mount(Label("Current Source:", classes="info-key"))
             if pm.current_source:
-                source_container.mount(Static(pm.current_source, classes="current-source"))
+                source_container.mount(Static(pm.current_source, classes="current-source-display"))
             else:
                 source_container.mount(Static("Not configured", classes="current-source-none"))
             
             source_container.mount(Rule())
-            
-            # Get available mirrors
-            mirrors = self.detector.get_available_mirrors(pm.name)
-            
-            if mirrors:
-                source_container.mount(Label("Available Mirrors:", classes="info-key"))
-                
-                # Create radio buttons for mirror selection
-                radio_set = RadioSet(id="mirror-selection")
-                
-                for mirror_name, mirror_url in mirrors.items():
-                    # Format the label
-                    label = f"{mirror_name.title()}: {self._truncate_source(mirror_url, 35)}"
-                    radio_set.mount(RadioButton(label, value=mirror_url, id=f"mirror-{mirror_name}"))
-                
-                source_container.mount(radio_set)
-                
-                # Custom source input
-                source_container.mount(Rule())
-                source_container.mount(Label("Custom Source:", classes="info-key"))
-                source_container.mount(Input(placeholder="Enter custom mirror URL", id="custom-source"))
-                
-                # Apply button
-                source_container.mount(Rule())
-                with source_container:
-                    with Horizontal(classes="action-buttons"):
-                        yield Button("Apply Mirror", id="apply-mirror", variant="primary")
-                        yield Button("Test Connection", id="test-mirror", variant="default")
-            else:
-                source_container.mount(Static(f"No predefined mirrors available for {pm.name}", classes="info-message"))
-                
-                # Still allow custom source
-                source_container.mount(Rule())
-                source_container.mount(Label("Custom Source:", classes="info-key"))
-                source_container.mount(Input(placeholder="Enter custom mirror URL", id="custom-source"))
-                
-                source_container.mount(Rule())
-                with source_container:
-                    with Horizontal(classes="action-buttons"):
-                        yield Button("Apply Custom Source", id="apply-custom", variant="primary")
+            source_container.mount(Static("Press Enter to change source", classes="help-text"))
                 
         except Exception as e:
             self._show_error(f"Error displaying source options: {str(e)}")
+    
+    def _show_source_selection_modal(self, pm) -> None:
+        """Show the source selection modal."""
+        def on_source_selected(selected_source: str):
+            # Show confirmation modal
+            def on_confirmation_result(success: bool, message: str):
+                if success:
+                    # Update the package manager's current source
+                    pm.current_source = selected_source
+                    # Refresh the displays
+                    self._display_package_managers()
+                    self._display_source_options(pm)
+                    self._show_message(message)
+                else:
+                    self._show_message(message, error=not success)
+            
+            # Show confirmation modal
+            try:
+                self.app.push_screen(
+                    MirrorConfirmationModal(pm, selected_source, on_confirmation_result)
+                )
+            except Exception as e:
+                self._show_message(f"Error showing confirmation: {str(e)}", error=True)
+        
+        # Show source selection modal
+        self.app.push_screen(
+            SourceSelectionModal(pm, on_source_selected)
+        )
     
     @on(Button.Pressed)
     def handle_button_press(self, event: Button.Pressed) -> None:
@@ -215,129 +202,16 @@ class PackageManagerScreen(Screen):
         
         if button_id == "back":
             self.app.pop_screen()
-        elif button_id and button_id.startswith("btn-"):
-            # Package manager selection button
-            pm_name = button_id.replace("btn-", "")
-            for pm in self.package_managers:
-                if pm.name == pm_name:
-                    self.selected_pm = pm
-                    self._display_source_options(pm)
-                    break
-        elif button_id == "apply-mirror":
-            self._apply_mirror_change()
-        elif button_id == "apply-custom":
-            self._apply_custom_source()
-        elif button_id == "test-mirror":
-            self._test_mirror_connection()
     
-    def _apply_mirror_change(self) -> None:
-        """Apply the selected mirror change."""
-        try:
-            # Get selected mirror from radio buttons
-            radio_set = self.query_one("#mirror-selection", RadioSet)
-            selected_mirror = radio_set.value
-            
-            # Check for custom source
-            custom_input = self.query_one("#custom-source", Input)
-            custom_source = custom_input.value.strip()
-            
-            # Prefer custom source if provided
-            mirror_url = custom_source if custom_source else selected_mirror
-            
-            if not mirror_url:
-                self._show_message("Please select a mirror or enter a custom source", error=True)
-                return
-            
-            if not self.selected_pm:
-                self._show_message("No package manager selected", error=True)
-                return
-            
-            # Apply the mirror change
-            self._show_message(f"Applying mirror: {mirror_url}...")
-            success, message = self.detector.change_mirror(self.selected_pm.name, mirror_url)
-            
-            if success:
-                self._show_message(f"✅ {message}")
-                # Update the current source
-                self.selected_pm.current_source = mirror_url
-                # Refresh the display
-                self._display_package_managers()
-                self._display_source_options(self.selected_pm)
-            else:
-                self._show_message(f"❌ {message}", error=True)
-                
-        except Exception as e:
-            self._show_message(f"Error applying mirror: {str(e)}", error=True)
-    
-    def _apply_custom_source(self) -> None:
-        """Apply a custom source URL."""
-        try:
-            custom_input = self.query_one("#custom-source", Input)
-            custom_source = custom_input.value.strip()
-            
-            if not custom_source:
-                self._show_message("Please enter a custom source URL", error=True)
-                return
-            
-            if not self.selected_pm:
-                self._show_message("No package manager selected", error=True)
-                return
-            
-            # Apply the custom source
-            self._show_message(f"Applying custom source: {custom_source}...")
-            success, message = self.detector.change_mirror(self.selected_pm.name, custom_source)
-            
-            if success:
-                self._show_message(f"✅ {message}")
-                # Update the current source
-                self.selected_pm.current_source = custom_source
-                # Refresh the display
-                self._display_package_managers()
-                self._display_source_options(self.selected_pm)
-            else:
-                self._show_message(f"❌ {message}", error=True)
-                
-        except Exception as e:
-            self._show_message(f"Error applying custom source: {str(e)}", error=True)
-    
-    def _test_mirror_connection(self) -> None:
-        """Test connection to the selected mirror."""
-        try:
-            # Get selected mirror
-            radio_set = self.query_one("#mirror-selection", RadioSet)
-            selected_mirror = radio_set.value
-            
-            # Check for custom source
-            custom_input = self.query_one("#custom-source", Input)
-            custom_source = custom_input.value.strip()
-            
-            # Prefer custom source if provided
-            mirror_url = custom_source if custom_source else selected_mirror
-            
-            if not mirror_url:
-                self._show_message("Please select a mirror or enter a custom source to test", error=True)
-                return
-            
-            # Test the connection
-            self._show_message(f"Testing connection to: {mirror_url}...")
-            
-            # Simple connectivity test
-            import urllib.request
-            import urllib.error
-            
-            try:
-                response = urllib.request.urlopen(mirror_url, timeout=5)
-                if response.status == 200:
-                    self._show_message(f"✅ Connection successful to {mirror_url}")
-                else:
-                    self._show_message(f"⚠️ Unexpected response from {mirror_url}: {response.status}")
-            except urllib.error.URLError as e:
-                self._show_message(f"❌ Failed to connect: {str(e)}", error=True)
-            except Exception as e:
-                self._show_message(f"❌ Connection test failed: {str(e)}", error=True)
-                
-        except Exception as e:
-            self._show_message(f"Error testing connection: {str(e)}", error=True)
+    def action_select_current(self) -> None:
+        """Handle Enter key - select current item."""
+        if self.focus_panel == "left" and self.package_managers:
+            # Select package manager and show source selection modal
+            if 0 <= self.left_focused_item < len(self.package_managers):
+                pm = self.package_managers[self.left_focused_item]
+                self.selected_pm = pm
+                self._display_source_options(pm)
+                self._show_source_selection_modal(pm)
     
     def _show_message(self, message: str, error: bool = False) -> None:
         """Show a message to the user."""
@@ -362,36 +236,44 @@ class PackageManagerScreen(Screen):
     
     def action_switch_focus(self) -> None:
         """Switch focus between panels."""
-        self.focus_next()
+        if self.focus_panel == "left":
+            self.focus_panel = "right"
+        else:
+            self.focus_panel = "left"
+        
+        # Update displays
+        self._display_package_managers()
     
     def action_nav_left(self) -> None:
-        """Navigate left."""
-        # Focus left panel
-        try:
-            left_panel = self.query_one("#pm-left-panel")
-            left_panel.focus()
-        except:
-            self.focus_previous()
+        """Navigate left - switch to left panel."""
+        if self.focus_panel == "right":
+            self.focus_panel = "left"
+            self._display_package_managers()
     
     def action_nav_right(self) -> None:
-        """Navigate right."""
-        # Focus right panel
-        try:
-            right_panel = self.query_one("#pm-right-panel")
-            right_panel.focus()
-        except:
-            self.focus_next()
+        """Navigate right - switch to right panel."""
+        if self.focus_panel == "left":
+            self.focus_panel = "right"
+            self._display_package_managers()
     
     def action_nav_down(self) -> None:
-        """Navigate down."""
-        self.focus_next()
+        """Navigate down within current panel."""
+        if self.focus_panel == "left" and self.package_managers:
+            if self.left_focused_item < len(self.package_managers) - 1:
+                self.left_focused_item += 1
+                # Auto-select and display details
+                pm = self.package_managers[self.left_focused_item]
+                self.selected_pm = pm
+                self._display_source_options(pm)
+            self._display_package_managers()
     
     def action_nav_up(self) -> None:
-        """Navigate up."""
-        self.focus_previous()
-    
-    def action_select_item(self) -> None:
-        """Select current focused item."""
-        focused = self.focused
-        if focused and hasattr(focused, 'press'):
-            focused.press()
+        """Navigate up within current panel."""
+        if self.focus_panel == "left" and self.package_managers:
+            if self.left_focused_item > 0:
+                self.left_focused_item -= 1
+                # Auto-select and display details
+                pm = self.package_managers[self.left_focused_item]
+                self.selected_pm = pm
+                self._display_source_options(pm)
+            self._display_package_managers()
