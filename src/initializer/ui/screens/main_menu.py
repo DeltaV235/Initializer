@@ -6,7 +6,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar, ListView, ListItem, LoadingIndicator
+from textual.widgets import Button, Static, Rule, Label, ProgressBar, ListView, ListItem
 from textual.reactive import reactive
 from textual.message import Message
 
@@ -22,10 +22,11 @@ class MainMenuScreen(Screen):
         ("2", "select_segment", "Homebrew"),
         ("3", "select_segment", "Package Manager"),
         ("4", "select_segment", "User Management"),
+        ("5", "select_segment", "Settings"),
         ("s", "select_segment", "Settings"),
-        ("?", "select_segment", "Help"),
         ("q", "quit", "Quit"),
         ("enter", "select_item", "Select"),
+        ("tab", "switch_panel", "Switch Panel"),
         # Vim-like navigation
         ("h", "nav_left", "Left"),
         ("j", "nav_down", "Down"),
@@ -61,7 +62,6 @@ class MainMenuScreen(Screen):
         {"id": "package_manager", "name": "Package Manager"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},
-        {"id": "help", "name": "Help"},
     ]
     
     def __init__(self, config_manager: ConfigManager):
@@ -107,6 +107,10 @@ class MainMenuScreen(Screen):
                 with Vertical(id="right-panel"):
                     with ScrollableContainer(id="settings-scroll"):
                         yield Static("Select a segment to view settings", id="settings-content")
+            
+            # Help box at the bottom
+            with Container(id="help-box"):
+                yield Label("Keyboard Shortcuts: q=Quit | s=Settings | Tab/h/l=Switch Panel | j/k=Navigate Up/Down | Enter=Select | 1-5=Quick Select", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -120,6 +124,8 @@ class MainMenuScreen(Screen):
         try:
             initial_button = self.query_one(f"#segment-{self.selected_segment}", Button)
             initial_button.focus()
+            # Highlight the left panel as initially focused
+            self._update_panel_focus(is_left_focused=True)
         except:
             pass
         
@@ -160,8 +166,6 @@ class MainMenuScreen(Screen):
                 self._build_user_management_settings(settings_container)
             elif self.selected_segment == "settings":
                 self._build_app_settings(settings_container)
-            elif self.selected_segment == "help":
-                self._build_help_content(settings_container)
             else:
                 settings_container.mount(Static("Select a segment to view settings", id="default-message"))
                 
@@ -176,16 +180,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.system_info_cache and not self.system_info_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_system_info(container, self.system_info_cache)
         elif self.system_info_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading system information...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading system info asynchronously
             self.system_info_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading system information...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_system_info()
     
@@ -637,16 +645,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.homebrew_cache and not self.homebrew_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_homebrew_info(container, self.homebrew_cache)
         elif self.homebrew_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading Homebrew configuration...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading homebrew info asynchronously
             self.homebrew_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading Homebrew configuration...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_homebrew_info()
     
@@ -657,16 +669,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.package_manager_cache and not self.package_manager_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_package_manager_info(container, self.package_manager_cache)
         elif self.package_manager_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading package manager configuration...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading package manager info asynchronously
             self.package_manager_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading package manager configuration...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_package_manager_info()
     
@@ -677,16 +693,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.user_management_cache and not self.user_management_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_user_management_info(container, self.user_management_cache)
         elif self.user_management_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading user management configuration...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading user management info asynchronously
             self.user_management_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading user management configuration...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_user_management_info()
     
@@ -697,16 +717,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.settings_cache and not self.settings_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_settings_info(container, self.settings_cache)
         elif self.settings_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading application settings...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading settings info asynchronously
             self.settings_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading application settings...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_settings_info()
     
@@ -717,16 +741,20 @@ class MainMenuScreen(Screen):
         
         # Check if we have cached data and not currently loading
         if self.help_cache and not self.help_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
             self._display_help_info(container, self.help_cache)
         elif self.help_loading:
-            # Show loading indicator
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading help documentation...", classes="info-display"))
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
         else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
             # Start loading help info asynchronously
             self.help_loading = True
-            container.mount(LoadingIndicator())
-            container.mount(Label("Loading help documentation...", classes="info-display"))
+            container.mount(Label("Loading...", classes="loading-text"))
             # Start the background task
             self._load_help_info()
     
@@ -761,11 +789,10 @@ class MainMenuScreen(Screen):
         focused = self.focused
         if focused and hasattr(focused, 'id') and focused.id and focused.id.startswith("segment-"):
             segment_id = focused.id.replace("segment-", "")
+            # Only update if the segment actually changed
             if segment_id != self.selected_segment:
                 self.selected_segment = segment_id
-                self.update_settings_panel()
-                self._update_segment_buttons(segment_id)
-                self._update_panel_title(segment_id)
+                # watch_selected_segment will handle the rest
     
     def _update_segment_buttons(self, selected_id: str) -> None:
         """Update segment button styles to show selection."""
@@ -787,6 +814,21 @@ class MainMenuScreen(Screen):
         """Update the right panel title based on selected segment."""
         # Title label has been removed - this method is kept for compatibility
         pass
+    
+    def _update_panel_focus(self, is_left_focused: bool) -> None:
+        """Update panel focus styles based on which panel has focus."""
+        try:
+            left_panel = self.query_one("#left-panel", Vertical)
+            right_panel = self.query_one("#right-panel", Vertical)
+            
+            if is_left_focused:
+                left_panel.add_class("panel-focused")
+                right_panel.remove_class("panel-focused")
+            else:
+                left_panel.remove_class("panel-focused")
+                right_panel.add_class("panel-focused")
+        except:
+            pass
     
     # Legacy action methods for backward compatibility
     def action_homebrew(self) -> None:
@@ -828,28 +870,209 @@ class MainMenuScreen(Screen):
         """Exit the application."""
         self.app.exit()
     
+    def action_switch_panel(self) -> None:
+        """Switch focus between left and right panels using Tab key."""
+        # Get the currently focused widget
+        focused = self.focused
+        
+        # If nothing is focused, focus the first segment button
+        if not focused:
+            try:
+                first_button = self.query_one(f"#segment-{self.SEGMENTS[0]['id']}", Button)
+                first_button.focus()
+                self._update_panel_focus(is_left_focused=True)
+            except:
+                pass
+            return
+            
+        # Check if focus is in the left panel
+        left_panel = self.query_one("#left-panel", Vertical)
+        right_panel = self.query_one("#right-panel", Vertical)
+        
+        # Check if the focused widget is in the left panel
+        is_in_left = False
+        try:
+            # Walk up the widget tree to see if we're inside the left panel
+            current = focused
+            while current is not None:
+                if current.id == "left-panel":
+                    is_in_left = True
+                    break
+                current = current.parent
+        except:
+            pass
+        
+        if is_in_left:
+            # Move focus to the right panel - focus the scrollable container
+            try:
+                right_container = self.query_one("#settings-scroll", ScrollableContainer)
+                right_container.focus()
+                self._update_panel_focus(is_left_focused=False)
+            except:
+                # If right panel doesn't have focusable elements, stay in left
+                pass
+        else:
+            # Move focus back to the left panel - focus the selected segment button
+            try:
+                selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
+                selected_button.focus()
+                self._update_panel_focus(is_left_focused=True)
+            except:
+                # Try to focus the first available segment button
+                for segment in self.SEGMENTS:
+                    try:
+                        button = self.query_one(f"#segment-{segment['id']}", Button)
+                        button.focus()
+                        self._update_panel_focus(is_left_focused=True)
+                        break
+                    except:
+                        continue
+    
+    
 
     
     # Vim-like navigation actions
     def action_nav_left(self) -> None:
-        """Navigate left (h key) - move to previous focusable element."""
-        self.focus_previous()
-        self._handle_focus_change()
+        """Navigate left (h key) - switch to left panel."""
+        # H key switches to left panel
+        try:
+            # Find and focus the selected segment button in left panel
+            selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
+            selected_button.focus()
+            self._update_panel_focus(is_left_focused=True)
+        except:
+            # Try to focus the first available segment button
+            for segment in self.SEGMENTS:
+                try:
+                    button = self.query_one(f"#segment-{segment['id']}", Button)
+                    button.focus()
+                    self._update_panel_focus(is_left_focused=True)
+                    break
+                except:
+                    continue
     
     def action_nav_down(self) -> None:
-        """Navigate down (j key) - move to next focusable element."""
-        self.focus_next()
-        self._handle_focus_change()
+        """Navigate down (j key) - move to next item in current panel."""
+        focused = self.focused
+        if not focused:
+            return
+            
+        # Check which panel we're in
+        is_in_left = self._is_focus_in_left_panel()
+        
+        if is_in_left:
+            # In left panel - navigate through segment buttons
+            self._navigate_segments_down()
+        else:
+            # In right panel - scroll down in the content
+            try:
+                scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
+                scroll_container.scroll_down()
+            except:
+                pass
     
     def action_nav_up(self) -> None:
-        """Navigate up (k key) - move to previous focusable element."""
-        self.focus_previous()
-        self._handle_focus_change()
+        """Navigate up (k key) - move to previous item in current panel."""
+        focused = self.focused
+        if not focused:
+            return
+            
+        # Check which panel we're in
+        is_in_left = self._is_focus_in_left_panel()
+        
+        if is_in_left:
+            # In left panel - navigate through segment buttons
+            self._navigate_segments_up()
+        else:
+            # In right panel - scroll up in the content
+            try:
+                scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
+                scroll_container.scroll_up()
+            except:
+                pass
     
     def action_nav_right(self) -> None:
-        """Navigate right (l key) - move to next focusable element."""
-        self.focus_next()
-        self._handle_focus_change()
+        """Navigate right (l key) - switch to right panel."""
+        # L key switches to right panel
+        try:
+            right_container = self.query_one("#settings-scroll", ScrollableContainer)
+            right_container.focus()
+            self._update_panel_focus(is_left_focused=False)
+        except:
+            pass
+    
+    def _is_focus_in_left_panel(self) -> bool:
+        """Check if current focus is in the left panel."""
+        focused = self.focused
+        if not focused:
+            return False
+            
+        # Walk up the widget tree to determine which panel contains the focused widget
+        current = focused
+        while current is not None:
+            if current.id == "left-panel":
+                return True
+            elif current.id == "right-panel" or current.id == "settings-scroll":
+                return False
+            current = current.parent
+        return False
+    
+    def _navigate_segments_down(self) -> None:
+        """Navigate down through segment buttons."""
+        current_segment_index = -1
+        for i, segment in enumerate(self.SEGMENTS):
+            if segment["id"] == self.selected_segment:
+                current_segment_index = i
+                break
+        
+        if current_segment_index >= 0 and current_segment_index < len(self.SEGMENTS) - 1:
+            # Move to next segment
+            next_segment = self.SEGMENTS[current_segment_index + 1]
+            try:
+                next_button = self.query_one(f"#segment-{next_segment['id']}", Button)
+                next_button.focus()
+                # Directly update the selected segment and trigger all updates
+                self.selected_segment = next_segment['id']
+                # No need to call _handle_focus_change since watch_selected_segment will handle it
+            except:
+                pass
+    
+    def _navigate_segments_up(self) -> None:
+        """Navigate up through segment buttons."""
+        current_segment_index = -1
+        for i, segment in enumerate(self.SEGMENTS):
+            if segment["id"] == self.selected_segment:
+                current_segment_index = i
+                break
+        
+        if current_segment_index > 0:
+            # Move to previous segment
+            prev_segment = self.SEGMENTS[current_segment_index - 1]
+            try:
+                prev_button = self.query_one(f"#segment-{prev_segment['id']}", Button)
+                prev_button.focus()
+                # Directly update the selected segment and trigger all updates
+                self.selected_segment = prev_segment['id']
+                # No need to call _handle_focus_change since watch_selected_segment will handle it
+            except:
+                pass
+    
+    def _check_and_update_panel_focus(self) -> None:
+        """Check which panel has focus and update the visual indicators."""
+        focused = self.focused
+        if not focused:
+            return
+            
+        # Walk up the widget tree to determine which panel contains the focused widget
+        current = focused
+        while current is not None:
+            if current.id == "left-panel":
+                self._update_panel_focus(is_left_focused=True)
+                return
+            elif current.id == "right-panel" or current.id == "settings-scroll":
+                self._update_panel_focus(is_left_focused=False)
+                return
+            current = current.parent
     
     def action_select_item(self) -> None:
         """Select current focused item (enter key)."""

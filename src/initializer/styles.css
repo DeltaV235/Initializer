@@ -1,9 +1,21 @@
 /* Linux System Initializer TUI Styles */
 
 /* Global styles */
+* {
+    margin: 0;
+    padding: 0;
+}
+
+App {
+    margin: 0;
+    padding: 0;
+}
+
 Screen {
     layers: base overlay;
     overflow: hidden;
+    padding: 0;
+    margin: 0;
 }
 
 /* Title styles with configurator border */
@@ -16,7 +28,7 @@ Screen {
     text-style: bold;
     color: cyan;
     border: solid cyan;
-    margin: 1;
+    margin: 0;
 }
 
 #subtitle {
@@ -31,32 +43,46 @@ Screen {
 #main-container {
     layout: vertical;
     height: 100%;
+    width: 100%;
+    padding: 0;
+    margin: 0;
 }
 
 #content-area {
     layout: horizontal;
     height: 1fr;
-    margin: 1;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
 }
 
 /* Left panel styles - Segments list */
 #left-panel {
     width: 30%;
-    min-width: 25;
-    max-width: 40;
-    padding-right: 2;
-    border: solid cyan;
+    min-width: 20;
+    max-width: 35;
     padding: 1;
+    border: solid cyan;
+    height: 100%;
+    margin: 0;
+}
+
+#left-panel.panel-focused {
+    border: solid $primary;
 }
 
 /* Right panel styles - Settings */
 #right-panel {
-    width: 70%;
-    min-width: 40;
+    width: 1fr;
     border: solid cyan;
     padding: 1;
     layout: vertical;
     height: 100%;
+    margin: 0;
+}
+
+#right-panel.panel-focused {
+    border: solid $primary;
 }
 
 /* Panel titles */
@@ -100,6 +126,26 @@ Screen {
     height: 1fr;
     width: 100%;
     scrollbar-size: 1 1;
+}
+
+/* Loading text - simple display in top-left */
+.loading-text {
+    color: $text-muted;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+}
+
+/* Loading text styles */
+.info-display {
+    color: $text;
+    margin-left: 2;
+}
+
+/* Loading message specific style */
+#settings-scroll .info-display.loading-message {
+    margin: 1 0;
+    text-align: center;
 }
 
 /* Settings content styles */
@@ -232,14 +278,23 @@ DataTable > .datatable--even-row {
     margin-bottom: 1;
 }
 
-/* Footer and header */
-Header {
-    background: $primary;
-    color: $text;
+/* Help box at bottom */
+#help-box {
+    dock: bottom;
+    width: 100%;
+    height: 3;
+    border: solid cyan;
+    background: $surface;
+    padding: 0 1;
+    margin: 0;
 }
 
-Footer {
-    background: $secondary;
-    color: $text;
+.help-text {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+    text-align: center;
+    color: $text-muted;
+    text-style: italic;
 }
 
