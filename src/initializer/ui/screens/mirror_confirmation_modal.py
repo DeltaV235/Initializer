@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
+from textual.containers import Container, Vertical, ScrollableContainer
 from textual.screen import ModalScreen
 from textual.widgets import Button, Static, Rule, Label
 from typing import Callable, Optional, List
@@ -38,7 +38,6 @@ class MirrorConfirmationModal(ModalScreen):
         self.detector = PackageManagerDetector()
         
         # State management
-        self.button_focus = "confirm"  # "confirm" or "cancel"
         self.is_executing = False
         
         # Files that will be affected
@@ -136,36 +135,9 @@ class MirrorConfirmationModal(ModalScreen):
                 with Vertical(id="log-output"):
                     yield Static("Waiting for confirmation...", id="log-content", classes="log-content")
             
-            # Fixed action buttons at the bottom (outside ScrollableContainer)
-            with Horizontal(id="confirmation-actions"):
-                yield Static("[ Enter ] Confirm", id="confirm-button", classes="confirmation-button confirm-focused")
-                yield Static("[ Esc ] Cancel", id="cancel-button", classes="confirmation-button")
-    
-    def _update_button_display(self) -> None:
-        """Update button display with focus indicators."""
-        try:
-            confirm_btn = self.query_one("#confirm-button", Static)
-            cancel_btn = self.query_one("#cancel-button", Static)
-            
-            if not self.is_executing:
-                if self.button_focus == "confirm":
-                    confirm_btn.update("▶ [ Confirm ]")
-                    cancel_btn.update("  [ Cancel ]")
-                else:
-                    confirm_btn.update("  [ Confirm ]")
-                    cancel_btn.update("▶ [ Cancel ]")
-            else:
-                # During execution, disable buttons
-                confirm_btn.update("  [ Working... ]")
-                cancel_btn.update("  [ Cancel ]")
-        except Exception:
-            pass
-    
-    def action_switch_focus(self) -> None:
-        """Switch focus between buttons."""
-        if not self.is_executing:
-            self.button_focus = "cancel" if self.button_focus == "confirm" else "confirm"
-            self._update_button_display()
+            # Fixed action help at the bottom - single line format like main menu
+            with Container(id="confirmation-actions"):
+                yield Static("Keyboard Shortcuts: j/k=Scroll | Enter=Confirm | Esc=Cancel", classes="help-text")
     
     def action_confirm_change(self) -> None:
         """Confirm the mirror change."""
@@ -225,7 +197,6 @@ class MirrorConfirmationModal(ModalScreen):
         self.is_executing = True
         
         def update_ui_start():
-            self._update_button_display()
             self._log_message("Starting mirror source change...")
         
         self.app.call_from_thread(update_ui_start)
@@ -253,7 +224,6 @@ class MirrorConfirmationModal(ModalScreen):
                     self.callback(False, message)
                 
                 self.is_executing = False
-                self._update_button_display()
             
             self.app.call_from_thread(update_ui_complete)
             
@@ -262,7 +232,6 @@ class MirrorConfirmationModal(ModalScreen):
                 self._log_message(f"❌ Error: {str(e)}")
                 self.callback(False, f"Error: {str(e)}")
                 self.is_executing = False
-                self._update_button_display()
             
             self.app.call_from_thread(show_error)
     

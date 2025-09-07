@@ -523,16 +523,13 @@ DataTable > .datatable--even-row {
 }
 
 #modal-actions {
-    layout: horizontal;
+    dock: bottom;
     height: 3;
     width: 100%;
     margin-top: 1;
-    content-align: center middle;
-}
-
-#modal-actions Button {
-    margin: 0 1;
-    min-width: 10;
+    border: solid cyan;
+    background: $surface;
+    padding: 0 1;
 }
 
 .current-source-display {
@@ -630,24 +627,12 @@ ModalScreen > #confirmation-container {
 
 #confirmation-actions {
     dock: bottom;
-    layout: horizontal;
     height: 3;
     width: 100%;
     margin-top: 1;
-    content-align: center middle;
     background: $surface;
-    border-top: solid $primary;
-}
-
-.confirmation-button {
-    color: $text;
-    margin: 0 2;
-    padding: 0 2;
-    text-align: center;
-    content-align: center middle;
-    height: 1;
-    min-width: 16;
-    background: transparent;
+    border: solid cyan;
+    padding: 0 1;
 }
 
 .confirm-focused {

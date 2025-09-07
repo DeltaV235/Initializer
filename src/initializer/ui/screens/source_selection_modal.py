@@ -115,6 +115,10 @@ class SourceSelectionModal(ModalScreen):
                             arrow = "▶ " if i == 0 else "  "
                             text = f"{arrow}{name.title()}: {display_url}"
                             yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+            
+            # Fixed bottom shortcuts - single line format like main menu
+            with Container(id="modal-actions"):
+                yield Static("Keyboard Shortcuts: j/k=Navigate | Enter=Select | Esc=Cancel", classes="help-text")
     
     def _update_mirror_display(self) -> None:
         """Update mirror list display with arrow indicators."""
