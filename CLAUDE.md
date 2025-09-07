@@ -130,13 +130,34 @@ python main.py --preset minimal   # Basic installation
 3. Create UI screen in `src/initializer/ui/screens/`
 4. Register in main menu (`src/initializer/ui/screens/main_menu.py`)
 
+## UI Navigation & Keyboard Shortcuts
+
+### Panel Navigation
+- **Tab**: Switch focus between left and right panels
+- **h/l**: Switch to left/right panel (Vim-style)
+- **j/k**: Navigate up/down within the currently focused panel
+  - Left panel: Move between segment buttons
+  - Right panel: Scroll content up/down
+- **Enter**: Select/activate current item
+- **1-5**: Quick select segments by number
+- **q**: Quit application
+- **s**: Jump to Settings segment
+
+### Visual Feedback
+- **Panel Focus Indicator**: Active panel shows with blue border (primary color)
+- **Segment Selection**: Selected segment shows with arrow indicator (▶)
+- **Help Box**: Bottom of screen displays keyboard shortcuts
+
 ## Current Implementation Status
 
 ### Completed Features ✅
 - Core TUI architecture with Rich/Textual
 - Configuration management system
-- System information module with export capabilities
-- Main menu, system info, homebrew, settings, help screens
+- System information module with comprehensive details
+- Advanced panel navigation system with focus management
+- Visual focus indicators and panel highlighting
+- Keyboard shortcuts displayed in bottom help box
+- Async loading with proper UI feedback
 - Theme system with multiple color schemes
 - Preset configuration system
 - Automated installation and deployment scripts
@@ -145,6 +166,7 @@ python main.py --preset minimal   # Basic installation
 - Complete Homebrew module implementation
 - Package manager module (auto-detect, mirror management)
 - User management module (user creation, SSH keys)
+- Export functionality for system information (JSON/Text)
 - Enhanced UI components (progress bars, confirmation dialogs)
 - 所有测试由我来手动执行
 - 如果在非 WSL 环境下开发，在完成修改之后，自动执行 @tools/sync-to-remote.sh 来将变更同步到远端
