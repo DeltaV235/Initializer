@@ -211,7 +211,10 @@ class PackageManagerScreen(Screen):
                 pm = self.package_managers[self.left_focused_item]
                 self.selected_pm = pm
                 self._display_source_options(pm)
-                self._show_source_selection_modal(pm)
+                try:
+                    self._show_source_selection_modal(pm)
+                except Exception as e:
+                    self._show_error(f"Error showing source selection: {str(e)}")
     
     def _show_message(self, message: str, error: bool = False) -> None:
         """Show a message to the user."""

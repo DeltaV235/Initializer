@@ -18,6 +18,85 @@ class SourceSelectionModal(ModalScreen):
         ("escape", "dismiss", "Cancel"),
     ]
     
+    # CSS styles for the modal
+    CSS = """
+    SourceSelectionModal {
+        align: center middle;
+    }
+    
+    #modal-container {
+        width: 80%;
+        height: 24;
+        max-height: 24;
+        background: $surface;
+        border: thick $primary;
+        padding: 1;
+    }
+    
+    #modal-content {
+        height: 1fr;
+        overflow-y: auto;
+        scrollbar-size-vertical: 1;
+        padding: 0 1;
+    }
+    
+    .info-key {
+        margin: 1 0 0 0;
+        color: $text;
+    }
+    
+    .current-mirror-item {
+        height: auto;
+        min-height: 1;
+        color: $text-muted;
+        text-style: dim;
+        background: transparent;
+    }
+    
+    .current-mirror-item:hover {
+        background: transparent;
+    }
+    
+    #mirror-list {
+        height: auto;
+        min-height: 1;
+        margin: 0 0 1 0;
+    }
+    
+    .mirror-item {
+        height: auto;
+        min-height: 1;
+    }
+    
+    .mirror-item:hover {
+        background: $accent 20%;
+    }
+    
+    #modal-actions {
+        height: 3;
+        dock: bottom;
+        background: $surface;
+        border-top: thick $primary;
+        padding: 1 2;
+        margin: 0;
+    }
+    
+    .help-text {
+        text-align: center;
+        color: $text;
+        text-style: normal;
+        height: 1;
+        content-align: center middle;
+        background: $surface;
+        border: none;
+    }
+    
+    .bottom-spacer {
+        height: 1;
+        background: transparent;
+    }
+    """
+    
     def __init__(self, package_manager, callback: Callable[[str], None]):
         super().__init__()
         self.package_manager = package_manager
@@ -26,28 +105,45 @@ class SourceSelectionModal(ModalScreen):
         self.available_mirrors = self.detector.get_available_mirrors(package_manager.name)
         
         # State management
-        self.mirror_list = []  # List of (name, url) tuples
-        self.selected_index = 0  # Currently selected mirror index
+        self.mirror_list = []  # List of (name, url, is_current) tuples
+        self.selected_index = 0  # Currently selected mirror index (only selectable mirrors)
         
         # Prepare mirror list
+        current_source_url = (self.package_manager.current_source or "").strip().rstrip('/')
         if self.available_mirrors:
             for name, url in self.available_mirrors.items():
-                self.mirror_list.append((name, url))
+                is_current = url.strip().rstrip('/') == current_source_url
+                self.mirror_list.append((name, url, is_current))
+            
+            # Set initial selected_index to first non-current item
+            self.selected_index = 0
+            for i, (_, _, is_current) in enumerate(self.mirror_list):
+                if not is_current:
+                    self.selected_index = i
+                    break
+            
+            # If no non-current item found, default to first item
+            if self.selected_index >= len(self.mirror_list):
+                self.selected_index = 0
     
     def on_mount(self) -> None:
         """Initialize the screen."""
-        # Use call_after_refresh to ensure components are rendered
-        self.call_after_refresh(self._update_mirror_display)
-        
-        # Test: Show that the modal was created
-        self._show_error("Modal created - use j/k to navigate, Enter to select")
-        
-        # Try to ensure focus with higher priority
-        self.focus()
-        
-        # Set higher priority for this screen
-        if hasattr(self.app, '_screen_stack'):
-            # Ensure this modal is at the top of the screen stack
+        try:
+            # Use call_after_refresh to ensure components are rendered
+            self.call_after_refresh(self._update_mirror_display)
+            
+            # Set initial title display
+            self.call_after_refresh(lambda: self._show_error(""))
+            
+            # Try to ensure focus with higher priority
+            self.focus()
+            
+            # Set higher priority for this screen
+            if hasattr(self.app, '_screen_stack'):
+                # Ensure this modal is at the top of the screen stack
+                pass
+        except Exception as e:
+            # Prevent any mounting errors from showing confusing messages
             pass
     
     def can_focus(self) -> bool:
@@ -62,25 +158,19 @@ class SourceSelectionModal(ModalScreen):
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
         """Handle key events using @on decorator."""
-        self._show_error(f"@ON KEY: {event.key} - Detected")
-        
         if event.key == "enter":
-            self._show_error("@ON ENTER - Calling action")
             self.action_select_current()
             event.prevent_default()
             event.stop()
         elif event.key == "j":
-            self._show_error("@ON J - Moving down")
             self.action_nav_down()
             event.prevent_default()
             event.stop()
         elif event.key == "k": 
-            self._show_error("@ON K - Moving up")
             self.action_nav_up()
             event.prevent_default()
             event.stop()
         elif event.key == "escape":
-            self._show_error("@ON ESC - Dismissing")
             self.dismiss()
             event.prevent_default()
             event.stop()
@@ -92,33 +182,33 @@ class SourceSelectionModal(ModalScreen):
             yield Rule()
             
             with ScrollableContainer(id="modal-content"):
-                # Current source info
-                yield Label("Current Source:", classes="info-key")
-                current = self.package_manager.current_source or "Not configured"
-                if len(current) > 80:
-                    current = current[:77] + "..."
-                yield Static(current, classes="current-source-display")
-                
-                yield Rule()
-                
-                # Available mirrors (displayed as text with arrows)
+                # Available mirrors (including current with special styling)
                 if self.mirror_list:
                     yield Label("Available Mirrors:", classes="info-key")
                     with Vertical(id="mirror-list"):
-                        # Pre-populate mirror items to avoid mounting issues
-                        for i, (name, url) in enumerate(self.mirror_list):
+                        # Force content height calculation by adding explicit spacers
+                        for i, (name, url, is_current) in enumerate(self.mirror_list):
                             display_url = url
                             if len(display_url) > 60:
                                 display_url = display_url[:57] + "..."
                             
-                            # Start with first item selected
-                            arrow = "▶ " if i == 0 else "  "
-                            text = f"{arrow}{name.title()}: {display_url}"
-                            yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+                            if is_current:
+                                # Current source - not selectable, dimmed
+                                text = f"  {name.title()}: {display_url} (Current)"
+                                yield Static(text, id=f"mirror-item-{i}", classes="current-mirror-item")
+                            else:
+                                # Selectable mirror - start with first non-current selected
+                                is_selected = (i == self.selected_index)
+                                arrow = "▶ " if is_selected else "  "
+                                text = f"{arrow}{name.title()}: {display_url}"
+                                yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+                        
+                        # Add bottom padding to ensure scrollbar calculation
+                        yield Static("", classes="bottom-spacer")
             
-            # Fixed bottom shortcuts - single line format like main menu
+            # Fixed bottom shortcuts - compact format
             with Container(id="modal-actions"):
-                yield Static("Keyboard Shortcuts: j/k=Navigate | Enter=Select | Esc=Cancel", classes="help-text")
+                yield Static("j/k: Navigate | Enter: Select | Esc: Cancel", classes="help-text")
     
     def _update_mirror_display(self) -> None:
         """Update mirror list display with arrow indicators."""
@@ -127,7 +217,7 @@ class SourceSelectionModal(ModalScreen):
                 return
             
             # Update existing mirror items
-            for i, (name, url) in enumerate(self.mirror_list):
+            for i, (name, url, is_current) in enumerate(self.mirror_list):
                 mirror_item = self.query_one(f"#mirror-item-{i}", Static)
                 
                 # Format display URL
@@ -135,9 +225,13 @@ class SourceSelectionModal(ModalScreen):
                 if len(display_url) > 60:
                     display_url = display_url[:57] + "..."
                 
-                # Create arrow indicator
-                arrow = "▶ " if i == self.selected_index else "  "
-                text = f"{arrow}{name.title()}: {display_url}"
+                if is_current:
+                    # Current source - always dimmed, no arrow
+                    text = f"  {name.title()}: {display_url} (Current)"
+                else:
+                    # Selectable mirror - show arrow only for selected item
+                    arrow = "▶ " if i == self.selected_index else "  "
+                    text = f"{arrow}{name.title()}: {display_url}"
                 
                 mirror_item.update(text)
                 
@@ -151,17 +245,22 @@ class SourceSelectionModal(ModalScreen):
                     child.remove()
                 
                 # Add mirror items
-                for i, (name, url) in enumerate(self.mirror_list):
+                for i, (name, url, is_current) in enumerate(self.mirror_list):
                     # Format display URL
                     display_url = url
                     if len(display_url) > 60:
                         display_url = display_url[:57] + "..."
                     
-                    # Create arrow indicator
-                    arrow = "▶ " if i == self.selected_index else "  "
-                    text = f"{arrow}{name.title()}: {display_url}"
+                    if is_current:
+                        # Current source - dimmed, not selectable
+                        text = f"  {name.title()}: {display_url} (Current)"
+                        mirror_item = Static(text, id=f"mirror-item-{i}", classes="current-mirror-item")
+                    else:
+                        # Selectable mirror with arrow indicator
+                        arrow = "▶ " if i == self.selected_index else "  "
+                        text = f"{arrow}{name.title()}: {display_url}"
+                        mirror_item = Static(text, id=f"mirror-item-{i}", classes="mirror-item")
                     
-                    mirror_item = Static(text, id=f"mirror-item-{i}", classes="mirror-item")
                     mirror_list_container.mount(mirror_item)
             except Exception:
                 pass
@@ -170,57 +269,146 @@ class SourceSelectionModal(ModalScreen):
         """Get the currently selected source URL."""
         # Check selected mirror
         if self.mirror_list and 0 <= self.selected_index < len(self.mirror_list):
-            return self.mirror_list[self.selected_index][1]
+            name, url, is_current = self.mirror_list[self.selected_index]
+            # Don't allow selection of current source
+            if not is_current:
+                return url
         
         return None
     
     def action_nav_down(self) -> None:
-        """Navigate down in the current focus area."""
-        if self.mirror_list and self.selected_index < len(self.mirror_list) - 1:
-            old_index = self.selected_index
-            self.selected_index += 1
-            self._show_error(f"Nav down: {old_index} -> {self.selected_index}")
-            self._update_mirror_display()
-        else:
-            self._show_error(f"Nav down blocked: index={self.selected_index}, max={len(self.mirror_list)-1 if self.mirror_list else 0}")
+        """Navigate down in the current focus area, skipping current source."""
+        if not self.mirror_list:
+            return
+            
+        # Find next selectable item
+        for next_index in range(self.selected_index + 1, len(self.mirror_list)):
+            _, _, is_current = self.mirror_list[next_index]
+            if not is_current:
+                self.selected_index = next_index
+                # Force immediate scroll and display update
+                self._scroll_to_current()  
+                self._update_mirror_display()
+                self._show_error("")
+                break
     
     def action_nav_up(self) -> None:
-        """Navigate up in the current focus area."""
-        if self.mirror_list and self.selected_index > 0:
-            old_index = self.selected_index
-            self.selected_index -= 1
-            self._show_error(f"Nav up: {old_index} -> {self.selected_index}")
-            self._update_mirror_display()
-        else:
-            self._show_error(f"Nav up blocked: index={self.selected_index}")
+        """Navigate up in the current focus area, skipping current source."""
+        if not self.mirror_list:
+            return
+            
+        # Find previous selectable item
+        for prev_index in range(self.selected_index - 1, -1, -1):
+            _, _, is_current = self.mirror_list[prev_index]
+            if not is_current:
+                self.selected_index = prev_index
+                # Force immediate scroll and display update
+                self._scroll_to_current()  
+                self._update_mirror_display()
+                self._show_error("")
+                break
     
     def action_select_current(self) -> None:
         """Select current item."""
-        # VERY OBVIOUS TEST MESSAGE
-        self._show_error("=== ACTION_SELECT_CURRENT CALLED ===")
-        
         selected_source = self._get_selected_source()
-        current = self.package_manager.current_source
-        
-        # Debug: Show the comparison
-        self._show_error(f"Selected: {selected_source}")
-        self._show_error(f"Current: {current}")
         
         if selected_source:
-            # Test: Show that we're calling callback
-            self._show_error(f"Calling callback with: {selected_source[:50]}...")
             self.callback(selected_source)
             self.dismiss()
         else:
             self._show_error("No mirror selected")
     
+    def _scroll_to_current(self) -> None:
+        """Scroll the modal content to ensure current selection is visible with smooth synchronous behavior."""
+        try:
+            # Get the scrollable container
+            scrollable_container = self.query_one("#modal-content", ScrollableContainer)
+            
+            # Try Textual's built-in scroll_to_widget method first
+            current_item = self.query_one(f"#mirror-item-{self.selected_index}", Static)
+            if hasattr(scrollable_container, 'scroll_to_widget'):
+                # Use smooth scrolling with center positioning
+                scrollable_container.scroll_to_widget(current_item, animate=True, speed=60, center=True)
+            else:
+                # Enhanced manual scrolling for immediate response
+                header_height = 2  # Only "Available Mirrors:" label now
+                visible_height = 15  # More visible height with expanded modal (18 total - 3 for margins)
+                
+                # Calculate current item position
+                current_item_position = header_height + self.selected_index
+                current_scroll = scrollable_container.scroll_y
+                
+                # Calculate optimal scroll position to keep item in view
+                # Target: keep selected item roughly in the middle third of visible area
+                target_position_from_top = 3  # 3 lines from top of visible area
+                
+                # Calculate new scroll position
+                new_scroll_position = max(0, current_item_position - header_height - target_position_from_top)
+                
+                # Apply smooth scrolling if position changes significantly
+                scroll_diff = abs(new_scroll_position - current_scroll)
+                if scroll_diff > 0:
+                    # Immediate scroll for synchronous feel
+                    scrollable_container.scroll_y = new_scroll_position
+                    
+        except Exception:
+            # Fallback: basic scrolling
+            try:
+                scrollable_container = self.query_one("#modal-content", ScrollableContainer)
+                # Simple position calculation based on selected_index
+                target_scroll = max(0, self.selected_index - 3)
+                scrollable_container.scroll_y = target_scroll
+            except:
+                pass
+
     def _show_error(self, message: str) -> None:
         """Show error message in the modal title."""
-        title_widget = self.query_one("#modal-title", Static)
-        original_title = title_widget.renderable
-        title_widget.update(f"❌ {message}")
-        # Reset after 2 seconds
-        self.set_timer(2.0, lambda: title_widget.update(original_title))
+        try:
+            title_widget = self.query_one("#modal-title", Static)
+            # Store original title if not already stored
+            if not hasattr(self, '_original_title'):
+                self._original_title = f"Select Mirror Source for {self.package_manager.name.upper()}"
+            
+            # Show current selection info along with any message
+            if (hasattr(self, 'selected_index') and self.mirror_list and 
+                0 <= self.selected_index < len(self.mirror_list)):
+                # Count only selectable (non-current) items
+                selectable_count = sum(1 for _, _, is_current in self.mirror_list if not is_current)
+                if selectable_count > 0:
+                    # Find position among selectable items
+                    selectable_position = 1
+                    for i in range(self.selected_index):
+                        if i < len(self.mirror_list):
+                            _, _, is_current = self.mirror_list[i]
+                            if not is_current:
+                                selectable_position += 1
+                    
+                    current_name = self.mirror_list[self.selected_index][0].title()
+                    display_message = f"[{selectable_position}/{selectable_count}] {current_name}"
+                    if message:
+                        display_message += f" | {message}"
+                else:
+                    display_message = message or self._original_title
+            else:
+                display_message = message or self._original_title
+                
+            title_widget.update(display_message)
+            
+            # Only reset after delay if there was a message
+            if message:
+                self.set_timer(2.0, lambda: self._reset_title())
+                
+        except Exception as e:
+            # Fallback to simple title
+            try:
+                title_widget = self.query_one("#modal-title", Static)
+                title_widget.update(f"Select Mirror Source for {self.package_manager.name.upper()}")
+            except:
+                pass
+
+    def _reset_title(self) -> None:
+        """Reset title to show current selection."""
+        self._show_error("")  # This will show just the selection info
     
     def action_dismiss(self) -> None:
         """Dismiss the modal."""
