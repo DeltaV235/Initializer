@@ -83,4 +83,22 @@ class InitializerApp(App):
         
     def action_quit(self) -> None:
         """Quit the application."""
+        # Disable mouse tracking immediately before exit
+        try:
+            import sys
+            sys.stdout.write('\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l')
+            sys.stdout.flush()
+        except Exception:
+            pass
         self.exit()
+        
+    def on_unmount(self) -> None:
+        """Called when app is unmounted - ensure proper cleanup."""
+        # Disable mouse tracking to prevent control sequences after exit
+        try:
+            import sys
+            # Send escape sequences to disable mouse tracking
+            sys.stdout.write('\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l')
+            sys.stdout.flush()
+        except Exception:
+            pass

@@ -6,6 +6,7 @@ Description: A modern terminal user interface for Linux system initialization
 """
 
 import sys
+import signal
 from pathlib import Path
 import click
 from rich.console import Console
@@ -15,6 +16,27 @@ from .config_manager import ConfigManager
 
 
 console = Console()
+
+
+def cleanup_terminal():
+    """Clean up terminal state on exit."""
+    try:
+        # Disable mouse tracking and other terminal features
+        sys.stdout.write('\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l\033[?25h')
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+def signal_handler(signum, frame):
+    """Handle signals and ensure proper cleanup."""
+    cleanup_terminal()
+    sys.exit(0)
+
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 
 @click.command()
@@ -42,13 +64,18 @@ def main(preset: str, config_dir: str, headless: bool, debug: bool):
         app = InitializerApp(config_manager, preset=preset, headless=headless, debug=debug)
         app.run()
         
+        # Always cleanup on normal exit
+        cleanup_terminal()
+        
     except KeyboardInterrupt:
         console.print("\n[yellow]Application interrupted by user[/yellow]")
+        cleanup_terminal()
         sys.exit(0)
     except Exception as e:
         console.print(f"[red]Error starting application: {e}[/red]")
         if debug:
             console.print_exception()
+        cleanup_terminal()
         sys.exit(1)
 
 
