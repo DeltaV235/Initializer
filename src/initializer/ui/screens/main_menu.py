@@ -103,8 +103,9 @@ class MainMenuScreen(Screen):
                         if segment["id"] == "user_management" and segment["id"] in self.modules_config and not self.modules_config[segment["id"]].enabled:
                             continue
                         
-                        # Create button with fixed-width arrow indicator space
-                        yield Button(f"  {segment['name']}", id=f"segment-{segment['id']}", classes="segment-item")
+                        # Create button with numbered prefix for quick select
+                        segment_number = next(i+1 for i, s in enumerate(self.SEGMENTS) if s['id'] == segment['id'])
+                        yield Button(f"  {segment_number}. {segment['name']}", id=f"segment-{segment['id']}", classes="segment-item")
                 
                 # Right panel - Settings
                 with Vertical(id="right-panel"):
@@ -113,7 +114,7 @@ class MainMenuScreen(Screen):
             
             # Help box at the bottom
             with Container(id="help-box"):
-                yield Label("Keyboard Shortcuts: q=Quit | s=Settings | Tab/h/l=Switch Panel | j/k=Navigate Up/Down | Enter=Select | 1-5=Quick Select", classes="help-text")
+                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | ENTER=Select | 1-5=Quick Select", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -808,11 +809,9 @@ class MainMenuScreen(Screen):
             return
         
         container.mount(Label("► Keyboard Shortcuts", classes="info-key"))
-        container.mount(Static("q - Quit application", classes="help-item"))
-        container.mount(Static("s - Settings segment", classes="help-item"))
-        container.mount(Static("? - Help segment", classes="help-item"))
-        container.mount(Static("h/j/k/l - Vim navigation", classes="help-item"))
-        container.mount(Static("Enter - Select item", classes="help-item"))
+        container.mount(Static("Q=Quit | S=Settings | ?=Help", classes="help-item"))
+        container.mount(Static("H/J/K/L=Navigate | ENTER=Select", classes="help-item"))
+        container.mount(Static("1-5=Quick Select Segment", classes="help-item"))
         
         container.mount(Label("► Segments", classes="info-key"))
         container.mount(Static("System Status - View system information", classes="help-item"))
@@ -1037,13 +1036,14 @@ class MainMenuScreen(Screen):
         for segment in self.SEGMENTS:
             try:
                 button = self.query_one(f"#segment-{segment['id']}", Button)
+                segment_number = next(i+1 for i, s in enumerate(self.SEGMENTS) if s['id'] == segment['id'])
                 if segment['id'] == selected_id and show_arrow:
                     # Use arrow in the reserved space (first 2 characters)
-                    button.label = f"▶ {segment['name']}"
+                    button.label = f"▶ {segment_number}. {segment['name']}"
                     button.add_class("selected")
                 else:
                     # Keep the reserved space with spaces
-                    button.label = f"  {segment['name']}"
+                    button.label = f"  {segment_number}. {segment['name']}"
                     if segment['id'] == selected_id:
                         button.add_class("selected")
                     else:

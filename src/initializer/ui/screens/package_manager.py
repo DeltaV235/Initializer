@@ -162,7 +162,7 @@ class PackageManagerScreen(Screen):
                 source_container.mount(Static("Not configured", classes="current-source-none"))
             
             source_container.mount(Rule())
-            source_container.mount(Static("Press Enter to change source", classes="help-text"))
+            source_container.mount(Static("ENTER=Change Source", classes="help-text"))
                 
         except Exception as e:
             self._show_error(f"Error displaying source options: {str(e)}")

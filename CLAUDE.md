@@ -220,3 +220,4 @@ tools/check-test-environment.sh --exit-code-only
 - **3 core modules**: system_info, package_manager, (homebrew in progress)
 - **Comprehensive navigation**: Tab, hjkl, Enter, 1-5 shortcuts, q for quit
 - **Automated tools**: Installation, deployment, environment detection
+- 执行完 run.sh，测试完成后，按 Q 正常退出程序。

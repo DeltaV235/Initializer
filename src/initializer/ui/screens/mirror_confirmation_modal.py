@@ -137,7 +137,7 @@ class MirrorConfirmationModal(ModalScreen):
             
             # Fixed action help at the bottom - single line format like main menu
             with Container(id="confirmation-actions"):
-                yield Static("Keyboard Shortcuts: j/k=Scroll | Enter=Confirm | Esc=Cancel", classes="help-text")
+                yield Static("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
     
     def action_confirm_change(self) -> None:
         """Confirm the mirror change."""
