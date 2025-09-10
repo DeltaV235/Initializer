@@ -34,10 +34,23 @@ class SourceSelectionModal(ModalScreen):
         layout: vertical;
     }
     
+    #current-source-container {
+        height: auto;
+        min-height: 1;
+        padding: 0 1;
+        background: $surface;
+    }
+    
     #modal-content {
         height: 1fr;
         overflow-y: auto;
         padding: 0 1;
+    }
+    
+    .section-divider {
+        height: 1;
+        color: $primary;
+        margin: 0;
     }
     
     .info-key {
@@ -185,14 +198,13 @@ class SourceSelectionModal(ModalScreen):
             yield Static(f"Select Mirror Source for {self.package_manager.name.upper()}", id="modal-title")
             yield Rule()
             
-            with ScrollableContainer(id="modal-content"):
-                # Show current source at the top in separate section
-                if self.mirror_list:
-                    current_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if is_current]
-                    selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
-                    
-                    # Current Source Section (at the top)
-                    if current_sources:
+            # Fixed Current Source Section (outside of scrollable area)
+            if self.mirror_list:
+                current_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if is_current]
+                selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
+                
+                if current_sources:
+                    with Container(id="current-source-container"):
                         yield Label("Current Source:", classes="info-key")
                         for i, name, url in current_sources:
                             display_url = url
@@ -200,12 +212,12 @@ class SourceSelectionModal(ModalScreen):
                                 display_url = display_url[:57] + "..."
                             text = f"  {name.title()}: {display_url}"
                             yield Static(text, id=f"current-source-{i}", classes="current-source-display")
-                        
-                        # Add separator between sections
-                        yield Static("", classes="section-separator")
                     
-                    # Available Sources Section
-                    yield Label("Available Sources:", classes="info-key")
+                    yield Rule(classes="section-divider")
+                
+                # Scrollable Available Sources Section
+                yield Label("Available Sources:", classes="info-key")
+                with ScrollableContainer(id="modal-content"):
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
                         for i, name, url in selectable_sources:
