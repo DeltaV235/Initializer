@@ -20,6 +20,14 @@ Linux System Initializer is a modern Terminal User Interface (TUI) application f
 
 **Keyboard-First Operation**: The entire project is designed primarily for keyboard operation. The basic logic uses arrows (▶) to indicate the current cursor position, and blue borders to show which panel currently has focus. The interface adopts a CLI-style graphical interface rather than modern UI elements, maintaining a terminal-native feel that experienced system administrators would find familiar and efficient.
 
+## Terminal State Management
+
+**Important**: The application includes automatic terminal state cleanup to prevent terminal issues after exit:
+- `tools/reset-terminal.sh` - Manual terminal reset script
+- `run.sh` automatically runs reset script after application exits
+- Python code includes cleanup handlers for normal and abnormal exits
+- Cleanup includes: exiting alternate screen buffer, disabling mouse tracking, showing cursor
+
 ## Development Commands
 
 ### Installation & Setup
@@ -73,6 +81,9 @@ tools/check-test-environment.sh
 
 # Remote deployment and synchronization  
 tools/sync-to-remote.sh
+
+# Terminal state reset (automatically called by run.sh)
+tools/reset-terminal.sh
 ```
 
 ## Architecture

@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import platform
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Tuple
 from pathlib import Path
@@ -16,6 +17,8 @@ class PackageManager:
     command: str
     current_source: Optional[str] = None
     available: bool = False
+    installable: bool = False  # Whether this package manager can be installed
+    description: Optional[str] = None  # Description of the package manager
 
 
 class PackageManagerDetector:
@@ -84,37 +87,96 @@ class PackageManagerDetector:
         }
     }
     
-    def __init__(self):
-        self.package_managers = self._detect_package_managers()
+    # Define all known package managers with their install info
+    PACKAGE_MANAGERS_INFO = {
+        "apt": {
+            "command": "apt-get",
+            "description": "Debian/Ubuntu package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "yum": {
+            "command": "yum",
+            "description": "RedHat/CentOS package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "dnf": {
+            "command": "dnf",
+            "description": "Fedora package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "pacman": {
+            "command": "pacman",
+            "description": "Arch Linux package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "zypper": {
+            "command": "zypper",
+            "description": "openSUSE package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "brew": {
+            "command": "brew",
+            "description": "macOS/Linux package manager",
+            "installable": True,  # Can be installed
+            "install_script": '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+            "uninstall_script": '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"',
+        },
+        "apk": {
+            "command": "apk",
+            "description": "Alpine Linux package manager",
+            "installable": False,  # Usually pre-installed
+        },
+        "snap": {
+            "command": "snap",
+            "description": "Universal Linux package manager",
+            "installable": True,
+            "install_commands": {
+                "apt": ["apt-get", "update", "&&", "apt-get", "install", "-y", "snapd"],
+                "yum": ["yum", "install", "-y", "snapd"],
+                "dnf": ["dnf", "install", "-y", "snapd"],
+            }
+        },
+        "flatpak": {
+            "command": "flatpak",
+            "description": "Universal Linux application distribution",
+            "installable": True,
+            "install_commands": {
+                "apt": ["apt-get", "update", "&&", "apt-get", "install", "-y", "flatpak"],
+                "yum": ["yum", "install", "-y", "flatpak"],
+                "dnf": ["dnf", "install", "-y", "flatpak"],
+                "pacman": ["pacman", "-S", "--noconfirm", "flatpak"],
+                "zypper": ["zypper", "install", "-y", "flatpak"],
+            }
+        },
+    }
     
-    def _detect_package_managers(self) -> List[PackageManager]:
-        """Detect available package managers on the system."""
+    def __init__(self):
+        self.all_package_managers = self._get_all_package_managers()
+        self.package_managers = [pm for pm in self.all_package_managers if pm.available]
+    
+    def _get_all_package_managers(self) -> List[PackageManager]:
+        """Get all package managers (installed and installable)."""
         managers = []
         
-        # Common package managers to check
-        pm_commands = [
-            ("apt", "apt-get"),
-            ("yum", "yum"),
-            ("dnf", "dnf"),
-            ("pacman", "pacman"),
-            ("zypper", "zypper"),
-            ("brew", "brew"),
-            ("apk", "apk"),
-            ("snap", "snap"),
-            ("flatpak", "flatpak"),
-        ]
-        
-        for name, command in pm_commands:
-            if shutil.which(command):
-                pm = PackageManager(
-                    name=name,
-                    command=command,
-                    available=True,
-                    current_source=self._get_current_source(name)
-                )
-                managers.append(pm)
+        for name, info in self.PACKAGE_MANAGERS_INFO.items():
+            command = info["command"]
+            is_available = shutil.which(command) is not None
+            
+            pm = PackageManager(
+                name=name,
+                command=command,
+                available=is_available,
+                installable=info.get("installable", False),
+                description=info.get("description", ""),
+                current_source=self._get_current_source(name) if is_available else None
+            )
+            managers.append(pm)
         
         return managers
+    
+    def _detect_package_managers(self) -> List[PackageManager]:
+        """Detect available package managers on the system (backward compatibility)."""
+        return [pm for pm in self.all_package_managers if pm.available]
     
     def _get_current_source(self, pm_name: str) -> Optional[str]:
         """Get the current source/mirror for a package manager."""
@@ -265,3 +327,121 @@ class PackageManagerDetector:
                 
         except Exception as e:
             return False, f"Failed to change mirror: {str(e)}"
+    
+    def get_install_command(self, pm_name: str) -> Optional[str]:
+        """Get the installation command for a package manager.
+        
+        Args:
+            pm_name: Package manager name
+        
+        Returns:
+            Installation command string or None if not installable
+        """
+        info = self.PACKAGE_MANAGERS_INFO.get(pm_name, {})
+        
+        if not info.get("installable", False):
+            return None
+        
+        # For brew, return the install script
+        if pm_name == "brew":
+            return info.get("install_script")
+        
+        # For snap and flatpak, get the appropriate install command
+        if pm_name in ["snap", "flatpak"]:
+            install_commands = info.get("install_commands", {})
+            # Find primary package manager to use for installation
+            primary_pm = self.get_primary_package_manager()
+            if primary_pm and primary_pm.name in install_commands:
+                return " ".join(install_commands[primary_pm.name])
+        
+        return None
+    
+    def get_uninstall_command(self, pm_name: str) -> Optional[str]:
+        """Get the uninstallation command for a package manager.
+        
+        Args:
+            pm_name: Package manager name
+        
+        Returns:
+            Uninstallation command string or None if not uninstallable
+        """
+        info = self.PACKAGE_MANAGERS_INFO.get(pm_name, {})
+        
+        # For brew, return the uninstall script
+        if pm_name == "brew":
+            return info.get("uninstall_script")
+        
+        # For snap and flatpak, generate uninstall command
+        if pm_name in ["snap", "flatpak"]:
+            primary_pm = self.get_primary_package_manager()
+            if primary_pm:
+                if primary_pm.name == "apt":
+                    return f"apt-get remove -y {pm_name}d" if pm_name == "snap" else f"apt-get remove -y {pm_name}"
+                elif primary_pm.name in ["yum", "dnf"]:
+                    return f"{primary_pm.command} remove -y {pm_name}d" if pm_name == "snap" else f"{primary_pm.command} remove -y {pm_name}"
+                elif primary_pm.name == "pacman":
+                    return f"pacman -R --noconfirm {pm_name}"
+                elif primary_pm.name == "zypper":
+                    return f"zypper remove -y {pm_name}"
+        
+        return None
+    
+    def install_package_manager(self, pm_name: str) -> Tuple[bool, str, Optional[str]]:
+        """Install a package manager.
+        
+        Args:
+            pm_name: Package manager name
+        
+        Returns:
+            Tuple of (success, message, command_used)
+        """
+        command = self.get_install_command(pm_name)
+        
+        if not command:
+            return False, f"Package manager {pm_name} is not installable", None
+        
+        try:
+            # For scripts (like Homebrew), use shell execution
+            if pm_name == "brew":
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            else:
+                # For regular commands
+                result = subprocess.run(command.split(), capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return True, f"Successfully installed {pm_name}", command
+            else:
+                return False, f"Failed to install {pm_name}: {result.stderr}", command
+                
+        except Exception as e:
+            return False, f"Error installing {pm_name}: {str(e)}", command
+    
+    def uninstall_package_manager(self, pm_name: str) -> Tuple[bool, str, Optional[str]]:
+        """Uninstall a package manager.
+        
+        Args:
+            pm_name: Package manager name
+        
+        Returns:
+            Tuple of (success, message, command_used)
+        """
+        command = self.get_uninstall_command(pm_name)
+        
+        if not command:
+            return False, f"Package manager {pm_name} cannot be uninstalled", None
+        
+        try:
+            # For scripts (like Homebrew), use shell execution
+            if pm_name == "brew":
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            else:
+                # For regular commands
+                result = subprocess.run(command.split(), capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return True, f"Successfully uninstalled {pm_name}", command
+            else:
+                return False, f"Failed to uninstall {pm_name}: {result.stderr}", command
+                
+        except Exception as e:
+            return False, f"Error uninstalling {pm_name}: {str(e)}", command

@@ -11,6 +11,9 @@ from ...config_manager import ConfigManager
 from ...modules.package_manager import PackageManagerDetector
 from .source_selection_modal import SourceSelectionModal
 from .mirror_confirmation_modal import MirrorConfirmationModal
+from .package_manager_install_modal import PackageManagerInstallModal
+from .installation_confirmation_modal import InstallationConfirmationModal
+from .installation_progress_modal import InstallationProgressModal
 
 
 class PackageManagerScreen(Screen):
@@ -51,7 +54,7 @@ class PackageManagerScreen(Screen):
             with Horizontal(id="pm-content"):
                 # Left panel - Package managers list
                 with Vertical(id="pm-left-panel", classes="panel"):
-                    yield Label("Detected Package Managers", classes="panel-title")
+                    yield Label("Package Managers", classes="panel-title")
                     with ScrollableContainer(id="pm-list"):
                         yield Static("Detecting package managers...", id="pm-loading")
                     
@@ -105,14 +108,28 @@ class PackageManagerScreen(Screen):
             for child in list(pm_list.children):
                 child.remove()
             
+            # First, add "Available Package Managers" option
+            arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == 0) else "  "
+            pm_list.mount(Static(f"{arrow}🔧 Available Package Managers\n    Install/Uninstall package managers", 
+                                id="pm-available", classes="pm-item"))
+            
+            # Add separator
+            pm_list.mount(Rule())
+            
             if not self.package_managers:
-                pm_list.mount(Static("No package managers detected", classes="info-message"))
+                pm_list.mount(Static("No package managers installed", classes="info-message"))
                 return
             
-            # Display each package manager with arrow indicators
+            # Display label for installed package managers
+            pm_list.mount(Label("Installed Package Managers:", classes="info-key"))
+            
+            # Display each installed package manager with arrow indicators
             for i, pm in enumerate(self.package_managers):
+                # Adjust index for arrow indicator (account for "Available" option)
+                display_index = i + 1  # +1 for "Available Package Managers" option
+                
                 # Create arrow indicator for CLI-style navigation
-                arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == i) else "  "
+                arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == display_index) else "  "
                 
                 # Package manager name and status
                 pm_info = f"{arrow}📦 {pm.name.upper()}"
@@ -146,23 +163,32 @@ class PackageManagerScreen(Screen):
             for child in list(source_container.children):
                 child.remove()
             
-            if not pm:
+            if pm is None and self.left_focused_item == 0:
+                # Show info about package manager installation
+                source_container.mount(Label("Package Manager Installation", classes="section-title"))
+                source_container.mount(Rule())
+                source_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
+                source_container.mount(Static(""))
+                source_container.mount(Label("Available Actions:", classes="info-key"))
+                source_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
+                source_container.mount(Static("• Uninstall existing package managers"))
+                source_container.mount(Static("• View installation status"))
+            elif not pm:
                 source_container.mount(Static("Select a package manager to configure", classes="info-message"))
-                return
-            
-            # Show current package manager info
-            source_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
-            source_container.mount(Rule())
-            
-            # Show current source
-            source_container.mount(Label("Current Source:", classes="info-key"))
-            if pm.current_source:
-                source_container.mount(Static(pm.current_source, classes="current-source-display"))
             else:
-                source_container.mount(Static("Not configured", classes="current-source-none"))
-            
-            source_container.mount(Rule())
-            source_container.mount(Static("ENTER=Change Source", classes="help-text"))
+                # Show current package manager info
+                source_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
+                source_container.mount(Rule())
+                
+                # Show current source
+                source_container.mount(Label("Current Source:", classes="info-key"))
+                if pm.current_source:
+                    source_container.mount(Static(pm.current_source, classes="current-source-display"))
+                else:
+                    source_container.mount(Static("Not configured", classes="current-source-none"))
+                
+                source_container.mount(Rule())
+                source_container.mount(Static("ENTER=Change Source", classes="help-text"))
                 
         except Exception as e:
             self._show_error(f"Error displaying source options: {str(e)}")
@@ -205,16 +231,22 @@ class PackageManagerScreen(Screen):
     
     def action_select_current(self) -> None:
         """Handle Enter key - select current item."""
-        if self.focus_panel == "left" and self.package_managers:
-            # Select package manager and show source selection modal
-            if 0 <= self.left_focused_item < len(self.package_managers):
-                pm = self.package_managers[self.left_focused_item]
-                self.selected_pm = pm
-                self._display_source_options(pm)
-                try:
-                    self._show_source_selection_modal(pm)
-                except Exception as e:
-                    self._show_error(f"Error showing source selection: {str(e)}")
+        if self.focus_panel == "left":
+            # Check if "Available Package Managers" is selected
+            if self.left_focused_item == 0:
+                # Show package manager installation modal
+                self._show_package_manager_install_modal()
+            elif self.package_managers and self.left_focused_item > 0:
+                # Adjust index for actual package manager (subtract 1 for "Available" option)
+                pm_index = self.left_focused_item - 1
+                if 0 <= pm_index < len(self.package_managers):
+                    pm = self.package_managers[pm_index]
+                    self.selected_pm = pm
+                    self._display_source_options(pm)
+                    try:
+                        self._show_source_selection_modal(pm)
+                    except Exception as e:
+                        self._show_error(f"Error showing source selection: {str(e)}")
     
     def _show_message(self, message: str, error: bool = False) -> None:
         """Show a message to the user."""
@@ -261,22 +293,88 @@ class PackageManagerScreen(Screen):
     
     def action_nav_down(self) -> None:
         """Navigate down within current panel."""
-        if self.focus_panel == "left" and self.package_managers:
-            if self.left_focused_item < len(self.package_managers) - 1:
+        if self.focus_panel == "left":
+            # Total items = 1 (Available) + number of installed PMs
+            total_items = 1 + len(self.package_managers)
+            
+            if self.left_focused_item < total_items - 1:
                 self.left_focused_item += 1
-                # Auto-select and display details
-                pm = self.package_managers[self.left_focused_item]
-                self.selected_pm = pm
-                self._display_source_options(pm)
+                
+                # Auto-select and display details if it's an installed PM
+                if self.left_focused_item > 0 and self.package_managers:
+                    pm_index = self.left_focused_item - 1
+                    if pm_index < len(self.package_managers):
+                        pm = self.package_managers[pm_index]
+                        self.selected_pm = pm
+                        self._display_source_options(pm)
+                else:
+                    # Clear right panel when "Available" is selected
+                    self._display_source_options(None)
+            
             self._display_package_managers()
     
     def action_nav_up(self) -> None:
         """Navigate up within current panel."""
-        if self.focus_panel == "left" and self.package_managers:
+        if self.focus_panel == "left":
             if self.left_focused_item > 0:
                 self.left_focused_item -= 1
-                # Auto-select and display details
-                pm = self.package_managers[self.left_focused_item]
-                self.selected_pm = pm
-                self._display_source_options(pm)
+                
+                # Auto-select and display details if it's an installed PM
+                if self.left_focused_item > 0 and self.package_managers:
+                    pm_index = self.left_focused_item - 1
+                    if pm_index < len(self.package_managers):
+                        pm = self.package_managers[pm_index]
+                        self.selected_pm = pm
+                        self._display_source_options(pm)
+                else:
+                    # Clear right panel when "Available" is selected
+                    self._display_source_options(None)
+            
             self._display_package_managers()
+    
+    def _show_package_manager_install_modal(self) -> None:
+        """Show the package manager installation modal."""
+        def on_install_actions_selected(actions: list):
+            if not actions:
+                return
+            
+            # Show confirmation modal
+            def on_confirmation(confirmed: bool):
+                if confirmed:
+                    # Show progress modal and execute installations
+                    try:
+                        self.app.push_screen(
+                            InstallationProgressModal(actions)
+                        )
+                        # After installation completes, refresh the package manager list
+                        self.set_timer(0.5, lambda: self._refresh_package_managers())
+                    except Exception as e:
+                        self._show_error(f"Error starting installation: {str(e)}")
+            
+            # Show confirmation modal
+            try:
+                self.app.push_screen(
+                    InstallationConfirmationModal(actions, on_confirmation)
+                )
+            except Exception as e:
+                self._show_error(f"Error showing confirmation: {str(e)}")
+        
+        # Show package manager installation modal
+        try:
+            self.app.push_screen(
+                PackageManagerInstallModal(on_install_actions_selected)
+            )
+        except Exception as e:
+            self._show_error(f"Error showing installation modal: {str(e)}")
+    
+    def _refresh_package_managers(self) -> None:
+        """Refresh the package manager list after installation/uninstallation."""
+        # Re-detect package managers
+        self.detector = PackageManagerDetector()
+        self.package_managers = self.detector.package_managers
+        self.primary_pm = self.detector.get_primary_package_manager()
+        
+        # Update displays
+        self._display_package_managers()
+        if self.selected_pm:
+            self._display_source_options(self.selected_pm)

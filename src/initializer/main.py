@@ -7,6 +7,7 @@ Description: A modern terminal user interface for Linux system initialization
 
 import sys
 import signal
+import atexit
 from pathlib import Path
 import click
 from rich.console import Console
@@ -21,8 +22,8 @@ console = Console()
 def cleanup_terminal():
     """Clean up terminal state on exit."""
     try:
-        # Disable mouse tracking and other terminal features
-        sys.stdout.write('\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l\033[?25h')
+        # Reset alternate screen buffer and disable mouse tracking
+        sys.stdout.write('\033[?1049l\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l\033[?25h')
         sys.stdout.flush()
     except Exception:
         pass
@@ -37,6 +38,9 @@ def signal_handler(signum, frame):
 # Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
+
+# Register atexit handler for additional safety
+atexit.register(cleanup_terminal)
 
 
 @click.command()
