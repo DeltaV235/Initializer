@@ -25,9 +25,11 @@ class SourceSelectionModal(ModalScreen):
     }
     
     #modal-container {
-        width: 80%;
-        height: 24;
-        max-height: 24;
+        width: 85%;
+        min-width: 60;
+        max-width: 120;
+        height: auto;
+        max-height: 85%;
         background: $surface;
         border: solid $primary;
         padding: 1;
@@ -43,8 +45,10 @@ class SourceSelectionModal(ModalScreen):
     
     #modal-content {
         height: 1fr;
+        max-height: 25;
         overflow-y: auto;
         padding: 0 1;
+        scrollbar-size: 1 1;
     }
     
     .section-divider {
