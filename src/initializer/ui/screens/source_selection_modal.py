@@ -57,6 +57,14 @@ class SourceSelectionModal(ModalScreen):
         background: transparent;
     }
     
+    .current-source-display {
+        height: auto;
+        min-height: 1;
+        color: $text;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+    
     #mirror-list {
         height: auto;
         min-height: 1;
@@ -83,6 +91,11 @@ class SourceSelectionModal(ModalScreen):
     }
     
     .bottom-spacer {
+        height: 1;
+        background: transparent;
+    }
+    
+    .section-separator {
         height: 1;
         background: transparent;
     }
@@ -173,26 +186,36 @@ class SourceSelectionModal(ModalScreen):
             yield Rule()
             
             with ScrollableContainer(id="modal-content"):
-                # Available mirrors (including current with special styling)
+                # Show current source at the top in separate section
                 if self.mirror_list:
-                    yield Label("Available Mirrors:", classes="info-key")
-                    with Vertical(id="mirror-list"):
-                        # Force content height calculation by adding explicit spacers
-                        for i, (name, url, is_current) in enumerate(self.mirror_list):
+                    current_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if is_current]
+                    selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
+                    
+                    # Current Source Section (at the top)
+                    if current_sources:
+                        yield Label("Current Source:", classes="info-key")
+                        for i, name, url in current_sources:
                             display_url = url
                             if len(display_url) > 60:
                                 display_url = display_url[:57] + "..."
-                            
-                            if is_current:
-                                # Current source - not selectable, dimmed
-                                text = f"  {name.title()}: {display_url} (Current)"
-                                yield Static(text, id=f"mirror-item-{i}", classes="current-mirror-item")
-                            else:
-                                # Selectable mirror - start with first non-current selected
-                                is_selected = (i == self.selected_index)
-                                arrow = "▶ " if is_selected else "  "
-                                text = f"{arrow}{name.title()}: {display_url}"
-                                yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+                            text = f"  {name.title()}: {display_url}"
+                            yield Static(text, id=f"current-source-{i}", classes="current-source-display")
+                        
+                        # Add separator between sections
+                        yield Static("", classes="section-separator")
+                    
+                    # Available Sources Section
+                    yield Label("Available Sources:", classes="info-key")
+                    with Vertical(id="mirror-list"):
+                        # Display selectable sources with arrows
+                        for i, name, url in selectable_sources:
+                            display_url = url
+                            if len(display_url) > 60:
+                                display_url = display_url[:57] + "..."
+                            is_selected = (i == self.selected_index)
+                            arrow = "▶ " if is_selected else "  "
+                            text = f"{arrow}{name.title()}: {display_url}"
+                            yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
                         
                         # Add bottom padding to ensure scrollbar calculation
                         yield Static("", classes="bottom-spacer")
@@ -207,51 +230,41 @@ class SourceSelectionModal(ModalScreen):
             if not self.mirror_list:
                 return
             
-            # Update existing mirror items
+            # Update only selectable mirror items (current source is in separate section)
             for i, (name, url, is_current) in enumerate(self.mirror_list):
-                mirror_item = self.query_one(f"#mirror-item-{i}", Static)
-                
-                # Format display URL
-                display_url = url
-                if len(display_url) > 60:
-                    display_url = display_url[:57] + "..."
-                
-                if is_current:
-                    # Current source - always dimmed, no arrow
-                    text = f"  {name.title()}: {display_url} (Current)"
-                else:
-                    # Selectable mirror - show arrow only for selected item
-                    arrow = "▶ " if i == self.selected_index else "  "
-                    text = f"{arrow}{name.title()}: {display_url}"
-                
-                mirror_item.update(text)
-                
-        except Exception as e:
-            # If specific item not found, try to recreate all items
-            try:
-                mirror_list_container = self.query_one("#mirror-list", Vertical)
-                
-                # Clear existing items
-                for child in list(mirror_list_container.children):
-                    child.remove()
-                
-                # Add mirror items
-                for i, (name, url, is_current) in enumerate(self.mirror_list):
+                if not is_current:  # Only update selectable items
+                    mirror_item = self.query_one(f"#mirror-item-{i}", Static)
+                    
                     # Format display URL
                     display_url = url
                     if len(display_url) > 60:
                         display_url = display_url[:57] + "..."
                     
-                    if is_current:
-                        # Current source - dimmed, not selectable
-                        text = f"  {name.title()}: {display_url} (Current)"
-                        mirror_item = Static(text, id=f"mirror-item-{i}", classes="current-mirror-item")
-                    else:
-                        # Selectable mirror with arrow indicator
-                        arrow = "▶ " if i == self.selected_index else "  "
-                        text = f"{arrow}{name.title()}: {display_url}"
-                        mirror_item = Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+                    # Selectable mirror - show arrow only for selected item
+                    arrow = "▶ " if i == self.selected_index else "  "
+                    text = f"{arrow}{name.title()}: {display_url}"
                     
+                    mirror_item.update(text)
+                
+        except Exception as e:
+            # If specific item not found, try to recreate selectable items only
+            try:
+                mirror_list_container = self.query_one("#mirror-list", Vertical)
+                
+                # Clear existing selectable items
+                for child in list(mirror_list_container.children):
+                    child.remove()
+                
+                # Recreate selectable sources only
+                selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
+                
+                for i, name, url in selectable_sources:
+                    display_url = url
+                    if len(display_url) > 60:
+                        display_url = display_url[:57] + "..."
+                    arrow = "▶ " if i == self.selected_index else "  "
+                    text = f"{arrow}{name.title()}: {display_url}"
+                    mirror_item = Static(text, id=f"mirror-item-{i}", classes="mirror-item")
                     mirror_list_container.mount(mirror_item)
             except Exception:
                 pass
