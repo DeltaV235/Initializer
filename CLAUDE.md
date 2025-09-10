@@ -28,6 +28,11 @@ Linux System Initializer is a modern Terminal User Interface (TUI) application f
 - Python code includes cleanup handlers for normal and abnormal exits
 - Cleanup includes: exiting alternate screen buffer, disabling mouse tracking, showing cursor
 
+**Claude 执行后清理规则**: 
+- 正常退出：应用会自动重置终端状态
+- 强制中断（KillBash/Ctrl+C）：必须手动执行 `./tools/reset-terminal.sh` 清理终端状态（不要使用 `--clear` 参数）
+- 任何异常终端显示：使用 `./tools/reset-terminal.sh` 进行清理（保留终端历史内容）
+
 ## Development Commands
 
 ### Installation & Setup
