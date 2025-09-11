@@ -11,6 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Simplicity First**: Use simple, straightforward implementations over complex designs
 - **Avoid Over-engineering**: Implement only what is needed, avoid premature optimization
 - **Readability**: Prefer clear, readable code over clever solutions
+- **Textual Framework Priority**: Always prioritize using Textual's native components, methods, and patterns over custom implementations. Leverage Textual's built-in event handling, styling system, and UI components for consistency and reliability.
+- **Context7 Comprehensive Documentation**: When encountering unfamiliar libraries, frameworks, or technologies, use Context7 extensively with multiple queries covering different aspects (components, events, styling, patterns, best practices) to build complete understanding before implementation. Query multiple times with different topics to ensure comprehensive coverage.
 
 ## Project Overview
 
@@ -127,6 +129,104 @@ tools/reset-terminal.sh
 - **Click**: Command-line interface
 - **psutil**: System information gathering
 - **distro**: Linux distribution detection
+
+## Textual Framework Documentation
+
+### Core Components and Architecture
+
+#### Widgets and UI Components
+- **Built-in Widgets**: Button, Input, Label, Static, Header, Footer, ProgressBar, DataTable, Tree, ListView, Markdown, TextArea, OptionList, Tabs, TabbedContent, etc.
+- **Containers**: Vertical, Horizontal, Grid, Container, VerticalScroll, HorizontalScroll, VerticalGroup, HorizontalGroup, Center, Right, Middle
+- **Custom Widgets**: Extend Widget base class, implement `compose()` method, use `DEFAULT_CSS` for default styling
+- **Component Classes**: Use `COMPONENT_CLASSES` for styling specific parts of widgets (e.g., `"widget--element"`)
+- **Widget Lifecycle**: `on_mount()`, `on_unmount()`, reactive attributes, watch methods
+
+#### Layout System
+- **Layout Types**: `vertical` (default), `horizontal`, `grid`
+- **Grid Layout**: Use `grid-size`, `grid-columns`, `grid-rows`, `grid-gutter` for cell arrangement
+- **Container Behavior**: Horizontal/Vertical containers divide available space equally
+- **Scrolling**: Use VerticalScroll/HorizontalScroll for scrollable content
+- **Alignment**: Use `align: center middle` for centering, `content-align` for widget content
+- **Fractional Units**: Use `fr` units for proportional sizing (`1fr`, `2fr`, etc.)
+
+#### Event Handling System
+- **Event Methods**: `on_key()`, `on_mouse_down()`, `on_click()`, `on_button_pressed()`, etc.
+- **Event Objects**: Event classes contain relevant data (coordinates, key pressed, widget reference)
+- **Event Bubbling**: Events propagate up the widget hierarchy
+- **@on Decorator**: `@on(Button.Pressed, "#button-id")` for targeted event handling
+- **Handler Parameters**: Can omit event parameter if not needed in handler
+- **Message Queue**: Each widget has async message queue for event processing
+
+#### Screen and Navigation Management
+- **Screen Stack**: Use `push_screen()`, `pop_screen()`, `switch_screen()` for navigation
+- **Modal Screens**: Inherit from `ModalScreen` for overlay dialogs
+- **Screen Modes**: Use `MODES` class variable to define mode-specific screen stacks
+- **Screen Lifecycle**: `on_mount()`, `on_unmount()`, `dismiss(result)` for modal return values
+- **Screen Push/Pop**: Support callbacks and async `wait_for_dismiss` patterns
+
+#### Reactivity System
+- **Reactive Attributes**: Use `reactive()` or `var()` for automatic UI updates
+- **Watch Methods**: `watch_attribute_name()` called when reactive attributes change
+- **Computed Properties**: Automatic recalculation when dependencies change
+- **Dynamic Watching**: Use `watch(obj, "attribute", callback)` for external objects
+- **Reactivity Options**: `layout=True`, `repaint=True`, `recompose=True`, `bindings=True`
+- **Initialization**: Use `set_reactive()` in constructor to avoid premature watcher calls
+
+#### Styling and Theming
+- **CSS-like Syntax**: Use Textual CSS (TCSS) for styling widgets
+- **Selectors**: Type (`Widget`), ID (`#my-id`), class (`.my-class`), pseudo (`Widget:hover`)
+- **Theme Variables**: Use `$primary`, `$secondary`, `$foreground`, `$background`, etc.
+- **Color System**: Support named colors, hex codes, RGB/HSL, theme variables
+- **Component Styling**: Target widget parts with component classes
+- **Dynamic Styling**: Set styles via `widget.styles.property = value`
+- **Responsive Design**: Use `:light/:dark` pseudo-selectors for theme-aware styling
+
+#### Input and Interaction
+- **Keyboard Input**: Handle via `on_key()`, support key bindings with `BINDINGS`
+- **Mouse Events**: `on_mouse_down()`, `on_mouse_move()`, `on_click()` with coordinates
+- **Input Widgets**: Input, TextArea with validation, suggestions, and event handling
+- **Focus Management**: Tab navigation, `can_focus` attribute, focus/blur events
+- **Mouse Capture**: `capture_mouse()` for drag-and-drop functionality
+- **Input Types**: text, integer, number, password with built-in validation
+
+#### Actions and Key Bindings
+- **Action Methods**: Define `action_name()` methods, callable via `run_action()`
+- **Key Bindings**: Use `BINDINGS` class variable to map keys to actions
+- **Binding Structure**: `("key", "action", "description", show_in_footer)`
+- **Built-in Actions**: `quit`, `bell`, `toggle_dark`, `focus_next`, `screenshot`, etc.
+- **Action Links**: Use `[@click=action_name]text[/]` in markup for clickable actions
+- **Priority Bindings**: Use `priority=True` for app-level key handling
+- **Dynamic Actions**: Implement `check_action()` for conditional action availability
+
+### Best Practices and Patterns
+
+#### Widget Development
+- Always call `super().__init__()` in custom widget constructors
+- Use `compose()` method to define child widgets
+- Implement watch methods for reactive attribute changes
+- Use component classes for styling specific widget parts
+- Follow naming conventions: `watch_attribute_name()`, `action_name()`
+
+#### Layout and UI Design
+- Use containers (Vertical/Horizontal) for macro layout division
+- Apply grid layout for structured arrangements with `grid-size`
+- Use fractional units (`fr`) for responsive sizing
+- Center content with `align: center middle` on containers
+- Implement keyboard-first navigation with proper focus handling
+
+#### Performance and Memory
+- Use reactive attributes with appropriate flags (`layout`, `repaint`)
+- Implement efficient event handling with targeted selectors
+- Use `recompose=True` for lists that change size
+- Avoid expensive operations in watch methods
+- Clean up resources in `on_unmount()` if needed
+
+#### Testing and Development
+- Use `App.run_test()` context manager for testing
+- Simulate events with Pilot: `pilot.click()`, `pilot.press()`, `pilot.type()`
+- Test reactive attribute changes and watch method calls
+- Verify screen navigation and modal dismiss behavior
+- Use `app.screenshot()` for visual regression testing
 
 ## Configuration System
 
