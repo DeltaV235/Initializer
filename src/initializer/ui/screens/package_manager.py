@@ -19,6 +19,76 @@ from .installation_progress_modal import InstallationProgressModal
 class PackageManagerScreen(Screen):
     """Screen for Package Manager detection and source management."""
     
+    CSS = """
+    #pm-content {
+        height: 1fr;
+    }
+    
+    #pm-left-panel, #pm-right-panel {
+        height: 100%;
+        width: 50%;
+    }
+    
+    #pm-list, #source-container {
+        height: 1fr;
+        overflow-y: auto;
+        scrollbar-size: 1 1;
+    }
+    
+    .panel {
+        border: solid $primary-lighten-2;
+        padding: 0 1;
+    }
+    
+    .panel:focus-within {
+        border: solid $primary;
+    }
+    
+    .panel-title {
+        background: $surface;
+        text-style: bold;
+        margin: 0 0 1 0;
+    }
+    
+    .pm-item {
+        padding: 0 1;
+        margin: 0 0 1 0;
+    }
+    
+    .info-key {
+        text-style: bold;
+        color: $text;
+        margin: 1 0 0 0;
+    }
+    
+    .section-title {
+        text-style: bold;
+        color: $primary;
+        margin: 0 0 0 0;
+    }
+    
+    .current-source-display {
+        color: $success;
+        margin: 0 0 0 1;
+    }
+    
+    .current-source-none {
+        color: $text-muted;
+        margin: 0 0 0 1;
+    }
+    
+    .help-text {
+        color: $text-muted;
+        text-align: center;
+        margin: 1 0 0 0;
+    }
+    
+    #pm-actions {
+        height: auto;
+        margin: 1 0 0 0;
+    }
+    """
+    
     BINDINGS = [
         ("escape", "back", "Back"),
         ("q", "back", "Back"),
@@ -55,14 +125,14 @@ class PackageManagerScreen(Screen):
                 # Left panel - Package managers list
                 with Vertical(id="pm-left-panel", classes="panel"):
                     yield Label("Package Managers", classes="panel-title")
-                    with ScrollableContainer(id="pm-list"):
-                        yield Static("Detecting package managers...", id="pm-loading")
+                    # Don't add any initial content - will be populated in on_mount
+                    yield ScrollableContainer(id="pm-list")
                     
                 # Right panel - Source management
                 with Vertical(id="pm-right-panel", classes="panel"):
                     yield Label("Mirror Source Management", classes="panel-title")
-                    with ScrollableContainer(id="source-container"):
-                        yield Static("Select a package manager to view sources", id="source-placeholder")
+                    # Don't add any initial content - will be populated dynamically
+                    yield ScrollableContainer(id="source-container")
             
             # Bottom action buttons
             with Horizontal(id="pm-actions"):
@@ -70,6 +140,16 @@ class PackageManagerScreen(Screen):
     
     def on_mount(self) -> None:
         """Initialize the screen."""
+        # Add initial loading message
+        try:
+            pm_list = self.query_one("#pm-list", ScrollableContainer)
+            pm_list.mount(Static("Detecting package managers...", id="pm-loading"))
+            
+            source_container = self.query_one("#source-container", ScrollableContainer)
+            source_container.mount(Static("Select a package manager to view sources", id="source-placeholder"))
+        except Exception:
+            pass
+        
         self._detect_package_managers()
     
     @work(exclusive=True, thread=True)
@@ -104,9 +184,8 @@ class PackageManagerScreen(Screen):
         try:
             pm_list = self.query_one("#pm-list", ScrollableContainer)
             
-            # Clear loading message
-            for child in list(pm_list.children):
-                child.remove()
+            # Clear ALL existing content completely
+            pm_list.remove_children()
             
             # First, add "Available Package Managers" option
             arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == 0) else "  "
@@ -144,6 +223,9 @@ class PackageManagerScreen(Screen):
                     pm_info += "\n    Source: Not configured"
                 
                 pm_list.mount(Static(pm_info, id=f"pm-{i}", classes="pm-item"))
+            
+            # Ensure current selection is visible after display update
+            self.call_after_refresh(self._scroll_to_current)
                 
         except Exception as e:
             self._show_error(f"Error displaying package managers: {str(e)}")
@@ -159,9 +241,11 @@ class PackageManagerScreen(Screen):
         try:
             source_container = self.query_one("#source-container", ScrollableContainer)
             
-            # Clear existing content
-            for child in list(source_container.children):
-                child.remove()
+            # Clear ALL existing content completely
+            source_container.remove_children()
+            
+            # Reset scroll position to top when displaying new content
+            source_container.scroll_y = 0
             
             if pm is None and self.left_focused_item == 0:
                 # Show info about package manager installation
@@ -312,6 +396,8 @@ class PackageManagerScreen(Screen):
                     self._display_source_options(None)
             
             self._display_package_managers()
+            # Use call_after_refresh to ensure DOM is updated before scrolling
+            self.call_after_refresh(self._scroll_to_current)
     
     def action_nav_up(self) -> None:
         """Navigate up within current panel."""
@@ -331,6 +417,8 @@ class PackageManagerScreen(Screen):
                     self._display_source_options(None)
             
             self._display_package_managers()
+            # Use call_after_refresh to ensure DOM is updated before scrolling
+            self.call_after_refresh(self._scroll_to_current)
     
     def _show_package_manager_install_modal(self) -> None:
         """Show the package manager installation modal."""
@@ -378,3 +466,58 @@ class PackageManagerScreen(Screen):
         self._display_package_managers()
         if self.selected_pm:
             self._display_source_options(self.selected_pm)
+    
+    def _scroll_to_current(self) -> None:
+        """Scroll the left panel to ensure current selection is visible."""
+        try:
+            # Get the scrollable container for left panel
+            scrollable_container = self.query_one("#pm-list", ScrollableContainer)
+            
+            # Try to get the specific item widget directly
+            if self.left_focused_item == 0:
+                # Scroll to top for "Available Package Managers"
+                scrollable_container.scroll_y = 0
+                return
+            
+            # For installed PMs, try to find the specific widget
+            pm_index = self.left_focused_item - 1  # Adjust for "Available" item
+            
+            # First, try a simple approach: calculate based on actual items
+            # Available PM: 2 lines
+            # Rule: 1 line
+            # Label (if PMs exist): 1 line
+            # Each PM: 2 lines
+            
+            if self.package_managers:
+                # Calculate cumulative height up to current item
+                lines_before = 4  # Available(2) + Rule(1) + Label(1)
+                
+                # Add lines for all PMs before current one
+                lines_before += pm_index * 2  # Each PM takes 2 lines
+                
+                # Current item starts at this line
+                item_start = lines_before
+                item_end = item_start + 2  # Current item is 2 lines
+                
+                # Get container dimensions
+                container_height = scrollable_container.size.height
+                current_scroll = scrollable_container.scroll_y
+                
+                # Calculate visible range
+                visible_start = current_scroll
+                visible_end = current_scroll + container_height
+                
+                # Check if item is fully visible
+                if item_start < visible_start:
+                    # Item starts above visible area, scroll up
+                    scrollable_container.scroll_y = max(0, item_start)
+                elif item_end > visible_end:
+                    # Item ends below visible area, scroll down
+                    # Position so the item is at the bottom of view
+                    new_scroll = item_end - container_height
+                    if new_scroll > 0:
+                        scrollable_container.scroll_y = new_scroll
+                        
+        except Exception as e:
+            # Silently ignore scrolling errors
+            pass
