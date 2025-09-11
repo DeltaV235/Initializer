@@ -83,12 +83,14 @@ class PackageManagerInstallModal(ModalScreen):
     
     .help-text {
         text-align: center;
-        color: $text;
-        height: auto;
+        color: $text-muted;
+        height: 1;
         min-height: 1;
-        margin: 0;
-        padding: 0;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
         background: $surface;
+        text-style: none;
     }
     
     .bottom-spacer {

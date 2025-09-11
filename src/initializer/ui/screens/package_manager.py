@@ -78,9 +78,15 @@ class PackageManagerScreen(Screen):
     }
     
     .help-text {
-        color: $text-muted;
         text-align: center;
-        margin: 1 0 0 0;
+        color: $text-muted;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
     }
     
     #pm-actions {
