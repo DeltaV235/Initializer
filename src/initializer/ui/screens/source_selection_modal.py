@@ -2,7 +2,7 @@
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
+from textual.containers import Container, Vertical, Horizontal, ScrollableContainer, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Static, Rule, Label, Input
 from textual.events import Key
@@ -232,7 +232,7 @@ class SourceSelectionModal(ModalScreen):
                 
                 # Scrollable Available Sources Section
                 yield Label("Available Sources:", classes="info-key")
-                with ScrollableContainer(id="modal-content"):
+                with VerticalScroll(id="modal-content"):
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
                         for i, name, url in selectable_sources:
@@ -243,9 +243,6 @@ class SourceSelectionModal(ModalScreen):
                             arrow = "▶ " if is_selected else "  "
                             text = f"{arrow}{name.title()}: {display_url}"
                             yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
-                        
-                        # Add bottom padding to ensure scrollbar calculation
-                        yield Static("", classes="bottom-spacer")
             
             # Bottom shortcuts area - with rule and minimal margin
             with Container(id="help-container"):
@@ -351,47 +348,14 @@ class SourceSelectionModal(ModalScreen):
             self._show_error("No mirror selected")
     
     def _scroll_to_current(self) -> None:
-        """Scroll the modal content to ensure current selection is visible with smooth synchronous behavior."""
+        """Scroll to current item using Textual's built-in VerticalScroll behavior."""
         try:
-            # Get the scrollable container
-            scrollable_container = self.query_one("#modal-content", ScrollableContainer)
-            
-            # Try Textual's built-in scroll_to_widget method first
+            # With VerticalScroll, we just need to scroll the selected item into view
             current_item = self.query_one(f"#mirror-item-{self.selected_index}", Static)
-            if hasattr(scrollable_container, 'scroll_to_widget'):
-                # Use smooth scrolling with center positioning
-                scrollable_container.scroll_to_widget(current_item, animate=True, speed=60, center=True)
-            else:
-                # Enhanced manual scrolling for immediate response
-                header_height = 2  # Only "Available Mirrors:" label now
-                visible_height = 15  # More visible height with expanded modal (18 total - 3 for margins)
-                
-                # Calculate current item position
-                current_item_position = header_height + self.selected_index
-                current_scroll = scrollable_container.scroll_y
-                
-                # Calculate optimal scroll position to keep item in view
-                # Target: keep selected item roughly in the middle third of visible area
-                target_position_from_top = 3  # 3 lines from top of visible area
-                
-                # Calculate new scroll position
-                new_scroll_position = max(0, current_item_position - header_height - target_position_from_top)
-                
-                # Apply smooth scrolling if position changes significantly
-                scroll_diff = abs(new_scroll_position - current_scroll)
-                if scroll_diff > 0:
-                    # Immediate scroll for synchronous feel
-                    scrollable_container.scroll_y = new_scroll_position
-                    
+            current_item.scroll_visible(animate=False)
         except Exception:
-            # Fallback: basic scrolling
-            try:
-                scrollable_container = self.query_one("#modal-content", ScrollableContainer)
-                # Simple position calculation based on selected_index
-                target_scroll = max(0, self.selected_index - 3)
-                scrollable_container.scroll_y = target_scroll
-            except:
-                pass
+            # If item not found, ignore silently
+            pass
 
     def _show_error(self, message: str) -> None:
         """Show error message in the modal title."""
