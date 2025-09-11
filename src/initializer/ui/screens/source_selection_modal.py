@@ -32,7 +32,7 @@ class SourceSelectionModal(ModalScreen):
         max-height: 85%;
         background: $surface;
         border: solid $primary;
-        padding: 1;
+        padding: 1 1 0 1;
         layout: vertical;
     }
     
@@ -45,7 +45,6 @@ class SourceSelectionModal(ModalScreen):
     
     #modal-content {
         height: 1fr;
-        max-height: 25;
         overflow-y: auto;
         padding: 0 1;
         scrollbar-size: 1 1;
@@ -99,12 +98,24 @@ class SourceSelectionModal(ModalScreen):
     
     .help-text {
         text-align: center;
-        color: $text;
-        height: auto;
+        color: $text-muted;
+        height: 1;
         min-height: 1;
-        margin: 0;
-        padding: 0;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
         background: $surface;
+        text-style: none;
+    }
+    
+    #help-container {
+        height: 2;
+        min-height: 2;
+        max-height: 2;
+        background: $surface;
+        layout: vertical;
+        margin: 0;
+        padding: 0 0 0 0;
     }
     
     .bottom-spacer {
@@ -236,9 +247,10 @@ class SourceSelectionModal(ModalScreen):
                         # Add bottom padding to ensure scrollbar calculation
                         yield Static("", classes="bottom-spacer")
             
-            # Bottom shortcuts area - now as part of the main container
-            yield Rule()
-            yield Label("J/K=Up/Down | ENTER=Select | ESC=Cancel", classes="help-text")
+            # Bottom shortcuts area - with rule and minimal margin
+            with Container(id="help-container"):
+                yield Rule()
+                yield Label("J/K=Up/Down | ENTER=Select | ESC=Cancel", classes="help-text")
     
     def _update_mirror_display(self) -> None:
         """Update mirror list display with arrow indicators."""
