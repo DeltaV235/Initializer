@@ -202,14 +202,11 @@ class PackageManagerScreen(Screen):
                 pm_list_container.mount(Static(f"{arrow}🔧 Available Package Managers\n    Install/Uninstall package managers", 
                                     id="pm-available", classes="pm-item"))
                 
-                # Add separator
-                pm_list_container.mount(Rule())
-                
                 if not self.package_managers:
                     pm_list_container.mount(Static("No package managers installed", classes="info-message"))
                     return
                 
-                # Display label for installed package managers
+                # Display label for installed package managers with minimal spacing
                 pm_list_container.mount(Label("Installed Package Managers:", classes="info-key"))
                 
                 # Display each installed package manager
@@ -298,9 +295,7 @@ class PackageManagerScreen(Screen):
             if pm is None and self.left_focused_item == 0:
                 # Show info about package manager installation
                 source_list_container.mount(Label("Package Manager Installation", classes="section-title"))
-                source_list_container.mount(Rule())
                 source_list_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
-                source_list_container.mount(Static(""))
                 source_list_container.mount(Label("Available Actions:", classes="info-key"))
                 source_list_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
                 source_list_container.mount(Static("• Uninstall existing package managers"))
@@ -310,7 +305,6 @@ class PackageManagerScreen(Screen):
             else:
                 # Show current package manager info
                 source_list_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
-                source_list_container.mount(Rule())
                 
                 # Show current source
                 source_list_container.mount(Label("Current Source:", classes="info-key"))
@@ -319,7 +313,6 @@ class PackageManagerScreen(Screen):
                 else:
                     source_list_container.mount(Static("Not configured", classes="current-source-none"))
                 
-                source_list_container.mount(Rule())
                 source_list_container.mount(Static("ENTER=Change Source", classes="help-text"))
                 
         except Exception as e:
