@@ -12,6 +12,7 @@ from textual.widgets import Button, Static, Rule, Label
 from typing import Callable, Optional, List
 
 from ...modules.package_manager import PackageManagerDetector
+from .mirror_source_processor import APTMirrorProcessor
 
 
 class MirrorConfirmationModal(ModalScreen):
@@ -40,8 +41,13 @@ class MirrorConfirmationModal(ModalScreen):
         # State management
         self.is_executing = False
         
-        # Files that will be affected
-        self.affected_files = self._get_affected_files()
+        # Initialize APT mirror processor for complete handling
+        if self.package_manager.name == "apt":
+            self.apt_processor = APTMirrorProcessor(new_source)
+            self.affected_files = self.apt_processor.get_affected_files_list()
+        else:
+            self.apt_processor = None
+            self.affected_files = self._get_affected_files()
         
     def _get_affected_files(self) -> List[str]:
         """Get list of files that will be modified."""
@@ -109,24 +115,48 @@ class MirrorConfirmationModal(ModalScreen):
                 
                 yield Rule()
                 
-                # Backup information
-                yield Label("Backup Information:", classes="info-key")
-                backup_time = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+                # Backup information - simplified to show only backup filenames
+                yield Label("Files to be backed up:", classes="info-key")
                 backup_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
-                yield Static(f"  • Backup date: {backup_time}", classes="backup-info")
-                yield Static(f"  • Backup suffix: .bak_{backup_suffix}", classes="backup-info")
                 
-                # Show specific backup file examples
+                # Show specific backup file examples - only filenames
                 if self.package_manager.name == "apt":
-                    yield Static(f"  • Example: /etc/apt/sources.list.bak_{backup_suffix}", classes="backup-info")
+                    if self.apt_processor:
+                        # Use the processor to get accurate backup file names
+                        main_file_path, file_format = self.apt_processor._detect_main_sources_file()
+                        if file_format == "deb822":
+                            yield Static(f"  • ubuntu.sources.bak_{backup_suffix}", classes="backup-info")
+                        else:
+                            yield Static(f"  • sources.list.bak_{backup_suffix}", classes="backup-info")
+                        
+                        # Check for additional files that would be backed up
+                        sources_d_path = "/etc/apt/sources.list.d"
+                        if os.path.exists(sources_d_path):
+                            ubuntu_files_count = 0
+                            for filename in os.listdir(sources_d_path):
+                                if not filename.endswith(('.list', '.sources')) or filename == 'ubuntu.sources':
+                                    continue
+                                file_path = os.path.join(sources_d_path, filename)
+                                try:
+                                    with open(file_path, 'r') as f:
+                                        content = f.read()
+                                    if self.apt_processor._contains_ubuntu_sources(content):
+                                        ubuntu_files_count += 1
+                                except:
+                                    continue
+                            
+                            if ubuntu_files_count > 0:
+                                yield Static(f"  • {ubuntu_files_count} additional .list files (sources.list.d/)", classes="backup-info")
+                    else:
+                        yield Static(f"  • sources.list.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name == "brew":
-                    yield Static(f"  • Example: /usr/local/Homebrew/.git/config.bak_{backup_suffix}", classes="backup-info")
+                    yield Static(f"  • config.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name in ["yum", "dnf"]:
-                    yield Static(f"  • Example: /etc/yum.repos.d/*.repo.bak_{backup_suffix}", classes="backup-info")
+                    yield Static(f"  • *.repo.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name == "pacman":
-                    yield Static(f"  • Example: /etc/pacman.d/mirrorlist.bak_{backup_suffix}", classes="backup-info")
+                    yield Static(f"  • mirrorlist.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name == "apk":
-                    yield Static(f"  • Example: /etc/apk/repositories.bak_{backup_suffix}", classes="backup-info")
+                    yield Static(f"  • repositories.bak_{backup_suffix}", classes="backup-info")
                 
                 yield Rule()
                 
@@ -249,100 +279,96 @@ class MirrorConfirmationModal(ModalScreen):
             return False, f"Failed to change mirror: {str(e)}"
     
     def _change_apt_mirror(self, backup_suffix: str) -> tuple[bool, str]:
-        """Change APT mirror source with backup."""
-        sources_file = "/etc/apt/sources.list"
-        backup_file = f"{sources_file}.bak_{backup_suffix}"
-        
+        """Change APT mirror source with complete backup and replacement."""
+        if not self.apt_processor:
+            return False, "APT processor not initialized"
+            
         try:
-            # Create backup
-            if os.path.exists(sources_file):
-                shutil.copy2(sources_file, backup_file)
-                
-                def log_backup():
-                    self._log_message(f"Backup created: {backup_file}")
-                self.app.call_from_thread(log_backup)
+            def log_start():
+                self._log_message("Starting complete APT mirror source change...")
+            self.app.call_from_thread(log_start)
             
-            # Write new sources.list
-            with open(sources_file, 'w') as f:
-                # Detect distribution codename
-                try:
-                    codename = subprocess.run(
-                        ["lsb_release", "-cs"],
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    ).stdout.strip()
-                except:
-                    codename = "focal"  # Default fallback
-                
-                def log_codename():
-                    self._log_message(f"Detected distribution: {codename}")
-                self.app.call_from_thread(log_codename)
-                
-                # Write repository entries
-                f.write(f"deb {self.new_source} {codename} main restricted universe multiverse\n")
-                f.write(f"deb {self.new_source} {codename}-updates main restricted universe multiverse\n")
-                f.write(f"deb {self.new_source} {codename}-backports main restricted universe multiverse\n")
-                f.write(f"deb {self.new_source} {codename}-security main restricted universe multiverse\n")
+            # Use the complete processor for mirror change
+            result = self.apt_processor.process_complete_mirror_change(backup_suffix)
             
-            def log_write():
-                self._log_message(f"Updated {sources_file}")
-            self.app.call_from_thread(log_write)
+            # Log the results
+            def log_results():
+                if result['modified_main']:
+                    for file in result['modified_main']:
+                        self._log_message(f"✅ Updated main config: {file}")
+                        
+                if result['modified_sources_d']:
+                    self._log_message(f"✅ Updated {len(result['modified_sources_d'])} files in sources.list.d/")
+                    for file in result['modified_sources_d']:
+                        self._log_message(f"  • {file}")
+                else:
+                    self._log_message("ℹ️  No additional Ubuntu sources found in sources.list.d/")
             
-            # Update package index with real-time output
-            # Run apt update and capture output in real-time
-            try:
-                def log_update_start():
-                    self._log_message("Running apt update...")
-                self.app.call_from_thread(log_update_start)
-                
-                process = subprocess.Popen(
-                    ["apt", "update"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,  # Combine stderr with stdout
-                    text=True,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-                
-                # Read output line by line in real-time
-                line_count = 0
-                while True:
-                    output = process.stdout.readline()
-                    if output == '' and process.poll() is not None:
-                        break
-                    if output:
-                        line = output.strip()
-                        # Show all significant lines, not just filtered ones
-                        if line and len(line) > 2:  # Skip very short lines
-                            line_count += 1
-                            def log_line(msg=line):
-                                self._log_message(f"  {msg}")
-                            self.app.call_from_thread(log_line)
-                
-                return_code = process.poll()
-                
-                def log_completion():
-                    if return_code == 0:
-                        self._log_message(f"✅ apt update completed successfully ({line_count} lines)")
-                    else:
-                        self._log_message(f"❌ apt update failed with return code: {return_code}")
-                
-                self.app.call_from_thread(log_completion)
-                
-                if return_code != 0:
-                    return False, f"apt update failed with return code: {return_code}"
-                    
-            except Exception as e:
-                def log_error():
-                    self._log_message(f"❌ Error running apt update: {str(e)}")
-                self.app.call_from_thread(log_error)
-                return False, f"Error running apt update: {str(e)}"
+            self.app.call_from_thread(log_results)
             
-            return True, f"Successfully changed APT mirror to {self.new_source}"
+            # Run apt update with real-time output
+            update_success = self._run_apt_update()
             
+            if update_success:
+                total_files = len(result['modified_main']) + len(result['modified_sources_d'])
+                return True, f"Successfully updated {total_files} configuration files and refreshed package index"
+            else:
+                return False, "Mirror changed but apt update failed"
+                
         except Exception as e:
+            def log_error():
+                self._log_message(f"❌ Error during complete mirror change: {str(e)}")
+            self.app.call_from_thread(log_error)
             return False, f"Failed to change APT mirror: {str(e)}"
+    
+    def _run_apt_update(self) -> bool:
+        """Run apt update with real-time logging"""
+        try:
+            def log_update_start():
+                self._log_message("Running apt update...")
+            self.app.call_from_thread(log_update_start)
+            
+            process = subprocess.Popen(
+                ["apt", "update"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Combine stderr with stdout
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            # Read output line by line in real-time
+            line_count = 0
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    line = output.strip()
+                    # Show all significant lines, not just filtered ones
+                    if line and len(line) > 2:  # Skip very short lines
+                        line_count += 1
+                        def log_line(msg=line):
+                            self._log_message(f"  {msg}")
+                        self.app.call_from_thread(log_line)
+            
+            return_code = process.poll()
+            
+            def log_completion():
+                if return_code == 0:
+                    self._log_message(f"✅ apt update completed successfully ({line_count} lines)")
+                else:
+                    self._log_message(f"❌ apt update failed with return code: {return_code}")
+            
+            self.app.call_from_thread(log_completion)
+            
+            return return_code == 0
+                
+        except Exception as e:
+            def log_error():
+                self._log_message(f"❌ Error running apt update: {str(e)}")
+            self.app.call_from_thread(log_error)
+            return False
     
     def _change_brew_mirror(self, backup_suffix: str) -> tuple[bool, str]:
         """Change Homebrew mirror source with backup."""
