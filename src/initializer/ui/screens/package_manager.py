@@ -2,7 +2,7 @@
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
+from textual.containers import Container, Vertical, Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Static, Rule, Label, Input, RadioSet, RadioButton
 from textual.reactive import reactive
@@ -132,13 +132,15 @@ class PackageManagerScreen(Screen):
                 with Vertical(id="pm-left-panel", classes="panel"):
                     yield Label("Package Managers", classes="panel-title")
                     # Don't add any initial content - will be populated in on_mount
-                    yield ScrollableContainer(id="pm-list")
+                    with VerticalScroll(id="pm-list"):
+                        yield Vertical(id="pm-list-container")
                     
                 # Right panel - Source management
                 with Vertical(id="pm-right-panel", classes="panel"):
                     yield Label("Mirror Source Management", classes="panel-title")
                     # Don't add any initial content - will be populated dynamically
-                    yield ScrollableContainer(id="source-container")
+                    with VerticalScroll(id="source-container"):
+                        yield Vertical(id="source-list-container")
             
             # Bottom action buttons
             with Horizontal(id="pm-actions"):
@@ -148,11 +150,11 @@ class PackageManagerScreen(Screen):
         """Initialize the screen."""
         # Add initial loading message
         try:
-            pm_list = self.query_one("#pm-list", ScrollableContainer)
-            pm_list.mount(Static("Detecting package managers...", id="pm-loading"))
+            pm_list_container = self.query_one("#pm-list-container", Vertical)
+            pm_list_container.mount(Static("Detecting package managers...", id="pm-loading"))
             
-            source_container = self.query_one("#source-container", ScrollableContainer)
-            source_container.mount(Static("Select a package manager to view sources", id="source-placeholder"))
+            source_list_container = self.query_one("#source-list-container", Vertical)
+            source_list_container.mount(Static("Select a package manager to view sources", id="source-placeholder"))
         except Exception:
             pass
         
@@ -188,50 +190,89 @@ class PackageManagerScreen(Screen):
     def _display_package_managers(self) -> None:
         """Display detected package managers in the left panel."""
         try:
-            pm_list = self.query_one("#pm-list", ScrollableContainer)
+            pm_list_container = self.query_one("#pm-list-container", Vertical)
             
-            # Clear ALL existing content completely
-            pm_list.remove_children()
+            # Check if we need to initialize (first time) or just update
+            needs_init = len(pm_list_container.children) == 0
             
-            # First, add "Available Package Managers" option
-            arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == 0) else "  "
-            pm_list.mount(Static(f"{arrow}🔧 Available Package Managers\n    Install/Uninstall package managers", 
-                                id="pm-available", classes="pm-item"))
-            
-            # Add separator
-            pm_list.mount(Rule())
-            
-            if not self.package_managers:
-                pm_list.mount(Static("No package managers installed", classes="info-message"))
-                return
-            
-            # Display label for installed package managers
-            pm_list.mount(Label("Installed Package Managers:", classes="info-key"))
-            
-            # Display each installed package manager with arrow indicators
-            for i, pm in enumerate(self.package_managers):
-                # Adjust index for arrow indicator (account for "Available" option)
-                display_index = i + 1  # +1 for "Available Package Managers" option
+            if needs_init:
+                # First time setup - create all components
+                # Add "Available Package Managers" option
+                arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == 0) else "  "
+                pm_list_container.mount(Static(f"{arrow}🔧 Available Package Managers\n    Install/Uninstall package managers", 
+                                    id="pm-available", classes="pm-item"))
                 
-                # Create arrow indicator for CLI-style navigation
-                arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == display_index) else "  "
+                # Add separator
+                pm_list_container.mount(Rule())
                 
-                # Package manager name and status
-                pm_info = f"{arrow}📦 {pm.name.upper()}"
-                if pm == self.primary_pm:
-                    pm_info += " (Primary)"
+                if not self.package_managers:
+                    pm_list_container.mount(Static("No package managers installed", classes="info-message"))
+                    return
                 
-                # Show current source if available on the same line
-                if pm.current_source:
-                    source_text = self._truncate_source(pm.current_source, 25)
-                    pm_info += f"\n    Source: {source_text}"
-                else:
-                    pm_info += "\n    Source: Not configured"
+                # Display label for installed package managers
+                pm_list_container.mount(Label("Installed Package Managers:", classes="info-key"))
                 
-                pm_list.mount(Static(pm_info, id=f"pm-{i}", classes="pm-item"))
+                # Display each installed package manager
+                for i, pm in enumerate(self.package_managers):
+                    # Adjust index for arrow indicator (account for "Available" option)
+                    display_index = i + 1  # +1 for "Available Package Managers" option
+                    
+                    # Create arrow indicator for CLI-style navigation
+                    arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == display_index) else "  "
+                    
+                    # Package manager name and status
+                    pm_info = f"{arrow}📦 {pm.name.upper()}"
+                    if pm == self.primary_pm:
+                        pm_info += " (Primary)"
+                    
+                    # Show current source if available on the same line
+                    if pm.current_source:
+                        source_text = self._truncate_source(pm.current_source, 25)
+                        pm_info += f"\n    Source: {source_text}"
+                    else:
+                        pm_info += "\n    Source: Not configured"
+                    
+                    pm_list_container.mount(Static(pm_info, id=f"pm-{i}", classes="pm-item"))
+            else:
+                # Update existing components without recreating them
+                # Update "Available Package Managers" arrow
+                try:
+                    available_item = self.query_one("#pm-available", Static)
+                    arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == 0) else "  "
+                    available_item.update(f"{arrow}🔧 Available Package Managers\n    Install/Uninstall package managers")
+                except Exception:
+                    pass
+                
+                # Update each package manager item
+                for i, pm in enumerate(self.package_managers):
+                    try:
+                        pm_item = self.query_one(f"#pm-{i}", Static)
+                        
+                        # Adjust index for arrow indicator (account for "Available" option)
+                        display_index = i + 1  # +1 for "Available Package Managers" option
+                        
+                        # Create arrow indicator for CLI-style navigation
+                        arrow = "▶ " if (self.focus_panel == "left" and self.left_focused_item == display_index) else "  "
+                        
+                        # Package manager name and status
+                        pm_info = f"{arrow}📦 {pm.name.upper()}"
+                        if pm == self.primary_pm:
+                            pm_info += " (Primary)"
+                        
+                        # Show current source if available on the same line
+                        if pm.current_source:
+                            source_text = self._truncate_source(pm.current_source, 25)
+                            pm_info += f"\n    Source: {source_text}"
+                        else:
+                            pm_info += "\n    Source: Not configured"
+                        
+                        pm_item.update(pm_info)
+                    except Exception:
+                        # If item doesn't exist, we might need to recreate
+                        pass
             
-            # Ensure current selection is visible after display update
-            self.call_after_refresh(self._scroll_to_current)
+            # Scroll to current selection directly after update
+            self._scroll_to_current()
                 
         except Exception as e:
             self._show_error(f"Error displaying package managers: {str(e)}")
@@ -245,40 +286,41 @@ class PackageManagerScreen(Screen):
     def _display_source_options(self, pm) -> None:
         """Display package manager information in the right panel."""
         try:
-            source_container = self.query_one("#source-container", ScrollableContainer)
+            source_list_container = self.query_one("#source-list-container", Vertical)
             
             # Clear ALL existing content completely
-            source_container.remove_children()
+            source_list_container.remove_children()
             
             # Reset scroll position to top when displaying new content
+            source_container = self.query_one("#source-container", VerticalScroll)
             source_container.scroll_y = 0
             
             if pm is None and self.left_focused_item == 0:
                 # Show info about package manager installation
-                source_container.mount(Label("Package Manager Installation", classes="section-title"))
-                source_container.mount(Rule())
-                source_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
-                source_container.mount(Static(""))
-                source_container.mount(Label("Available Actions:", classes="info-key"))
-                source_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
-                source_container.mount(Static("• Uninstall existing package managers"))
-                source_container.mount(Static("• View installation status"))
+                source_list_container.mount(Label("Package Manager Installation", classes="section-title"))
+                source_list_container.mount(Rule())
+                source_list_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
+                source_list_container.mount(Static(""))
+                source_list_container.mount(Label("Available Actions:", classes="info-key"))
+                source_list_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
+                source_list_container.mount(Static("• Uninstall existing package managers"))
+                source_list_container.mount(Static("• View installation status"))
             elif not pm:
-                source_container.mount(Static("Select a package manager to configure", classes="info-message"))
+                source_list_container.mount(Static("Select a package manager to configure", classes="info-message"))
             else:
                 # Show current package manager info
-                source_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
-                source_container.mount(Rule())
+                source_list_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
+                source_list_container.mount(Rule())
                 
                 # Show current source
-                source_container.mount(Label("Current Source:", classes="info-key"))
+                source_list_container.mount(Label("Current Source:", classes="info-key"))
                 if pm.current_source:
-                    source_container.mount(Static(pm.current_source, classes="current-source-display"))
+                    source_list_container.mount(Static(pm.current_source, classes="current-source-display"))
                 else:
-                    source_container.mount(Static("Not configured", classes="current-source-none"))
+                    source_list_container.mount(Static("Not configured", classes="current-source-none"))
                 
-                source_container.mount(Rule())
-                source_container.mount(Static("ENTER=Change Source", classes="help-text"))
+                source_list_container.mount(Rule())
+                source_list_container.mount(Static("ENTER=Change Source", classes="help-text"))
                 
         except Exception as e:
             self._show_error(f"Error displaying source options: {str(e)}")
@@ -401,9 +443,9 @@ class PackageManagerScreen(Screen):
                     # Clear right panel when "Available" is selected
                     self._display_source_options(None)
             
+            # Update display first, then scroll directly
             self._display_package_managers()
-            # Use call_after_refresh to ensure DOM is updated before scrolling
-            self.call_after_refresh(self._scroll_to_current)
+            self._scroll_to_current()
     
     def action_nav_up(self) -> None:
         """Navigate up within current panel."""
@@ -422,9 +464,9 @@ class PackageManagerScreen(Screen):
                     # Clear right panel when "Available" is selected
                     self._display_source_options(None)
             
+            # Update display first, then scroll directly
             self._display_package_managers()
-            # Use call_after_refresh to ensure DOM is updated before scrolling
-            self.call_after_refresh(self._scroll_to_current)
+            self._scroll_to_current()
     
     def _show_package_manager_install_modal(self) -> None:
         """Show the package manager installation modal."""
@@ -476,54 +518,41 @@ class PackageManagerScreen(Screen):
     def _scroll_to_current(self) -> None:
         """Scroll the left panel to ensure current selection is visible."""
         try:
-            # Get the scrollable container for left panel
-            scrollable_container = self.query_one("#pm-list", ScrollableContainer)
+            # Try different approaches to scroll to current item
+            scroll_container = self.query_one("#pm-list", VerticalScroll)
             
-            # Try to get the specific item widget directly
             if self.left_focused_item == 0:
                 # Scroll to top for "Available Package Managers"
-                scrollable_container.scroll_y = 0
-                return
-            
-            # For installed PMs, try to find the specific widget
-            pm_index = self.left_focused_item - 1  # Adjust for "Available" item
-            
-            # First, try a simple approach: calculate based on actual items
-            # Available PM: 2 lines
-            # Rule: 1 line
-            # Label (if PMs exist): 1 line
-            # Each PM: 2 lines
-            
-            if self.package_managers:
-                # Calculate cumulative height up to current item
-                lines_before = 4  # Available(2) + Rule(1) + Label(1)
-                
-                # Add lines for all PMs before current one
-                lines_before += pm_index * 2  # Each PM takes 2 lines
-                
-                # Current item starts at this line
-                item_start = lines_before
-                item_end = item_start + 2  # Current item is 2 lines
-                
-                # Get container dimensions
-                container_height = scrollable_container.size.height
-                current_scroll = scrollable_container.scroll_y
-                
-                # Calculate visible range
-                visible_start = current_scroll
-                visible_end = current_scroll + container_height
-                
-                # Check if item is fully visible
-                if item_start < visible_start:
-                    # Item starts above visible area, scroll up
-                    scrollable_container.scroll_y = max(0, item_start)
-                elif item_end > visible_end:
-                    # Item ends below visible area, scroll down
-                    # Position so the item is at the bottom of view
-                    new_scroll = item_end - container_height
-                    if new_scroll > 0:
-                        scrollable_container.scroll_y = new_scroll
+                try:
+                    current_item = self.query_one("#pm-available", Static)
+                    # Try using scroll_to method on the container
+                    y_offset = current_item.region.y if hasattr(current_item, 'region') else 0
+                    scroll_container.scroll_to(y=y_offset, animate=False)
+                except Exception as e:
+                    # Fallback: try scroll_visible on the item itself
+                    try:
+                        current_item = self.query_one("#pm-available", Static)
+                        current_item.scroll_visible(animate=False)
+                    except Exception:
+                        pass
                         
-        except Exception as e:
-            # Silently ignore scrolling errors
+            elif self.package_managers and self.left_focused_item > 0:
+                # Scroll to specific package manager item
+                pm_index = self.left_focused_item - 1
+                if pm_index < len(self.package_managers):
+                    try:
+                        current_item = self.query_one(f"#pm-{pm_index}", Static)
+                        # Try using scroll_to method on the container
+                        y_offset = current_item.region.y if hasattr(current_item, 'region') else 0
+                        scroll_container.scroll_to(y=y_offset, animate=False)
+                    except Exception as e:
+                        # Fallback: try scroll_visible on the item itself
+                        try:
+                            current_item = self.query_one(f"#pm-{pm_index}", Static)
+                            current_item.scroll_visible(animate=False)
+                        except Exception:
+                            pass
+                            
+        except Exception:
+            # Final fallback: do nothing silently
             pass
