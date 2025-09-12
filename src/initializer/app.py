@@ -9,6 +9,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header
 from textual.screen import Screen
+from textual.binding import Binding
 
 from .config_manager import ConfigManager
 
@@ -25,6 +26,8 @@ class InitializerApp(App):
         ("s", "settings", "Settings"),
         ("h", "help", "Help"),
         ("ctrl+c", "quit", "Quit"),
+        Binding("f10", "reload_app", "", show=False, priority=True),    # Hidden shortcut for testing
+        Binding("f12", "force_quit", "", show=False, priority=True),    # Hidden shortcut for testing
     ]
     
     def __init__(self, config_manager: ConfigManager, preset: str = None, 
@@ -91,6 +94,29 @@ class InitializerApp(App):
         except Exception:
             pass
         self.exit()
+        
+    def action_force_quit(self) -> None:
+        """Force quit the application (F12) - hidden testing shortcut."""
+        self.action_quit()
+        
+    def action_reload_app(self) -> None:
+        """Reload the application (F10) - hidden testing shortcut."""
+        import os
+        import sys
+        
+        # Clean up current app state
+        self.action_quit()
+        
+        # Restart the application with same arguments
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+    def key_f10(self) -> None:
+        """Handle F10 key directly - reload app."""
+        self.action_reload_app()
+        
+    def key_f12(self) -> None:
+        """Handle F12 key directly - force quit."""
+        self.action_force_quit()
         
     def on_unmount(self) -> None:
         """Called when app is unmounted - ensure proper cleanup."""
