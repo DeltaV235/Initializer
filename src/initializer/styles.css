@@ -607,7 +607,7 @@ ModalScreen > #confirmation-container {
 }
 
 .new-source {
-    color: $secondary;
+    color: $text;
     margin: 0 0 1 0;
 }
 
