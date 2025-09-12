@@ -109,6 +109,7 @@ class MainMenuScreen(Screen):
                 
                 # Right panel - Settings
                 with Vertical(id="right-panel"):
+                    yield Label("Settings", id="right-panel-title", classes="panel-title")
                     with ScrollableContainer(id="settings-scroll"):
                         yield Static("Select a segment to view settings", id="settings-content")
             
@@ -191,9 +192,6 @@ class MainMenuScreen(Screen):
     
     def _build_system_info_settings(self, container: ScrollableContainer) -> None:
         """Build system information settings panel."""
-        # Show title
-        container.mount(Label("System Status", classes="section-title"))
-        
         # Check if we have cached data and not currently loading
         if self.system_info_cache and not self.system_info_loading:
             # Enable scrollbar for content
@@ -827,9 +825,6 @@ class MainMenuScreen(Screen):
     
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
         """Build Homebrew settings panel."""
-        container.mount(Label("Homebrew Configuration", classes="section-title"))
-        container.mount(Rule())
-        
         # Check if we have cached data and not currently loading
         if self.homebrew_cache and not self.homebrew_loading:
             # Enable scrollbar for content
@@ -851,9 +846,6 @@ class MainMenuScreen(Screen):
     
     def _build_package_manager_settings(self, container: ScrollableContainer) -> None:
         """Build Package Manager settings panel."""
-        container.mount(Label("Package Manager Configuration", classes="section-title"))
-        container.mount(Rule())
-        
         # Check if we have cached data and not currently loading
         if self.package_manager_cache and not self.package_manager_loading:
             # Enable scrollbar for content
@@ -875,9 +867,6 @@ class MainMenuScreen(Screen):
     
     def _build_user_management_settings(self, container: ScrollableContainer) -> None:
         """Build User Management settings panel."""
-        container.mount(Label("User Management Configuration", classes="section-title"))
-        container.mount(Rule())
-        
         # Check if we have cached data and not currently loading
         if self.user_management_cache and not self.user_management_loading:
             # Enable scrollbar for content
@@ -899,9 +888,6 @@ class MainMenuScreen(Screen):
     
     def _build_app_settings(self, container: ScrollableContainer) -> None:
         """Build application settings panel."""
-        container.mount(Label("Application Settings", classes="section-title"))
-        container.mount(Rule())
-        
         # Check if we have cached data and not currently loading
         if self.settings_cache and not self.settings_loading:
             # Enable scrollbar for content
@@ -923,9 +909,6 @@ class MainMenuScreen(Screen):
     
     def _build_help_content(self, container: ScrollableContainer) -> None:
         """Build help content panel."""
-        container.mount(Label("Help & Documentation", classes="section-title"))
-        container.mount(Rule())
-        
         # Check if we have cached data and not currently loading
         if self.help_cache and not self.help_loading:
             # Enable scrollbar for content
@@ -1053,8 +1036,23 @@ class MainMenuScreen(Screen):
     
     def _update_panel_title(self, selected_id: str) -> None:
         """Update the right panel title based on selected segment."""
-        # Title label has been removed - this method is kept for compatibility
-        pass
+        try:
+            title_widget = self.query_one("#right-panel-title", Label)
+            # Map segment IDs to display titles
+            title_map = {
+                "system_info": "System Status",
+                "package_manager": "Package Manager",
+                "homebrew": "Homebrew",
+                "user_management": "User Management", 
+                "settings": "Settings",
+                "help": "Help"
+            }
+            
+            display_title = title_map.get(selected_id, "Settings")
+            title_widget.update(display_title)
+        except Exception:
+            # Silently fail if title widget not found
+            pass
     
     def _update_panel_focus(self, is_left_focused: bool) -> None:
         """Update panel focus styles based on which panel has focus."""
