@@ -244,42 +244,38 @@ python main.py --preset minimal   # Basic installation
 
 ## Environment-Specific Execution
 
-### Automated Environment Detection
-**Claude 应首先执行环境检测以决定执行策略：**
+### Testing Policy
+**重要说明：Claude 在任何环境下都不应该执行应用程序测试**
+
+- **用户手动测试**: 所有应用程序的运行和测试都由用户手动执行
+- **Claude 职责**: 仅限于代码编写、修改、分析和文档更新
+- **不执行测试**: 无论是 Ubuntu、非 Ubuntu 还是其他任何环境，Claude 都不应该运行 `./run.sh`、`python main.py` 或其他测试命令
+- **代码验证**: Claude 可以通过代码分析、静态检查和逻辑审查来确保代码质量，但不执行动态测试
+
+### Environment Detection (仅用于参考)
+项目包含环境检测工具，但 Claude 不应该使用它们来决定是否执行测试：
 
 ```bash
-# 检测环境并获取退出码判断
+# 环境检测工具（Claude 不使用）
 tools/check-test-environment.sh --exit-code-only
-
-# 退出码 0 = Ubuntu 环境，可本地执行
-# 退出码 1 = 非 Ubuntu 环境，需远程执行
 ```
 
-**Claude 执行逻辑：**
-1. **首先运行**: `tools/check-test-environment.sh --exit-code-only`
-2. **根据退出码决定**:
-   - 退出码 `0`: 直接执行 `./run.sh` 或 `python main.py`
-   - 退出码 `1`: 使用 `tools/sync-to-remote.sh` 同步到远程执行
-3. **无需询问用户**: 自动根据环境选择执行策略
+### Claude 工作范围
+- ✅ **代码开发**: 编写、修改、重构代码
+- ✅ **代码分析**: 阅读、理解、解释代码逻辑
+- ✅ **问题诊断**: 分析错误信息、日志输出、调试信息
+- ✅ **文档更新**: 修改配置文件、文档、注释
+- ✅ **架构设计**: 规划模块结构、接口设计
+- ❌ **应用程序执行**: 不运行 TUI 应用程序进行测试
+- ❌ **自动化测试**: 不执行任何形式的应用程序测试
+- ❌ **部署操作**: 不执行远程同步或部署命令
 
-**当前环境状态**: Ubuntu 24.10 ✅ (退出码 0 = 本地执行)
-
-### Ubuntu Environments ✅
-- **Claude 可以直接执行应用**: `./install.sh`, `./run.sh`, `python main.py`
-- **无需远程部署**: 在 Ubuntu 环境下 Claude 可以直接运行和测试应用程序
-- **本地执行完全支持**: 包括安装、运行、开发工具等所有操作
-- **测试策略**: Ubuntu = 本地直接执行，无需同步到远程服务器
-
-### Non-Ubuntu Environments ⚠️  
-- **必须在远程服务器执行** (192.168.0.33)
-- **Claude 应使用远程部署**: 先用 `tools/sync-to-remote.sh` 同步，再远程执行
-- **本地执行不支持**: 按项目要求必须远程运行
-- **测试策略**: 非 Ubuntu = 远程部署执行，禁止本地运行
-
-### WSL Environments
-- If WSL is Ubuntu: Follow Ubuntu rules (direct execution allowed)
-- If WSL is non-Ubuntu: Follow non-Ubuntu rules (remote execution required)
-- Environment detection automatically handles WSL scenarios
+### 用户测试流程
+当 Claude 完成代码修改后：
+1. Claude 提供代码修改说明和预期行为
+2. 用户手动执行 `./run.sh` 或 `python main.py` 进行测试
+3. 用户报告测试结果或问题
+4. Claude 根据用户反馈进行代码调整
 
 ## Adding New Modules
 
@@ -336,4 +332,4 @@ tools/check-test-environment.sh --exit-code-only
 - **3 core modules**: system_info, package_manager, (homebrew in progress)
 - **Comprehensive navigation**: Tab, hjkl, Enter, 1-5 shortcuts, q for quit
 - **Automated tools**: Installation, deployment, environment detection
-- 执行完 run.sh，测试完成后，按 Q 正常退出程序。
+- **用户测试**: 用户手动运行 run.sh 测试应用程序，测试完成后按 Q 正常退出程序。
