@@ -9,10 +9,12 @@ from textual.app import ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.screen import ModalScreen
 from textual.widgets import Button, Static, Rule, Label
+from textual.events import Key
 from typing import Callable, Optional, List
 
 from ...modules.package_manager import PackageManagerDetector
 from .mirror_source_processor import APTMirrorProcessor
+from .apt_update_log_modal import APTUpdateLogModal
 
 
 class MirrorConfirmationModal(ModalScreen):
@@ -169,10 +171,46 @@ class MirrorConfirmationModal(ModalScreen):
             with Container(id="confirmation-actions"):
                 yield Static("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
     
+    
+    def on_mount(self) -> None:
+        """Initialize the modal and ensure it can receive focus."""
+        self.focus()
+    
+    @on(Key)
+    def handle_key_event(self, event: Key) -> None:
+        """Handle key events using @on decorator for reliable event processing."""
+        if event.key == "enter":
+            self.action_confirm_change()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "escape":
+            self.action_cancel_operation()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "y":
+            self.action_confirm_change()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "n":
+            self.action_cancel_operation()
+            event.prevent_default()
+            event.stop()
+    
+    def can_focus(self) -> bool:
+        """Return True to allow this modal to receive focus."""
+        return True
+    
+    @property
+    def is_modal(self) -> bool:
+        """Mark this as a modal screen."""
+        return True
+    
     def action_confirm_change(self) -> None:
         """Confirm the mirror change."""
         if self.is_executing:
             return
+        
+        self._log_message("Starting mirror source change...")
         self._execute_mirror_change()
     
     def action_cancel_operation(self) -> None:
@@ -224,6 +262,11 @@ class MirrorConfirmationModal(ModalScreen):
     @work(exclusive=True, thread=True)  
     async def _execute_mirror_change(self) -> None:
         """Execute the mirror change in background thread."""
+        def debug_start():
+            self._log_message("DEBUG: _execute_mirror_change started")
+        
+        self.app.call_from_thread(debug_start)
+        
         self.is_executing = True
         
         def update_ui_start():
@@ -286,13 +329,14 @@ class MirrorConfirmationModal(ModalScreen):
         try:
             def log_start():
                 self._log_message("Starting complete APT mirror source change...")
+                self._log_message("DEBUG: About to call apt_processor.process_complete_mirror_change")
             self.app.call_from_thread(log_start)
             
             # Use the complete processor for mirror change
             result = self.apt_processor.process_complete_mirror_change(backup_suffix)
             
-            # Log the results
             def log_results():
+                self._log_message("DEBUG: Mirror change completed, preparing to show APT log modal")
                 if result['modified_main']:
                     for file in result['modified_main']:
                         self._log_message(f"✅ Updated main config: {file}")
@@ -303,72 +347,43 @@ class MirrorConfirmationModal(ModalScreen):
                         self._log_message(f"  • {file}")
                 else:
                     self._log_message("ℹ️  No additional Ubuntu sources found in sources.list.d/")
+                
+                self._log_message("🚀 Starting APT update in full-screen mode...")
             
             self.app.call_from_thread(log_results)
             
-            # Run apt update with real-time output
-            update_success = self._run_apt_update()
+            # Show the APT update log modal through main thread
+            def on_apt_update_complete(success: bool, message: str):
+                # This callback is called when APT update completes
+                if success:
+                    total_files = len(result['modified_main']) + len(result['modified_sources_d'])
+                    final_message = f"Successfully updated {total_files} configuration files and refreshed package index"
+                    self.callback(True, final_message)
+                else:
+                    self.callback(False, f"Mirror changed but apt update failed: {message}")
+                
+                # NOW dismiss the confirmation modal after APT is complete
+                self.set_timer(1.0, self._dismiss_after_success)
             
-            if update_success:
-                total_files = len(result['modified_main']) + len(result['modified_sources_d'])
-                return True, f"Successfully updated {total_files} configuration files and refreshed package index"
-            else:
-                return False, "Mirror changed but apt update failed"
+            def show_apt_log_modal():
+                # Push the APT update log modal from main thread  
+                self._log_message("DEBUG: About to push_screen APTUpdateLogModal")
+                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete))
+                self._log_message("DEBUG: push_screen called successfully")
+                # DO NOT dismiss this modal yet - let APT complete first
+            
+            # Call from thread to show modal in main thread
+            self.app.call_from_thread(show_apt_log_modal)
+            
+            # Return success for the mirror change itself
+            total_files = len(result['modified_main']) + len(result['modified_sources_d'])
+            return True, f"Mirror configuration updated ({total_files} files). APT update started in full-screen mode."
                 
         except Exception as e:
             def log_error():
                 self._log_message(f"❌ Error during complete mirror change: {str(e)}")
             self.app.call_from_thread(log_error)
             return False, f"Failed to change APT mirror: {str(e)}"
-    
-    def _run_apt_update(self) -> bool:
-        """Run apt update with real-time logging"""
-        try:
-            def log_update_start():
-                self._log_message("Running apt update...")
-            self.app.call_from_thread(log_update_start)
-            
-            process = subprocess.Popen(
-                ["apt", "update"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # Combine stderr with stdout
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            # Read output line by line in real-time
-            line_count = 0
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    line = output.strip()
-                    # Show all significant lines, not just filtered ones
-                    if line and len(line) > 2:  # Skip very short lines
-                        line_count += 1
-                        def log_line(msg=line):
-                            self._log_message(f"  {msg}")
-                        self.app.call_from_thread(log_line)
-            
-            return_code = process.poll()
-            
-            def log_completion():
-                if return_code == 0:
-                    self._log_message(f"✅ apt update completed successfully ({line_count} lines)")
-                else:
-                    self._log_message(f"❌ apt update failed with return code: {return_code}")
-            
-            self.app.call_from_thread(log_completion)
-            
-            return return_code == 0
-                
-        except Exception as e:
-            def log_error():
-                self._log_message(f"❌ Error running apt update: {str(e)}")
-            self.app.call_from_thread(log_error)
-            return False
     
     def _change_brew_mirror(self, backup_suffix: str) -> tuple[bool, str]:
         """Change Homebrew mirror source with backup."""
