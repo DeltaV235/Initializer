@@ -102,10 +102,10 @@ class PackageManagerInstallModal(ModalScreen):
     # Reactive properties
     selected_index = reactive(0)
     
-    def __init__(self, callback: Callable[[List[Dict]], None]):
+    def __init__(self, callback: Callable[[List[Dict]], None], config_manager=None):
         super().__init__()
         self.callback = callback
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
         self.all_package_managers = self.detector.all_package_managers
         
         # Filter to only show installable package managers

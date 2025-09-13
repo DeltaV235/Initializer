@@ -96,11 +96,11 @@ class InstallationConfirmationModal(ModalScreen):
     }
     """
     
-    def __init__(self, actions: List[Dict], callback: Callable[[bool], None]):
+    def __init__(self, actions: List[Dict], callback: Callable[[bool], None], config_manager=None):
         super().__init__()
         self.actions = actions
         self.callback = callback
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
     
     def on_mount(self) -> None:
         """Initialize the screen."""

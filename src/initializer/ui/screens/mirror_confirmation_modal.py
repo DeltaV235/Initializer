@@ -33,12 +33,12 @@ class MirrorConfirmationModal(ModalScreen):
         ("pageup", "scroll_page_up", "Page Up"),
     ]
     
-    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None]):
+    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None):
         super().__init__()
         self.package_manager = package_manager
         self.new_source = new_source
         self.callback = callback
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
         
         # State management
         self.is_executing = False

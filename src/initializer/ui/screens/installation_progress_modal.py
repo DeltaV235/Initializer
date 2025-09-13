@@ -115,10 +115,10 @@ class InstallationProgressModal(ModalScreen):
     current_task_index = reactive(0)
     all_completed = reactive(False)
     
-    def __init__(self, actions: List[Dict]):
+    def __init__(self, actions: List[Dict], config_manager=None):
         super().__init__()
         self.actions = actions
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
         
         # Task tracking
         self.tasks = []

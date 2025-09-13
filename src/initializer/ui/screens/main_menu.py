@@ -425,7 +425,7 @@ class MainMenuScreen(Screen):
         """Load Package Manager information in background thread."""
         try:
             # Detect package managers and get their info
-            detector = PackageManagerDetector()
+            detector = PackageManagerDetector(self.config_manager)
             package_managers = detector.package_managers
             primary_pm = detector.get_primary_package_manager()
             
@@ -585,7 +585,7 @@ class MainMenuScreen(Screen):
             from .mirror_confirmation_modal import MirrorConfirmationModal
             
             # Get the primary package manager
-            detector = PackageManagerDetector()
+            detector = PackageManagerDetector(self.config_manager)
             primary_pm = detector.get_primary_package_manager()
             
             if not primary_pm:
@@ -607,14 +607,14 @@ class MainMenuScreen(Screen):
                 # Show confirmation modal
                 try:
                     self.app.push_screen(
-                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result)
+                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager)
                     )
                 except Exception as e:
                     self._show_message(f"Error showing confirmation: {str(e)}", error=True)
             
             # Show source selection modal
             self.app.push_screen(
-                SourceSelectionModal(primary_pm, on_source_selected)
+                SourceSelectionModal(primary_pm, on_source_selected, self.config_manager)
             )
             
         except Exception as e:
@@ -976,7 +976,7 @@ class MainMenuScreen(Screen):
             if source_url:
                 # Apply the selected source
                 from ...modules.package_manager import PackageManagerDetector
-                detector = PackageManagerDetector()
+                detector = PackageManagerDetector(self.config_manager)
                 success, message = detector.change_mirror(self._primary_pm.name, source_url)
                 
                 if success:
@@ -990,7 +990,7 @@ class MainMenuScreen(Screen):
                     # Show error message
                     self._show_temp_message(f"❌ {message}")
         
-        modal = SourceSelectionModal(self._primary_pm, on_source_selected)
+        modal = SourceSelectionModal(self._primary_pm, on_source_selected, self.config_manager)
         self.app.push_screen(modal)
     
     def _show_temp_message(self, message: str) -> None:
@@ -1393,7 +1393,7 @@ class MainMenuScreen(Screen):
         try:
             # Refresh package manager detection
             from ...modules.package_manager import PackageManagerDetector
-            detector = PackageManagerDetector()
+            detector = PackageManagerDetector(self.config_manager)
             self._primary_pm = detector.get_primary_package_manager()
             
             # Update the package manager display in the UI

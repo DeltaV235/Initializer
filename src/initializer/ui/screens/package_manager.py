@@ -117,7 +117,7 @@ class PackageManagerScreen(Screen):
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
         self.config_manager = config_manager
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
         self.package_managers = []
         self.primary_pm = None
         
@@ -336,14 +336,14 @@ class PackageManagerScreen(Screen):
             # Show confirmation modal
             try:
                 self.app.push_screen(
-                    MirrorConfirmationModal(pm, selected_source, on_confirmation_result)
+                    MirrorConfirmationModal(pm, selected_source, on_confirmation_result, self.config_manager)
                 )
             except Exception as e:
                 self._show_message(f"Error showing confirmation: {str(e)}", error=True)
         
         # Show source selection modal
         self.app.push_screen(
-            SourceSelectionModal(pm, on_source_selected)
+            SourceSelectionModal(pm, on_source_selected, self.config_manager)
         )
     
     @on(Button.Pressed)
@@ -473,7 +473,7 @@ class PackageManagerScreen(Screen):
                     # Show progress modal and execute installations
                     try:
                         self.app.push_screen(
-                            InstallationProgressModal(actions)
+                            InstallationProgressModal(actions, self.config_manager)
                         )
                         # After installation completes, refresh the package manager list
                         self.set_timer(0.5, lambda: self._refresh_package_managers())
@@ -483,7 +483,7 @@ class PackageManagerScreen(Screen):
             # Show confirmation modal
             try:
                 self.app.push_screen(
-                    InstallationConfirmationModal(actions, on_confirmation)
+                    InstallationConfirmationModal(actions, on_confirmation, self.config_manager)
                 )
             except Exception as e:
                 self._show_error(f"Error showing confirmation: {str(e)}")
@@ -491,7 +491,7 @@ class PackageManagerScreen(Screen):
         # Show package manager installation modal
         try:
             self.app.push_screen(
-                PackageManagerInstallModal(on_install_actions_selected)
+                PackageManagerInstallModal(on_install_actions_selected, self.config_manager)
             )
         except Exception as e:
             self._show_error(f"Error showing installation modal: {str(e)}")
@@ -499,7 +499,7 @@ class PackageManagerScreen(Screen):
     def _refresh_package_managers(self) -> None:
         """Refresh the package manager list after installation/uninstallation."""
         # Re-detect package managers
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(self.config_manager)
         self.package_managers = self.detector.package_managers
         self.primary_pm = self.detector.get_primary_package_manager()
         

@@ -129,11 +129,11 @@ class SourceSelectionModal(ModalScreen):
     }
     """
     
-    def __init__(self, package_manager, callback: Callable[[str], None]):
+    def __init__(self, package_manager, callback: Callable[[str], None], config_manager=None):
         super().__init__()
         self.package_manager = package_manager
         self.callback = callback
-        self.detector = PackageManagerDetector()
+        self.detector = PackageManagerDetector(config_manager)
         self.available_mirrors = self.detector.get_available_mirrors(package_manager.name)
         
         # State management

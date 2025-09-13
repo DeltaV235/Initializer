@@ -9,6 +9,8 @@ from typing import Optional, Dict, List, Tuple
 from pathlib import Path
 from datetime import datetime
 
+from ..config_manager import ConfigManager
+
 
 @dataclass
 class PackageManager:
@@ -23,69 +25,6 @@ class PackageManager:
 
 class PackageManagerDetector:
     """Detect and manage system package managers."""
-    
-    MIRROR_SOURCES = {
-        "apt": {
-            "default": "http://archive.ubuntu.com/ubuntu/",
-            "aliyun": "http://mirrors.aliyun.com/ubuntu/",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/ubuntu/",
-            "ustc": "http://mirrors.ustc.edu.cn/ubuntu/",
-            "163": "http://mirrors.163.com/ubuntu/",
-            "huawei": "https://repo.huaweicloud.com/ubuntu/",
-            "sohu": "http://mirrors.sohu.com/ubuntu/",
-            "tencent": "http://mirrors.cloud.tencent.com/ubuntu/",
-            "bfsu": "https://mirrors.bfsu.edu.cn/ubuntu/",
-            "nju": "https://mirror.nju.edu.cn/ubuntu/",
-            "sjtu": "https://mirror.sjtu.edu.cn/ubuntu/",
-            "zju": "http://mirrors.zju.edu.cn/ubuntu/",
-            "hit": "http://mirrors.hit.edu.cn/ubuntu/",
-            "neu": "http://mirror.neu.edu.cn/ubuntu/",
-            "bit": "http://mirror.bit.edu.cn/ubuntu/",
-            "cqu": "http://mirrors.cqu.edu.cn/ubuntu/",
-            "bjtu": "https://mirror.bjtu.edu.cn/ubuntu/",
-            "bupt": "http://mirrors.bupt.edu.cn/ubuntu/",
-        },
-        "yum": {
-            "default": "http://mirror.centos.org/centos/",
-            "aliyun": "http://mirrors.aliyun.com/centos/",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/centos/",
-            "ustc": "http://mirrors.ustc.edu.cn/centos/",
-            "163": "http://mirrors.163.com/centos/",
-            "huawei": "https://repo.huaweicloud.com/centos/",
-        },
-        "dnf": {
-            "default": "http://download.fedoraproject.org/pub/fedora/",
-            "aliyun": "http://mirrors.aliyun.com/fedora/",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/fedora/",
-            "ustc": "http://mirrors.ustc.edu.cn/fedora/",
-            "163": "http://mirrors.163.com/fedora/",
-        },
-        "pacman": {
-            "default": "https://archlinux.org/mirrorlist/",
-            "aliyun": "Server = http://mirrors.aliyun.com/archlinux/$repo/os/$arch",
-            "tuna": "Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch",
-            "ustc": "Server = http://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch",
-            "163": "Server = http://mirrors.163.com/archlinux/$repo/os/$arch",
-        },
-        "zypper": {
-            "default": "http://download.opensuse.org/",
-            "aliyun": "http://mirrors.aliyun.com/opensuse/",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/opensuse/",
-            "ustc": "http://mirrors.ustc.edu.cn/opensuse/",
-        },
-        "brew": {
-            "default": "https://github.com/Homebrew/brew.git",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git",
-            "ustc": "https://mirrors.ustc.edu.cn/brew.git",
-            "aliyun": "https://mirrors.aliyun.com/homebrew/brew.git",
-        },
-        "apk": {
-            "default": "http://dl-cdn.alpinelinux.org/alpine/",
-            "aliyun": "http://mirrors.aliyun.com/alpine/",
-            "tuna": "https://mirrors.tuna.tsinghua.edu.cn/alpine/",
-            "ustc": "http://mirrors.ustc.edu.cn/alpine/",
-        }
-    }
     
     # Define all known package managers with their install info
     PACKAGE_MANAGERS_INFO = {
@@ -150,7 +89,9 @@ class PackageManagerDetector:
         },
     }
     
-    def __init__(self):
+    def __init__(self, config_manager: Optional[ConfigManager] = None):
+        self.config_manager = config_manager or ConfigManager()
+        self._mirror_sources = self._load_mirror_sources_from_config()
         self.all_package_managers = self._get_all_package_managers()
         self.package_managers = [pm for pm in self.all_package_managers if pm.available]
     
@@ -258,7 +199,52 @@ class PackageManagerDetector:
     
     def get_available_mirrors(self, pm_name: str) -> Dict[str, str]:
         """Get available mirror sources for a package manager."""
-        return self.MIRROR_SOURCES.get(pm_name, {})
+        return self._mirror_sources.get(pm_name, {})
+    
+    def get_available_mirrors_with_info(self, pm_name: str) -> List[Dict[str, str]]:
+        """Get available mirror sources with detailed info for a package manager."""
+        try:
+            # Load the raw configuration directly
+            modules_config = self.config_manager.load_config("modules")
+            package_manager_config = modules_config.get('modules', {}).get('package_manager', {})
+            mirrors_config = package_manager_config.get('mirrors', {}).get(pm_name, {})
+            return mirrors_config.get('sources', [])
+        except Exception:
+            return []
+    
+    def _load_mirror_sources_from_config(self) -> Dict[str, Dict[str, str]]:
+        """Load mirror sources from configuration file."""
+        try:
+            # Load the raw configuration directly
+            modules_config = self.config_manager.load_config("modules")
+            package_manager_config = modules_config.get('modules', {}).get('package_manager', {})
+            mirrors_config = package_manager_config.get('mirrors', {})
+            
+            # Convert new format to old format for backward compatibility
+            mirror_sources = {}
+            
+            for pm_name, pm_mirrors in mirrors_config.items():
+                if isinstance(pm_mirrors, dict) and 'sources' in pm_mirrors:
+                    # New format with sources list
+                    mirror_sources[pm_name] = {}
+                    for source in pm_mirrors['sources']:
+                        key = source.get('key', source.get('name', '').lower())
+                        url = source.get('url', '')
+                        if key and url:
+                            mirror_sources[pm_name][key] = url
+                elif isinstance(pm_mirrors, list):
+                    # Legacy format - convert to new format
+                    mirror_sources[pm_name] = {}
+                    for mirror in pm_mirrors:
+                        if isinstance(mirror, dict) and 'name' in mirror and 'url' in mirror:
+                            key = mirror['name'].lower().replace(' ', '_')
+                            mirror_sources[pm_name][key] = mirror['url']
+                            
+            return mirror_sources
+            
+        except Exception as e:
+            # Fallback to empty dict if config loading fails
+            return {}
     
     def change_mirror(self, pm_name: str, mirror_url: str, backup_suffix: Optional[str] = None) -> Tuple[bool, str]:
         """Change the mirror source for a package manager.
