@@ -159,13 +159,6 @@ class MirrorConfirmationModal(ModalScreen):
                     yield Static(f"  • mirrorlist.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name == "apk":
                     yield Static(f"  • repositories.bak_{backup_suffix}", classes="backup-info")
-                
-                yield Rule()
-                
-                # Execution log area (initially empty)
-                yield Label("Execution Log:", classes="info-key")
-                with Vertical(id="log-output"):
-                    yield Static("Waiting for confirmation...", id="log-content", classes="log-content")
             
             # Fixed action help at the bottom - single line format like main menu
             with Container(id="confirmation-actions"):
@@ -210,7 +203,6 @@ class MirrorConfirmationModal(ModalScreen):
         if self.is_executing:
             return
         
-        self._log_message("Starting mirror source change...")
         self._execute_mirror_change()
     
     def action_cancel_operation(self) -> None:
@@ -262,38 +254,21 @@ class MirrorConfirmationModal(ModalScreen):
     @work(exclusive=True, thread=True)  
     async def _execute_mirror_change(self) -> None:
         """Execute the mirror change in background thread."""
-        def debug_start():
-            self._log_message("DEBUG: _execute_mirror_change started")
-        
-        self.app.call_from_thread(debug_start)
-        
         self.is_executing = True
-        
-        def update_ui_start():
-            self._log_message("Starting mirror source change...")
-        
-        self.app.call_from_thread(update_ui_start)
         
         try:
             # Create backup
             backup_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            def log_backup():
-                self._log_message(f"Creating backup with suffix: .bak_{backup_time}")
-            
-            self.app.call_from_thread(log_backup)
             
             # Perform the actual mirror change
             success, message = self._change_mirror_with_backup(backup_time)
             
             def update_ui_complete():
                 if success:
-                    self._log_message(f"✅ {message}")
                     self.callback(True, message)
                     # Auto-dismiss after a short delay using a wrapper function
                     self.set_timer(2.0, self._dismiss_after_success)
                 else:
-                    self._log_message(f"❌ {message}")
                     self.callback(False, message)
                 
                 self.is_executing = False
@@ -302,7 +277,6 @@ class MirrorConfirmationModal(ModalScreen):
             
         except Exception as e:
             def show_error():
-                self._log_message(f"❌ Error: {str(e)}")
                 self.callback(False, f"Error: {str(e)}")
                 self.is_executing = False
             
@@ -327,30 +301,8 @@ class MirrorConfirmationModal(ModalScreen):
             return False, "APT processor not initialized"
             
         try:
-            def log_start():
-                self._log_message("Starting complete APT mirror source change...")
-                self._log_message("DEBUG: About to call apt_processor.process_complete_mirror_change")
-            self.app.call_from_thread(log_start)
-            
             # Use the complete processor for mirror change
             result = self.apt_processor.process_complete_mirror_change(backup_suffix)
-            
-            def log_results():
-                self._log_message("DEBUG: Mirror change completed, preparing to show APT log modal")
-                if result['modified_main']:
-                    for file in result['modified_main']:
-                        self._log_message(f"✅ Updated main config: {file}")
-                        
-                if result['modified_sources_d']:
-                    self._log_message(f"✅ Updated {len(result['modified_sources_d'])} files in sources.list.d/")
-                    for file in result['modified_sources_d']:
-                        self._log_message(f"  • {file}")
-                else:
-                    self._log_message("ℹ️  No additional Ubuntu sources found in sources.list.d/")
-                
-                self._log_message("🚀 Starting APT update in full-screen mode...")
-            
-            self.app.call_from_thread(log_results)
             
             # Show the APT update log modal through main thread
             def on_apt_update_complete(success: bool, message: str):
@@ -367,9 +319,7 @@ class MirrorConfirmationModal(ModalScreen):
             
             def show_apt_log_modal():
                 # Push the APT update log modal from main thread  
-                self._log_message("DEBUG: About to push_screen APTUpdateLogModal")
                 self.app.push_screen(APTUpdateLogModal(on_apt_update_complete))
-                self._log_message("DEBUG: push_screen called successfully")
                 # DO NOT dismiss this modal yet - let APT complete first
             
             # Call from thread to show modal in main thread
@@ -380,9 +330,6 @@ class MirrorConfirmationModal(ModalScreen):
             return True, f"Mirror configuration updated ({total_files} files). APT update started in full-screen mode."
                 
         except Exception as e:
-            def log_error():
-                self._log_message(f"❌ Error during complete mirror change: {str(e)}")
-            self.app.call_from_thread(log_error)
             return False, f"Failed to change APT mirror: {str(e)}"
     
     def _change_brew_mirror(self, backup_suffix: str) -> tuple[bool, str]:
@@ -394,15 +341,8 @@ class MirrorConfirmationModal(ModalScreen):
         try:
             if os.path.exists(config_file):
                 shutil.copy2(config_file, backup_file)
-                
-                def log_backup():
-                    self._log_message(f"Backup created: {backup_file}")
-                self.app.call_from_thread(log_backup)
             
             if os.path.exists(brew_repo):
-                def log_change():
-                    self._log_message("Changing Homebrew remote URL...")
-                self.app.call_from_thread(log_change)
                 
                 result = subprocess.run(
                     ["git", "-C", brew_repo, "remote", "set-url", "origin", self.new_source],
@@ -419,42 +359,6 @@ class MirrorConfirmationModal(ModalScreen):
                 
         except Exception as e:
             return False, f"Failed to change Homebrew mirror: {str(e)}"
-    
-    def _log_message(self, message: str) -> None:
-        """Add a message to the execution log."""
-        try:
-            log_content = self.query_one("#log-content", Static)
-            current_content = log_content.renderable
-            
-            # Get current content as string
-            if hasattr(current_content, '__str__'):
-                current_text = str(current_content)
-            else:
-                current_text = ""
-            
-            # Add timestamp
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            new_line = f"[{timestamp}] {message}"
-            
-            if current_text:
-                updated_content = current_text + "\n" + new_line
-            else:
-                updated_content = new_line
-            
-            # Keep only last 20 lines
-            lines = updated_content.split('\n')
-            if len(lines) > 20:
-                lines = lines[-20:]
-                updated_content = '\n'.join(lines)
-            
-            log_content.update(updated_content)
-            
-            # Auto-scroll to bottom
-            log_container = self.query_one("#confirmation-content", ScrollableContainer)
-            log_container.scroll_end(animate=False)
-            
-        except Exception:
-            pass
     
     def action_dismiss(self) -> None:
         """Dismiss the modal."""
