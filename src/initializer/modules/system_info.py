@@ -21,7 +21,9 @@ class SystemInfoModule:
     
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
-        self.config = config_manager.get_modules_config().get("system_info", {})
+        # Load raw configuration directly
+        modules_config = config_manager.load_config("modules")
+        self.config = modules_config.get('modules', {}).get('system_info', {})
         
     def get_distribution_info(self) -> Dict[str, str]:
         """Get Linux distribution information."""
