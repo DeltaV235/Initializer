@@ -13,6 +13,7 @@ from textual.message import Message
 from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
 from ...modules.package_manager import PackageManagerDetector
+from ...modules.app_installer import AppInstaller
 
 
 class MainMenuScreen(Screen):
@@ -21,13 +22,15 @@ class MainMenuScreen(Screen):
     BINDINGS = [
         ("1", "select_segment", "System Status"),
         ("2", "select_segment", "Package Manager"),
-        ("3", "select_segment", "Homebrew"),
-        ("4", "select_segment", "User Management"),
-        ("5", "select_segment", "Settings"),
+        ("3", "select_segment", "Application Manager"),
+        ("4", "select_segment", "Homebrew"),
+        ("5", "select_segment", "User Management"),
+        ("6", "select_segment", "Settings"),
         ("s", "select_segment", "Settings"),
         ("q", "quit", "Quit"),
         ("enter", "select_item", "Select"),
         ("tab", "switch_panel", "Switch Panel"),
+        ("a", "apply_app_changes", "Apply Changes"),
         # Vim-like navigation
         ("h", "nav_left", "Left"),
         ("j", "nav_down", "Down"),
@@ -56,10 +59,16 @@ class MainMenuScreen(Screen):
     help_cache = reactive(None)
     help_loading = reactive(False)
     
+    app_install_cache = reactive(None)
+    app_install_loading = reactive(False)
+    app_selection_state = reactive({})
+    app_focused_index = reactive(0)
+    
     # Define segments configuration
     SEGMENTS = [
         {"id": "system_info", "name": "System Status"},
         {"id": "package_manager", "name": "Package Manager"},
+        {"id": "app_install", "name": "Application Manager"},
         {"id": "homebrew", "name": "Homebrew"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},
@@ -71,6 +80,7 @@ class MainMenuScreen(Screen):
         self.app_config = config_manager.get_app_config()
         self.modules_config = config_manager.get_modules_config()
         self.system_info_module = SystemInfoModule(config_manager)
+        self.app_installer = AppInstaller(config_manager)
     
     def watch_selected_segment(self, old_value: str, new_value: str) -> None:
         """React to segment selection changes."""
@@ -115,7 +125,7 @@ class MainMenuScreen(Screen):
             
             # Help box at the bottom
             with Container(id="help-box"):
-                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | ENTER=Select | 1-5=Quick Select", classes="help-text")
+                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | ENTER=Select | 1-6=Quick Select", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -169,6 +179,10 @@ class MainMenuScreen(Screen):
                 if hasattr(self, '_pm_unique_suffix'):
                     del self._pm_unique_suffix
             
+            # Reset app install focus state when switching segments
+            if self.selected_segment != "app_install":
+                self.app_focused_index = 0
+            
             # Force a refresh to ensure widgets are fully cleared
             self.refresh()
             
@@ -179,6 +193,8 @@ class MainMenuScreen(Screen):
                 self._build_homebrew_settings(settings_container)
             elif self.selected_segment == "package_manager":
                 self._build_package_manager_settings(settings_container)
+            elif self.selected_segment == "app_install":
+                self._build_app_install_settings(settings_container)
             elif self.selected_segment == "user_management":
                 self._build_user_management_settings(settings_container)
             elif self.selected_segment == "settings":
@@ -823,6 +839,280 @@ class MainMenuScreen(Screen):
         container.mount(Static(f"Application: {help_info['app_name']} v{help_info['app_version']}", classes="version-info"))
         container.mount(Static("Framework: Rich/Textual", classes="version-info"))
     
+    def _build_app_install_settings(self, container: ScrollableContainer) -> None:
+        """Build App installation settings panel."""
+        # Check if we have cached data and not currently loading
+        if self.app_install_cache and not self.app_install_loading:
+            # Enable scrollbar for content
+            container.styles.scrollbar_size = 1
+            self._display_app_install_list(container, self.app_install_cache)
+        elif self.app_install_loading:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Show simple loading text
+            container.mount(Label("Loading...", classes="loading-text"))
+        else:
+            # Disable scrollbar when loading
+            container.styles.scrollbar_size = 0
+            # Start loading app info asynchronously
+            self.app_install_loading = True
+            container.mount(Label("Loading...", classes="loading-text"))
+            # Start the background task
+            self._load_app_install_info()
+    
+    @work(exclusive=True, thread=True)
+    async def _load_app_install_info(self) -> None:
+        """Load App installation information in background thread."""
+        try:
+            # Get all applications with their installation status
+            applications = self.app_installer.get_all_applications()
+            
+            # Initialize selection state based on current installation status
+            selection_state = {}
+            for app in applications:
+                selection_state[app.name] = app.installed
+            
+            # Update cache and loading state on main thread using call_from_thread
+            def update_ui():
+                self.app_install_cache = applications
+                self.app_selection_state = selection_state
+                self.app_install_loading = False
+                self.app_focused_index = 0
+                
+                # Refresh the panel if we're still on app_install segment
+                if self.selected_segment == "app_install":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_ui)
+                
+        except Exception as e:
+            # Handle errors on main thread
+            def update_error():
+                self.app_install_loading = False
+                self.app_install_cache = {"error": str(e)}
+                if self.selected_segment == "app_install":
+                    self.update_settings_panel()
+                    # Force refresh the UI
+                    self.refresh()
+            
+            self.app.call_from_thread(update_error)
+    
+    def _display_app_install_list(self, container: ScrollableContainer, applications) -> None:
+        """Display App installation list in the container."""
+        # Handle error case
+        if isinstance(applications, dict) and "error" in applications:
+            container.mount(Label(f"Error loading App info: {applications['error']}", classes="info-display"))
+            return
+        
+        container.mount(Label("Available Applications:", classes="section-title"))
+        container.mount(Rule())
+        
+        # Generate unique suffix to avoid ID conflicts
+        import time
+        unique_suffix = str(int(time.time() * 1000))[-6:]
+        
+        # Store unique suffix for scrolling reference
+        self._app_unique_suffix = unique_suffix
+        
+        # Display each application with checkbox
+        for i, app in enumerate(applications):
+            # Arrow indicator for current selection
+            arrow = "▶ " if i == self.app_focused_index else "  "
+            
+            # Checkbox state
+            is_selected = self.app_selection_state.get(app.name, False)
+            checkbox = "[X]" if is_selected else "[ ]"
+            
+            # Status indicator
+            status = " (Installed)" if app.installed else ""
+            
+            # Create the display text
+            app_text = f"{arrow}{checkbox} {app.name}{status}"
+            container.mount(Static(app_text, id=f"app-item-{i}-{unique_suffix}", classes="pm-item-text"))
+            
+            # Add description
+            if app.description:
+                container.mount(Static(f"     {app.description}", classes="info-display"))
+        
+        # Show changes to apply
+        container.mount(Rule())
+        self._display_pending_changes(container)
+        
+        # Add Apply button
+        container.mount(Rule())
+        changes = self._calculate_changes(applications)
+        if changes["install"] or changes["uninstall"]:
+            container.mount(Button("Apply Changes (A)", id=f"apply-app-changes-{unique_suffix}", variant="primary"))
+        else:
+            container.mount(Static("No changes to apply", classes="info-display"))
+        
+        # Help text
+        container.mount(Rule())
+        container.mount(Label("J/K=Navigate | SPACE/ENTER=Toggle | A=Apply Changes", classes="help-text"))
+    
+    def _display_pending_changes(self, container: ScrollableContainer) -> None:
+        """Display pending installation/uninstallation changes."""
+        if not self.app_install_cache:
+            return
+        
+        changes = self._calculate_changes(self.app_install_cache)
+        
+        container.mount(Label("Changes to apply:", classes="info-key"))
+        
+        if changes["install"]:
+            install_list = ", ".join(changes["install"])
+            container.mount(Static(f"• Install: {install_list}", classes="info-display"))
+        
+        if changes["uninstall"]:
+            uninstall_list = ", ".join(changes["uninstall"])
+            container.mount(Static(f"• Uninstall: {uninstall_list}", classes="info-display"))
+        
+        if not changes["install"] and not changes["uninstall"]:
+            container.mount(Static("• No changes", classes="info-display"))
+    
+    def _calculate_changes(self, applications) -> dict:
+        """Calculate what needs to be installed/uninstalled."""
+        changes = {"install": [], "uninstall": []}
+        
+        for app in applications:
+            is_selected = self.app_selection_state.get(app.name, False)
+            
+            if app.installed and not is_selected:
+                changes["uninstall"].append(app.name)
+            elif not app.installed and is_selected:
+                changes["install"].append(app.name)
+        
+        return changes
+    
+    def _navigate_app_items(self, direction: str) -> None:
+        """Navigate through app items in the app install section."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+        
+        max_index = len(self.app_install_cache) - 1
+        
+        if direction == "down" and self.app_focused_index < max_index:
+            self.app_focused_index += 1
+        elif direction == "up" and self.app_focused_index > 0:
+            self.app_focused_index -= 1
+        
+        # Update display and scroll to current item
+        self.update_settings_panel()
+        self._scroll_to_current_app(direction)
+    
+    def _scroll_to_current_app(self, direction: str = None) -> None:
+        """Scroll to ensure current app selection is visible."""
+        try:
+            scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
+            
+            # Try to find the current app item by its Static widget ID
+            if hasattr(self, '_app_unique_suffix'):
+                current_item_id = f"app-item-{self.app_focused_index}-{self._app_unique_suffix}"
+                current_item = self.query_one(f"#{current_item_id}", Static)
+                
+                # Use scroll_to_widget if available (preferred method)
+                if hasattr(scrollable_container, 'scroll_to_widget'):
+                    scrollable_container.scroll_to_widget(current_item, animate=True, speed=60, center=True)
+                    return
+            
+        except Exception:
+            pass
+        
+        # Fallback: manual scrolling calculation
+        try:
+            scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
+            
+            # Calculate the position of the current app item
+            # Each app item consists of: app line + description line = ~2 lines
+            # Plus header (3 lines) and rules
+            header_height = 3  # "Available Applications:" + Rule
+            app_item_height = 2  # App line + description
+            current_position = header_height + (self.app_focused_index * app_item_height)
+            
+            # Get container dimensions
+            container_height = scrollable_container.size.height
+            current_scroll = scrollable_container.scroll_y
+            
+            # Scroll if current item is not visible
+            if current_position < current_scroll:
+                # Item is above visible area - scroll up
+                scrollable_container.scroll_y = max(0, current_position - 1)
+            elif current_position >= current_scroll + container_height - 2:
+                # Item is below visible area - scroll down
+                scrollable_container.scroll_y = current_position - container_height + 3
+                    
+        except Exception:
+            # Final fallback: simple scroll by direction
+            if direction:
+                try:
+                    scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
+                    if direction == "down":
+                        scrollable_container.scroll_down(animate=True)
+                    else:
+                        scrollable_container.scroll_up(animate=True)
+                except:
+                    pass
+    
+    def _toggle_current_app(self) -> None:
+        """Toggle the selection state of the currently focused app."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+        
+        if 0 <= self.app_focused_index < len(self.app_install_cache):
+            app = self.app_install_cache[self.app_focused_index]
+            # Toggle the selection state
+            current_state = self.app_selection_state.get(app.name, False)
+            self.app_selection_state[app.name] = not current_state
+            
+            # Update display
+            self.update_settings_panel()
+    
+    def action_apply_app_changes(self) -> None:
+        """Apply the selected app installation changes."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+        
+        changes = self._calculate_changes(self.app_install_cache)
+        
+        if not changes["install"] and not changes["uninstall"]:
+            self._show_message("No changes to apply")
+            return
+        
+        # Prepare actions list
+        actions = []
+        for app in self.app_install_cache:
+            is_selected = self.app_selection_state.get(app.name, False)
+            
+            if app.installed and not is_selected:
+                actions.append({
+                    "action": "uninstall",
+                    "application": app
+                })
+            elif not app.installed and is_selected:
+                actions.append({
+                    "action": "install",
+                    "application": app
+                })
+        
+        if actions:
+            # Show confirmation modal
+            from .app_install_confirmation_modal import AppInstallConfirmationModal
+            
+            def on_confirmation(confirmed: bool):
+                if confirmed:
+                    # Show progress modal
+                    from .app_install_progress_modal import AppInstallProgressModal
+                    self.app.push_screen(AppInstallProgressModal(actions, self.app_installer))
+                    # Refresh the app list after installation
+                    self.app_install_cache = None
+                    self.app_install_loading = False
+                    self.update_settings_panel()
+            
+            modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
+            self.app.push_screen(modal)
+    
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
         """Build Homebrew settings panel."""
         # Check if we have cached data and not currently loading
@@ -1042,6 +1332,7 @@ class MainMenuScreen(Screen):
             title_map = {
                 "system_info": "System Status",
                 "package_manager": "Package Manager",
+                "app_install": "Application Manager",
                 "homebrew": "Homebrew",
                 "user_management": "User Management", 
                 "settings": "Settings",
@@ -1233,6 +1524,9 @@ class MainMenuScreen(Screen):
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                 # Navigate through package manager items
                 self._navigate_pm_items("down")
+            elif self.selected_segment == "app_install":
+                # Navigate through app items
+                self._navigate_app_items("down")
             else:
                 # Scroll down in other sections
                 try:
@@ -1258,6 +1552,9 @@ class MainMenuScreen(Screen):
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                 # Navigate through package manager items
                 self._navigate_pm_items("up")
+            elif self.selected_segment == "app_install":
+                # Navigate through app items
+                self._navigate_app_items("up")
             else:
                 # Scroll up in other sections
                 try:
@@ -1375,6 +1672,11 @@ class MainMenuScreen(Screen):
         # Check if we're in package manager section with focused items
         if self.selected_segment == "package_manager" and hasattr(self, '_pm_focused_item') and self._pm_focused_item:
             self._handle_pm_item_selection()
+            return
+        
+        # Check if we're in app install section
+        if self.selected_segment == "app_install":
+            self._toggle_current_app()
             return
         
         if focused and hasattr(focused, 'press'):
