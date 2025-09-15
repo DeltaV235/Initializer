@@ -19,7 +19,7 @@ from .apt_update_log_modal import APTUpdateLogModal
 
 class MirrorConfirmationModal(ModalScreen):
     """Modal screen for confirming mirror source change."""
-    
+
     BINDINGS = [
         ("escape", "cancel_operation", "Cancel"),
         ("enter", "confirm_change", "Confirm"),
@@ -32,6 +32,106 @@ class MirrorConfirmationModal(ModalScreen):
         ("pagedown", "scroll_page_down", "Page Down"),
         ("pageup", "scroll_page_up", "Page Up"),
     ]
+
+    # CSS styles for the modal
+    CSS = """
+    MirrorConfirmationModal {
+        align: center middle;
+    }
+
+    #confirmation-container {
+        width: 85%;
+        min-width: 60;
+        max-width: 120;
+        height: 50;
+        max-height: 85%;
+        background: $surface;
+        border: round #7dd3fc;
+        padding: 1 1 1 1;
+        layout: vertical;
+    }
+
+    #confirmation-content {
+        height: 1fr;
+        overflow-y: auto;
+        padding: 0 1;
+        scrollbar-size: 1 1;
+    }
+
+    .warning-title {
+        color: #f59e0b;
+        text-style: bold;
+        text-align: center;
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    .info-key {
+        margin: 1 0 0 0;
+        color: #7dd3fc;
+    }
+
+    .current-source {
+        height: auto;
+        min-height: 1;
+        color: $text-muted;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .new-source {
+        height: auto;
+        min-height: 1;
+        color: #22c55e;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .file-item {
+        height: auto;
+        min-height: 1;
+        color: $text;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .backup-info {
+        height: auto;
+        min-height: 1;
+        color: $text-muted;
+        text-style: dim;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .section-divider {
+        height: 1;
+        color: #7dd3fc;
+        margin: 0;
+    }
+
+    .help-text {
+        text-align: center;
+        color: $text-muted;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
+    }
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
+    }
+    """
     
     def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None):
         super().__init__()
@@ -160,9 +260,9 @@ class MirrorConfirmationModal(ModalScreen):
                 elif self.package_manager.name == "apk":
                     yield Static(f"  • repositories.bak_{backup_suffix}", classes="backup-info")
             
-            # Fixed action help at the bottom - single line format like main menu
-            with Container(id="confirmation-actions"):
-                yield Static("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
+            # Fixed action help at the bottom - mimic main menu style exactly
+            with Container(id="help-box"):
+                yield Label("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
     
     
     def on_mount(self) -> None:

@@ -631,16 +631,6 @@ ModalScreen > #confirmation-container {
     min-height: 5;
 }
 
-#confirmation-actions {
-    dock: bottom;
-    height: 3;
-    width: 100%;
-    margin-top: 1;
-    background: $surface;
-    border: round white;
-    padding: 0 1;
-}
-
 /* Rule/divider styles */
 Rule {
     color: #7dd3fc;

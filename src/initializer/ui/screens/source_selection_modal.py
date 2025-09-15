@@ -28,11 +28,11 @@ class SourceSelectionModal(ModalScreen):
         width: 85%;
         min-width: 60;
         max-width: 120;
-        height: auto;
+        height: 50;
         max-height: 85%;
         background: $surface;
         border: round #7dd3fc;
-        padding: 1 1 0 1;
+        padding: 1 1 1 1;
         layout: vertical;
     }
     
@@ -107,15 +107,15 @@ class SourceSelectionModal(ModalScreen):
         background: $surface;
         text-style: none;
     }
-    
-    #help-container {
-        height: 2;
-        min-height: 2;
-        max-height: 2;
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
         background: $surface;
-        layout: vertical;
+        padding: 0 1;
         margin: 0;
-        padding: 0 0 0 0;
     }
     
     .bottom-spacer {
@@ -244,9 +244,8 @@ class SourceSelectionModal(ModalScreen):
                             text = f"{arrow}{name.title()}: {display_url}"
                             yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
             
-            # Bottom shortcuts area - with rule and minimal margin
-            with Container(id="help-container"):
-                yield Rule()
+            # Bottom shortcuts area - mimic main menu style exactly
+            with Container(id="help-box"):
                 yield Label("J/K=Up/Down | ENTER=Select | ESC=Cancel", classes="help-text")
     
     def _update_mirror_display(self) -> None:
