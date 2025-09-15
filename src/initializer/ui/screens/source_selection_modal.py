@@ -42,7 +42,14 @@ class SourceSelectionModal(ModalScreen):
         padding: 0 1;
         background: $surface;
     }
-    
+
+    #available-sources-header {
+        height: auto;
+        min-height: 1;
+        padding: 0 1;
+        background: $surface;
+    }
+
     #modal-content {
         height: 1fr;
         overflow-y: auto;
@@ -135,29 +142,63 @@ class SourceSelectionModal(ModalScreen):
         self.callback = callback
         self.detector = PackageManagerDetector(config_manager)
         self.available_mirrors = self.detector.get_available_mirrors(package_manager.name)
-        
+
         # State management
         self.mirror_list = []  # List of (name, url, is_current) tuples
         self.selected_index = 0  # Currently selected mirror index (only selectable mirrors)
-        
+
         # Prepare mirror list
         current_source_url = (self.package_manager.current_source or "").strip().rstrip('/')
+
         if self.available_mirrors:
             for name, url in self.available_mirrors.items():
-                is_current = url.strip().rstrip('/') == current_source_url
+                # More robust URL comparison
+                is_current = self._urls_match(url, current_source_url)
                 self.mirror_list.append((name, url, is_current))
-            
+
             # Set initial selected_index to first non-current item
             self.selected_index = 0
             for i, (_, _, is_current) in enumerate(self.mirror_list):
                 if not is_current:
                     self.selected_index = i
                     break
-            
+
             # If no non-current item found, default to first item
             if self.selected_index >= len(self.mirror_list):
                 self.selected_index = 0
-    
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for comparison."""
+        if not url:
+            return ""
+        # Remove protocol, trailing slashes, and standardize
+        normalized = url.strip().rstrip('/')
+        # Remove common protocols
+        for protocol in ['https://', 'http://', 'ftp://']:
+            if normalized.startswith(protocol):
+                normalized = normalized[len(protocol):]
+                break
+        return normalized.lower()
+
+    def _urls_match(self, url1: str, url2: str) -> bool:
+        """Check if two URLs represent the same mirror source."""
+        if not url1 or not url2:
+            return False
+
+        norm1 = self._normalize_url(url1)
+        norm2 = self._normalize_url(url2)
+
+        # Direct match
+        if norm1 == norm2:
+            return True
+
+        # Check if one is contained in the other (handle subpaths)
+        if norm1 and norm2:
+            if norm1.startswith(norm2) or norm2.startswith(norm1):
+                return True
+
+        return False
+
     def on_mount(self) -> None:
         """Initialize the screen."""
         try:
@@ -212,12 +253,12 @@ class SourceSelectionModal(ModalScreen):
         with Container(id="modal-container"):
             yield Static(f"Select Mirror Source for {self.package_manager.name.upper()}", id="modal-title")
             yield Rule()
-            
+
             # Fixed Current Source Section (outside of scrollable area)
             if self.mirror_list:
                 current_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if is_current]
                 selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
-                
+
                 if current_sources:
                     with Container(id="current-source-container"):
                         yield Label("Current Source:", classes="info-key")
@@ -227,11 +268,12 @@ class SourceSelectionModal(ModalScreen):
                                 display_url = display_url[:57] + "..."
                             text = f"  {name.title()}: {display_url}"
                             yield Static(text, id=f"current-source-{i}", classes="current-source-display")
-                    
+
                     yield Rule(classes="section-divider")
-                
+
                 # Scrollable Available Sources Section
-                yield Label("Available Sources:", classes="info-key")
+                with Container(id="available-sources-header"):
+                    yield Label("Available Sources:", classes="info-key")
                 with VerticalScroll(id="modal-content"):
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
