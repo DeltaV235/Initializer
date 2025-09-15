@@ -7,27 +7,30 @@
 reset_terminal() {
     # Exit alternate screen buffer
     printf '\033[?1049l'
-    
+
     # Disable all mouse tracking modes
     printf '\033[?1000l'  # Basic mouse tracking
     printf '\033[?1002l'  # Cell motion tracking
     printf '\033[?1003l'  # All motion tracking
     printf '\033[?1006l'  # SGR extended mode
     printf '\033[?1015l'  # URXVT mode
-    
+
     # Disable other features
     printf '\033[?1004l'  # Focus tracking
     printf '\033[?2004l'  # Bracketed paste mode
-    
+
     # Show cursor
     printf '\033[?25h'
-    
+
     # Reset colors and attributes
     printf '\033[0m'
-    
+
     # Clear any remaining escape sequences
     printf '\033c'
-    
+
+    # Reset terminal to sane state (restore echo and input)
+    stty sane </dev/tty >/dev/null 2>&1 || true
+
     # Ensure changes are flushed
     tput sgr0 2>/dev/null || true
 }

@@ -26,6 +26,9 @@ fi
 # Activate virtual environment
 source "$VENV_NAME/bin/activate"
 
+# Set environment variable to indicate script-based execution
+export RUN_VIA_SCRIPT=1
+
 # Run the application
 python main.py "$@"
 EXIT_CODE=$?

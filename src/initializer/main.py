@@ -20,11 +20,55 @@ console = Console()
 
 
 def cleanup_terminal():
-    """Clean up terminal state on exit."""
+    """Clean up terminal state on exit - comprehensive reset matching reset-terminal.sh."""
     try:
-        # Reset alternate screen buffer and disable mouse tracking
-        sys.stdout.write('\033[?1049l\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l\033[?25h')
+        # Exit alternate screen buffer
+        sys.stdout.write('\033[?1049l')
+
+        # Disable all mouse tracking modes
+        sys.stdout.write('\033[?1000l')  # Basic mouse tracking
+        sys.stdout.write('\033[?1002l')  # Cell motion tracking
+        sys.stdout.write('\033[?1003l')  # All motion tracking
+        sys.stdout.write('\033[?1006l')  # SGR extended mode
+        sys.stdout.write('\033[?1015l')  # URXVT mode
+
+        # Disable other features
+        sys.stdout.write('\033[?1004l')  # Focus tracking
+        sys.stdout.write('\033[?2004l')  # Bracketed paste mode
+
+        # Show cursor
+        sys.stdout.write('\033[?25h')
+
+        # Reset colors and attributes
+        sys.stdout.write('\033[0m')
+
+        # Clear any remaining escape sequences
+        sys.stdout.write('\033c')
+
+        # Ensure changes are flushed
         sys.stdout.flush()
+
+        # Critical: Reset terminal to sane state - restore echo and proper input
+        import subprocess
+        try:
+            # Use /dev/tty to ensure we're operating on the actual terminal
+            with open('/dev/tty', 'w') as tty:
+                subprocess.run(['stty', 'sane'], check=False, timeout=1, stdin=tty, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired, OSError):
+            pass
+
+        # Additional reset using tput if available
+        try:
+            subprocess.run(['tput', 'sgr0'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            pass
+
+        # Final reset attempt with direct terminal command
+        try:
+            subprocess.run(['reset'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            pass
+
     except Exception:
         pass
 
