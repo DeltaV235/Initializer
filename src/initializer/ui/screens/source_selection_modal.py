@@ -31,7 +31,7 @@ class SourceSelectionModal(ModalScreen):
         height: auto;
         max-height: 85%;
         background: $surface;
-        border: solid $primary;
+        border: round #7dd3fc;
         padding: 1 1 0 1;
         layout: vertical;
     }
@@ -52,13 +52,13 @@ class SourceSelectionModal(ModalScreen):
     
     .section-divider {
         height: 1;
-        color: $primary;
+        color: #7dd3fc;
         margin: 0;
     }
     
     .info-key {
         margin: 1 0 0 0;
-        color: $text;
+        color: #7dd3fc;
     }
     
     .current-mirror-item {

@@ -32,7 +32,7 @@ class InstallationProgressModal(ModalScreen):
         width: 90%;
         height: 80%;
         background: $surface;
-        border: solid $primary;
+        border: round #7dd3fc;
         padding: 1;
         layout: vertical;
     }
@@ -78,7 +78,7 @@ class InstallationProgressModal(ModalScreen):
     
     #log-container {
         height: 1fr;
-        border: solid $primary;
+        border: round #7dd3fc;
         padding: 1;
         margin: 0 0 1 0;
     }

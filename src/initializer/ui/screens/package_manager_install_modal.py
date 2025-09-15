@@ -31,7 +31,7 @@ class PackageManagerInstallModal(ModalScreen):
         height: 80%;
         max-height: 30;
         background: $surface;
-        border: solid $primary;
+        border: round #7dd3fc;
         padding: 1;
         layout: vertical;
     }
@@ -44,7 +44,7 @@ class PackageManagerInstallModal(ModalScreen):
     
     .info-key {
         margin: 1 0 0 0;
-        color: $text;
+        color: #7dd3fc;
     }
     
     #pm-list {

@@ -66,7 +66,7 @@ class InstallationConfirmationModal(ModalScreen):
         margin: 0 0 0 2;
         padding: 1;
         background: $boost;
-        border: solid $primary;
+        border: round #7dd3fc;
         color: $text;
     }
     

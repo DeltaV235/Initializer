@@ -25,7 +25,7 @@ class APTUpdateLogModal(ModalScreen):
         width: 95%;
         height: 95%;
         background: $surface;
-        border: solid $primary;
+        border: round #7dd3fc;
         padding: 1;
         layout: vertical;
     }

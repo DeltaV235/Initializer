@@ -539,7 +539,7 @@ class MainMenuScreen(Screen):
             pm_item = self.query_one(f"#pm-manager-item-{self._pm_unique_suffix}", Static)
             if hasattr(self, '_primary_pm') and self._primary_pm:
                 if self._pm_focused_item == "manager":
-                    pm_item.update(f"▶ {self._primary_pm.name.upper()}")
+                    pm_item.update(f"[#7dd3fc]▶[/#7dd3fc] {self._primary_pm.name.upper()}")
                 else:
                     pm_item.update(f"  {self._primary_pm.name.upper()}")
         except:
@@ -553,7 +553,7 @@ class MainMenuScreen(Screen):
                 if len(source) > 60:
                     source = source[:57] + "..."
                 if self._pm_focused_item == "source":
-                    source_item.update(f"▶ {source}")
+                    source_item.update(f"[#7dd3fc]▶[/#7dd3fc] {source}")
                 else:
                     source_item.update(f"  {source}")
         except:
@@ -919,7 +919,7 @@ class MainMenuScreen(Screen):
         # Display each application with checkbox
         for i, app in enumerate(applications):
             # Arrow indicator for current selection
-            arrow = "▶ " if i == self.app_focused_index else "  "
+            arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
             
             # Checkbox state
             is_selected = self.app_selection_state.get(app.name, False)
@@ -1312,7 +1312,7 @@ class MainMenuScreen(Screen):
                 segment_number = next(i+1 for i, s in enumerate(self.SEGMENTS) if s['id'] == segment['id'])
                 if segment['id'] == selected_id and show_arrow:
                     # Use arrow in the reserved space (first 2 characters)
-                    button.label = f"▶ {segment_number}. {segment['name']}"
+                    button.label = f"[#7dd3fc]▶[/#7dd3fc] {segment_number}. {segment['name']}"
                     button.add_class("selected")
                 else:
                     # Keep the reserved space with spaces

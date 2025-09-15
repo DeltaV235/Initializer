@@ -36,12 +36,12 @@ class PackageManagerScreen(Screen):
     }
     
     .panel {
-        border: solid $primary-lighten-2;
+        border: round white;
         padding: 0 1;
     }
     
     .panel:focus-within {
-        border: solid $primary;
+        border: round #7dd3fc;
     }
     
     .panel-title {
@@ -57,13 +57,13 @@ class PackageManagerScreen(Screen):
     
     .info-key {
         text-style: bold;
-        color: $text;
+        color: #7dd3fc;
         margin: 1 0 0 0;
     }
     
     .section-title {
         text-style: bold;
-        color: $primary;
+        color: white;
         margin: 0 0 0 0;
     }
     
