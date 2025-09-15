@@ -467,8 +467,8 @@ DataTable > .datatable--even-row {
 /* Package Manager Item Text Styles */
 .pm-item-text {
     width: 100%;
-    height: 2;
-    margin: 1 0;
+    height: 1;
+    margin: 0 0;
     padding: 0 1;
     color: $text;
     background: transparent;
@@ -644,6 +644,7 @@ ModalScreen > #confirmation-container {
 /* Rule/divider styles */
 Rule {
     color: #7dd3fc;
+    margin: 1 0;
 }
 
 .confirm-focused {
