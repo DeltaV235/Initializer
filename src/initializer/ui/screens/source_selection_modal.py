@@ -40,6 +40,7 @@ class SourceSelectionModal(ModalScreen):
         height: auto;
         min-height: 1;
         padding: 0 1;
+        margin: 0 0 1 0;
         background: $surface;
     }
 
@@ -50,24 +51,24 @@ class SourceSelectionModal(ModalScreen):
         background: $surface;
     }
 
-    #modal-content {
-        height: 1fr;
-        overflow-y: auto;
+    #mirror-list {
+        height: auto;
+        min-height: 1;
+        margin: 0 0 1 0;
         padding: 0 1;
-        scrollbar-size: 1 1;
     }
-    
+
     .section-divider {
         height: 1;
         color: #7dd3fc;
         margin: 0;
     }
-    
+
     .info-key {
         margin: 1 0 0 0;
         color: #7dd3fc;
     }
-    
+
     .current-mirror-item {
         height: auto;
         min-height: 1;
@@ -75,11 +76,11 @@ class SourceSelectionModal(ModalScreen):
         text-style: dim;
         background: transparent;
     }
-    
+
     .current-mirror-item:hover {
         background: transparent;
     }
-    
+
     .current-source-display {
         height: auto;
         min-height: 1;
@@ -87,13 +88,7 @@ class SourceSelectionModal(ModalScreen):
         background: $surface;
         margin: 0 0 0 1;
     }
-    
-    #mirror-list {
-        height: auto;
-        min-height: 1;
-        margin: 0 0 1 0;
-    }
-    
+
     .mirror-item {
         height: auto;
         min-height: 1;
@@ -252,7 +247,7 @@ class SourceSelectionModal(ModalScreen):
         """Compose the modal interface."""
         with Container(id="modal-container"):
             yield Static(f"Select Mirror Source for {self.package_manager.name.upper()}", id="modal-title")
-            yield Rule()
+            yield Rule(classes="section-divider")
 
             # Fixed Current Source Section (outside of scrollable area)
             if self.mirror_list:
@@ -274,7 +269,6 @@ class SourceSelectionModal(ModalScreen):
                 # Scrollable Available Sources Section
                 with Container(id="available-sources-header"):
                     yield Label("Available Sources:", classes="info-key")
-                with VerticalScroll(id="modal-content"):
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
                         for i, name, url in selectable_sources:
