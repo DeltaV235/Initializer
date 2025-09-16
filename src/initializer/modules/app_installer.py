@@ -2,7 +2,7 @@
 
 import subprocess
 import shutil
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from pathlib import Path
 from ..utils.log_manager import InstallationLogManager, LogLevel
@@ -174,6 +174,10 @@ class AppInstaller:
                     yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True, indent=2)
 
             return True
+
+        except Exception as e:
+            print(f"清理安装状态失败: {str(e)}")
+            return False
 
     def analyze_error_and_suggest_solution(self, error_output: str, command: str, app_name: str) -> str:
         """Analyze error output and provide user-friendly solutions.

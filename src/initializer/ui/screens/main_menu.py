@@ -182,6 +182,7 @@ class MainMenuScreen(Screen):
             # Reset app install focus state when switching segments
             if self.selected_segment != "app_install":
                 self.app_focused_index = 0
+                self._app_focus_initialized = False
             
             # Force a refresh to ensure widgets are fully cleared
             self.refresh()
@@ -990,17 +991,54 @@ class MainMenuScreen(Screen):
         """Navigate through app items in the app install section."""
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
-        
+
         max_index = len(self.app_install_cache) - 1
-        
+
         if direction == "down" and self.app_focused_index < max_index:
             self.app_focused_index += 1
         elif direction == "up" and self.app_focused_index > 0:
             self.app_focused_index -= 1
-        
-        # Update display and scroll to current item
-        self.update_settings_panel()
+
+        # Only update focus indicators instead of full panel refresh
+        self._update_app_focus_indicators()
         self._scroll_to_current_app(direction)
+
+    def _update_app_focus_indicators(self) -> None:
+        """Update arrow indicators for app items without full refresh."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+
+        if not hasattr(self, '_app_unique_suffix'):
+            return
+
+        # Update all app items
+        try:
+            for i, app in enumerate(self.app_install_cache):
+                item_id = f"app-item-{i}-{self._app_unique_suffix}"
+                try:
+                    item_widget = self.query_one(f"#{item_id}", Static)
+
+                    # Arrow indicator for current selection
+                    arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
+
+                    # Checkbox state
+                    is_selected = self.app_selection_state.get(app.name, False)
+                    checkbox = "[X]" if is_selected else "[ ]"
+
+                    # Status indicator
+                    status = " (Installed)" if app.installed else ""
+
+                    # Create the display text
+                    app_text = f"{arrow}{checkbox} {app.name}{status}"
+
+                    # Update the widget text
+                    item_widget.update(app_text)
+                except:
+                    # If we can't find the specific item, skip it
+                    pass
+        except:
+            # If we can't update indicators, fall back to full refresh
+            self.update_settings_panel()
     
     def _scroll_to_current_app(self, direction: str = None) -> None:
         """Scroll to ensure current app selection is visible."""
@@ -1059,15 +1097,44 @@ class MainMenuScreen(Screen):
         """Toggle the selection state of the currently focused app."""
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
-        
+
         if 0 <= self.app_focused_index < len(self.app_install_cache):
             app = self.app_install_cache[self.app_focused_index]
             # Toggle the selection state
             current_state = self.app_selection_state.get(app.name, False)
             self.app_selection_state[app.name] = not current_state
-            
-            # Update display
-            self.update_settings_panel()
+
+            # Only update focus indicators and pending changes instead of full refresh
+            self._update_app_focus_indicators()
+            self._update_pending_changes_display()
+
+    def _update_pending_changes_display(self) -> None:
+        """Update pending changes display without full refresh."""
+        # For now, use a lightweight approach - just update the apply button state
+        if not hasattr(self, '_app_unique_suffix'):
+            return
+
+        try:
+            # Try to update the apply button
+            changes = self._calculate_changes(self.app_install_cache)
+            button_id = f"apply-app-changes-{self._app_unique_suffix}"
+
+            # Try to find the apply button and update its state
+            try:
+                apply_button = self.query_one(f"#{button_id}", Button)
+                if changes["install"] or changes["uninstall"]:
+                    apply_button.label = "Apply Changes (A)"
+                    apply_button.disabled = False
+                else:
+                    apply_button.label = "No Changes to Apply"
+                    apply_button.disabled = True
+            except:
+                # If we can't find the button, it might be in a different state
+                pass
+        except:
+            # If updating individual elements fails, this is okay -
+            # the changes will be visible when the user tries to apply
+            pass
     
     def action_apply_app_changes(self) -> None:
         """Apply the selected app installation changes."""
@@ -1445,6 +1512,15 @@ class MainMenuScreen(Screen):
                     self._pm_focused_item = "manager"
                     # Clear left arrows and show right arrows
                     self._update_pm_focus_indicators(clear_left_arrows=True)
+                elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
+                    # Initialize app focus when switching to right panel
+                    if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
+                        self.app_focused_index = 0
+                        self._app_focus_initialized = True
+                    # Update focus indicators
+                    self._update_app_focus_indicators()
+                    # Clear left arrows
+                    self._update_segment_buttons(self.selected_segment, show_arrow=False)
                 else:
                     # Clear left panel arrows for other sections
                     self._update_segment_buttons(self.selected_segment, show_arrow=False)
@@ -1577,6 +1653,15 @@ class MainMenuScreen(Screen):
                 self._pm_focused_item = "manager"
                 # Clear left arrows and show right arrows
                 self._update_pm_focus_indicators(clear_left_arrows=True)
+            elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
+                # Initialize app focus when switching to right panel
+                if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
+                    self.app_focused_index = 0
+                    self._app_focus_initialized = True
+                # Update focus indicators
+                self._update_app_focus_indicators()
+                # Clear left arrows
+                self._update_segment_buttons(self.selected_segment, show_arrow=False)
             else:
                 # Clear left panel arrows for other sections
                 self._update_segment_buttons(self.selected_segment, show_arrow=False)
