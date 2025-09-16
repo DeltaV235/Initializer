@@ -47,7 +47,7 @@ class MirrorConfirmationModal(ModalScreen):
         max-height: 85%;
         background: $surface;
         border: round #7dd3fc;
-        padding: 1 1 1 1;
+        padding: 1 1 0 1;
         layout: vertical;
     }
 
