@@ -54,13 +54,7 @@ class PackageManagerScreen(Screen):
         padding: 0 1;
         margin: 0 0 1 0;
     }
-    
-    .info-key {
-        text-style: bold;
-        color: #7dd3fc;
-        margin: 1 0 0 0;
-    }
-    
+
     .section-title {
         text-style: bold;
         color: white;
@@ -207,7 +201,7 @@ class PackageManagerScreen(Screen):
                     return
                 
                 # Display label for installed package managers with minimal spacing
-                pm_list_container.mount(Label("Installed Package Managers:", classes="info-key"))
+                pm_list_container.mount(Label("Installed Package Managers:", classes="section-header"))
                 
                 # Display each installed package manager
                 for i, pm in enumerate(self.package_managers):
@@ -296,7 +290,7 @@ class PackageManagerScreen(Screen):
                 # Show info about package manager installation
                 source_list_container.mount(Label("Package Manager Installation", classes="section-title"))
                 source_list_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
-                source_list_container.mount(Label("Available Actions:", classes="info-key"))
+                source_list_container.mount(Label("Available Actions:", classes="section-header"))
                 source_list_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
                 source_list_container.mount(Static("• Uninstall existing package managers"))
                 source_list_container.mount(Static("• View installation status"))
@@ -307,7 +301,7 @@ class PackageManagerScreen(Screen):
                 source_list_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
                 
                 # Show current source
-                source_list_container.mount(Label("Current Source:", classes="info-key"))
+                source_list_container.mount(Label("Current Source:", classes="section-header"))
                 if pm.current_source:
                     source_list_container.mount(Static(pm.current_source, classes="current-source-display"))
                 else:

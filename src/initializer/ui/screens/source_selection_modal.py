@@ -23,19 +23,7 @@ class SourceSelectionModal(ModalScreen):
     SourceSelectionModal {
         align: center middle;
     }
-    
-    #modal-container {
-        width: 85%;
-        min-width: 60;
-        max-width: 120;
-        height: 50;
-        max-height: 85%;
-        background: $surface;
-        border: round #7dd3fc;
-        padding: 1 1 0 1;
-        layout: vertical;
-    }
-    
+
     #current-source-container {
         height: auto;
         min-height: 1;
@@ -55,18 +43,12 @@ class SourceSelectionModal(ModalScreen):
         height: auto;
         min-height: 1;
         margin: 0 0 1 0;
-        padding: 0 1;
     }
 
     .section-divider {
         height: 1;
         color: #7dd3fc;
         margin: 0;
-    }
-
-    .info-key {
-        margin: 1 0 0 0;
-        color: #7dd3fc;
     }
 
     .current-mirror-item {
@@ -245,7 +227,7 @@ class SourceSelectionModal(ModalScreen):
         
     def compose(self) -> ComposeResult:
         """Compose the modal interface."""
-        with Container(id="modal-container"):
+        with Container(classes="modal-container-xs"):
             yield Static(f"Select Mirror Source for {self.package_manager.name.upper()}", id="modal-title")
             yield Rule(classes="section-divider")
 
@@ -256,7 +238,7 @@ class SourceSelectionModal(ModalScreen):
 
                 if current_sources:
                     with Container(id="current-source-container"):
-                        yield Label("Current Source:", classes="info-key")
+                        yield Label("Current Source:", classes="section-header")
                         for i, name, url in current_sources:
                             display_url = url
                             if len(display_url) > 60:
@@ -268,7 +250,7 @@ class SourceSelectionModal(ModalScreen):
 
                 # Scrollable Available Sources Section
                 with Container(id="available-sources-header"):
-                    yield Label("Available Sources:", classes="info-key")
+                    yield Label("Available Sources:", classes="section-header")
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
                         for i, name, url in selectable_sources:

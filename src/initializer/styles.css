@@ -155,10 +155,10 @@ Screen {
     margin: 0;
 }
 
-.info-key {
+.section-header {
     color: #7dd3fc;
     text-style: bold;
-    margin-top: 0;
+    margin: 1 0 1 0;
 }
 
 .info-value {

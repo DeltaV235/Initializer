@@ -41,12 +41,7 @@ class PackageManagerInstallModal(ModalScreen):
         overflow-y: auto;
         padding: 0 1;
     }
-    
-    .info-key {
-        margin: 1 0 0 0;
-        color: #7dd3fc;
-    }
-    
+
     #pm-list {
         height: auto;
         min-height: 1;
@@ -165,7 +160,7 @@ class PackageManagerInstallModal(ModalScreen):
             yield Rule()
             
             with ScrollableContainer(id="modal-content"):
-                yield Label("Available Package Managers:", classes="info-key")
+                yield Label("Available Package Managers:", classes="section-header")
                 with Vertical(id="pm-list"):
                     for i, pm in enumerate(self.installable_pms):
                         with Horizontal(id=f"pm-item-{i}", classes="pm-item"):

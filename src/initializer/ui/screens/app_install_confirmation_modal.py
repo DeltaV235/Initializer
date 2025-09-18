@@ -183,7 +183,7 @@ class AppInstallConfirmationModal(ModalScreen):
                 # Summary
                 yield Static("")  # Spacer
                 yield Label(f"总计: {len(install_actions)} 个安装, {len(uninstall_actions)} 个卸载", 
-                          classes="info-key")
+                          classes="section-header")
             
             yield Rule()
             

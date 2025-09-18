@@ -39,18 +39,6 @@ class MirrorConfirmationModal(ModalScreen):
         align: center middle;
     }
 
-    #confirmation-container {
-        width: 85%;
-        min-width: 60;
-        max-width: 120;
-        height: 50;
-        max-height: 85%;
-        background: $surface;
-        border: round #7dd3fc;
-        padding: 1 1 0 1;
-        layout: vertical;
-    }
-
     #confirmation-content {
         height: 1fr;
         overflow-y: auto;
@@ -64,11 +52,6 @@ class MirrorConfirmationModal(ModalScreen):
         text-align: center;
         height: auto;
         margin: 0 0 1 0;
-    }
-
-    .info-key {
-        margin: 1 0 0 0;
-        color: #7dd3fc;
     }
 
     .current-source {
@@ -186,7 +169,7 @@ class MirrorConfirmationModal(ModalScreen):
     
     def compose(self) -> ComposeResult:
         """Compose the confirmation interface."""
-        with Container(id="confirmation-container"):
+        with Container(classes="modal-container-xs"):
             yield Static(f"Confirm Mirror Change - {self.package_manager.name.upper()}", id="confirmation-title")
             yield Rule()
             
@@ -196,13 +179,13 @@ class MirrorConfirmationModal(ModalScreen):
                 yield Rule()
                 
                 # Current and new source info
-                yield Label("Current Source:", classes="info-key")
+                yield Label("Current Source:", classes="section-header")
                 current = self.package_manager.current_source or "Not configured"
                 if len(current) > 80:
                     current = current[:77] + "..."
                 yield Static(f"  {current}", classes="current-source")
                 
-                yield Label("New Source:", classes="info-key")
+                yield Label("New Source:", classes="section-header")
                 new = self.new_source
                 if len(new) > 80:
                     new = new[:77] + "..."
@@ -211,14 +194,14 @@ class MirrorConfirmationModal(ModalScreen):
                 yield Rule()
                 
                 # Files to be modified
-                yield Label("Files that will be modified:", classes="info-key")
+                yield Label("Files that will be modified:", classes="section-header")
                 for file_path in self.affected_files:
                     yield Static(f"  • {file_path}", classes="file-item")
                 
                 yield Rule()
                 
                 # Backup information - simplified to show only backup filenames
-                yield Label("Files to be backed up:", classes="info-key")
+                yield Label("Files to be backed up:", classes="section-header")
                 backup_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
                 
                 # Show specific backup file examples - only filenames

@@ -236,7 +236,7 @@ class MainMenuScreen(Screen):
         
         # System & Distribution Information
         if "distribution" in all_info:
-            container.mount(Label("🖥️ System", classes="info-key"))
+            container.mount(Label("🖥️ System", classes="section-header"))
             
             dist_info = all_info["distribution"]
             if "System" in dist_info:
@@ -253,7 +253,7 @@ class MainMenuScreen(Screen):
         # CPU Information
         if "cpu" in all_info:
             container.mount(Label("", classes="info-display"))  # Spacing
-            container.mount(Label("🎯 CPU", classes="info-key"))
+            container.mount(Label("🎯 CPU", classes="section-header"))
             
             cpu_info = all_info["cpu"]
             if "CPU Count" in cpu_info:
@@ -270,7 +270,7 @@ class MainMenuScreen(Screen):
         # Memory Information  
         if "memory" in all_info:
             container.mount(Label("", classes="info-display"))  # Spacing
-            container.mount(Label("💾 Memory", classes="info-key"))
+            container.mount(Label("💾 Memory", classes="section-header"))
             
             memory_info = all_info["memory"]
             if "Total RAM" in memory_info:
@@ -287,7 +287,7 @@ class MainMenuScreen(Screen):
         # Disk Information
         if "disk" in all_info:
             container.mount(Label("", classes="info-display"))  # Spacing
-            container.mount(Label("💿 Storage", classes="info-key"))
+            container.mount(Label("💿 Storage", classes="section-header"))
             
             disk_info = all_info["disk"]
             
@@ -313,7 +313,7 @@ class MainMenuScreen(Screen):
         # Network Information
         if "network" in all_info:
             container.mount(Label("", classes="info-display"))  # Spacing
-            container.mount(Label("🌐 Network", classes="info-key"))
+            container.mount(Label("🌐 Network", classes="section-header"))
             
             network_info = all_info["network"]
             # Show network interfaces
@@ -335,7 +335,7 @@ class MainMenuScreen(Screen):
             pkg_info = all_info["package_manager"]
             if pkg_info:
                 container.mount(Label("", classes="info-display"))  # Spacing
-                container.mount(Label("📦 Package Managers", classes="info-key"))
+                container.mount(Label("📦 Package Managers", classes="section-header"))
                 
                 # Show all detected package managers and their sources
                 for pm_name, pm_status in pkg_info.items():
@@ -416,15 +416,15 @@ class MainMenuScreen(Screen):
             container.mount(Label(f"Error loading Homebrew info: {homebrew_config['error']}", classes="info-display"))
             return
         
-        container.mount(Label("► Status", classes="info-key"))
+        container.mount(Label("► Status", classes="section-header"))
         status = "Enabled" if homebrew_config.get("enabled", True) else "Disabled"
         container.mount(Static(f"{status}", classes="info-value"))
         
-        container.mount(Label("► Auto-install", classes="info-key"))
+        container.mount(Label("► Auto-install", classes="section-header"))
         auto_install = "Yes" if homebrew_config.get("auto_install", False) else "No"
         container.mount(Static(f"{auto_install}", classes="info-value"))
         
-        container.mount(Label("► Packages", classes="info-key"))
+        container.mount(Label("► Packages", classes="section-header"))
         packages = homebrew_config.get("packages", [])
         if packages:
             container.mount(Static(f"{len(packages)} packages configured", classes="info-value"))
@@ -707,15 +707,15 @@ class MainMenuScreen(Screen):
             container.mount(Label(f"Error loading User Management info: {user_config['error']}", classes="info-display"))
             return
         
-        container.mount(Label("► User Creation", classes="info-key"))
+        container.mount(Label("► User Creation", classes="section-header"))
         user_creation = "Enabled" if user_config.get("user_creation", True) else "Disabled"
         container.mount(Static(f"{user_creation}", classes="info-value"))
         
-        container.mount(Label("► SSH Key Management", classes="info-key"))
+        container.mount(Label("► SSH Key Management", classes="section-header"))
         ssh_keys = "Enabled" if user_config.get("ssh_keys", True) else "Disabled"
         container.mount(Static(f"{ssh_keys}", classes="info-value"))
         
-        container.mount(Label("► Sudo Access", classes="info-key"))
+        container.mount(Label("► Sudo Access", classes="section-header"))
         sudo_access = "Configurable" if user_config.get("sudo_management", True) else "Manual"
         container.mount(Static(f"{sudo_access}", classes="info-value"))
     
@@ -762,15 +762,15 @@ class MainMenuScreen(Screen):
             container.mount(Label(f"Error loading Settings: {settings_info['error']}", classes="info-display"))
             return
         
-        container.mount(Label("► Theme", classes="info-key"))
+        container.mount(Label("► Theme", classes="section-header"))
         current_theme = settings_info.get("theme", "default")
         container.mount(Static(f"{current_theme.title()}", classes="info-value"))
         
-        container.mount(Label("► Debug Mode", classes="info-key"))
+        container.mount(Label("► Debug Mode", classes="section-header"))
         debug_mode = "Enabled" if settings_info.get("debug", False) else "Disabled"
         container.mount(Static(f"{debug_mode}", classes="info-value"))
         
-        container.mount(Label("► Auto-save", classes="info-key"))
+        container.mount(Label("► Auto-save", classes="section-header"))
         auto_save = "Enabled" if settings_info.get("auto_save", True) else "Disabled"
         container.mount(Static(f"{auto_save}", classes="info-value"))
         
@@ -822,12 +822,12 @@ class MainMenuScreen(Screen):
             container.mount(Label(f"Error loading Help: {help_info['error']}", classes="info-display"))
             return
         
-        container.mount(Label("► Keyboard Shortcuts", classes="info-key"))
+        container.mount(Label("► Keyboard Shortcuts", classes="section-header"))
         container.mount(Static("Q=Quit | S=Settings | ?=Help", classes="help-item"))
         container.mount(Static("H/J/K/L=Navigate | ENTER=Select", classes="help-item"))
         container.mount(Static("1-5=Quick Select Segment", classes="help-item"))
         
-        container.mount(Label("► Segments", classes="info-key"))
+        container.mount(Label("► Segments", classes="section-header"))
         container.mount(Static("System Status - View system information", classes="help-item"))
         container.mount(Static("Homebrew - Manage Homebrew packages", classes="help-item"))
         container.mount(Static("Package Manager - Configure package managers", classes="help-item"))
@@ -959,7 +959,7 @@ class MainMenuScreen(Screen):
         
         changes = self._calculate_changes(self.app_install_cache)
         
-        container.mount(Label("Changes to apply:", classes="info-key"))
+        container.mount(Label("Changes to apply:", classes="section-header"))
         
         if changes["install"]:
             install_list = ", ".join(changes["install"])

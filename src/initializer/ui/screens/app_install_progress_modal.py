@@ -175,7 +175,7 @@ class AppInstallProgressModal(ModalScreen):
                 yield ProgressBar(id="main-progress", total=100)
             
             # Log output
-            yield Label("📋 安装日志:", classes="info-key")
+            yield Label("📋 安装日志:", classes="section-header")
             with Container(id="log-container"):
                 yield RichLog(id="log-output", highlight=True, markup=True, wrap=True)
             
