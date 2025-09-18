@@ -561,8 +561,8 @@ DataTable > .datatable--even-row {
     width: 55%;
     min-width: 40;
     max-width: 70;
-    height: 50;
-    max-height: 85%;
+    height: auto;
+    max-height: 85vh;
     background: $surface;
     border: round #7dd3fc;
     padding: 1 1 0 1;

@@ -39,6 +39,13 @@ class SourceSelectionModal(ModalScreen):
         background: $surface;
     }
 
+    #available-sources-scroll {
+        height: 1fr;
+        padding: 0 1;
+        background: $surface;
+        overflow-y: auto;
+    }
+
     #mirror-list {
         height: auto;
         min-height: 1;
@@ -264,7 +271,7 @@ class SourceSelectionModal(ModalScreen):
                     yield Rule(classes="section-divider")
 
                 # Scrollable Available Sources Section
-                with Container(id="available-sources-header"):
+                with VerticalScroll(id="available-sources-scroll"):
                     yield Label("Available Sources:", classes="section-header")
                     with Vertical(id="mirror-list"):
                         # Display selectable sources with arrows
