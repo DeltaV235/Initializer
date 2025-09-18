@@ -214,6 +214,23 @@ tools/reset-terminal.sh
 - Center content with `align: center middle` on containers
 - Implement keyboard-first navigation with proper focus handling
 
+#### Modal Container CSS Classes (styles.css)
+Project provides a complete modal container size system for consistent UI:
+
+| Size | Class Name | Width | Min Width | Max Width | Use Case |
+|------|------------|-------|-----------|-----------|----------|
+| Extra Large | `.modal-container-xl` | 95% | 80 | 150 | Complex forms, data tables |
+| Large | `.modal-container-lg` | 85% | 70 | 130 | Detailed settings, multi-step wizards |
+| Medium | `.modal-container-md` | 75% | 60 | 110 | Standard modals (recommended default) |
+| Compact | `.modal-container-compact` | 75% | 50 | 100 | General content (legacy compatibility) |
+| Small | `.modal-container-sm` | 65% | 45 | 85 | Medium content |
+| Small Alt | `.modal-container-small` | 65% | 45 | 85 | Medium content (alternative name) |
+| Extra Small | `.modal-container-xs` | 55% | 40 | 70 | Selection/confirmation dialogs |
+| Mini | `.modal-container-mini` | 45% | 35 | 55 | Compact prompts/alerts |
+
+**Usage**: `Container(classes="modal-container-xs")` - Select appropriate size based on content complexity.
+**Current Usage**: Source selection and confirmation modals use `modal-container-xs`.
+
 #### Performance and Memory
 - Use reactive attributes with appropriate flags (`layout`, `repaint`)
 - Implement efficient event handling with targeted selectors
@@ -317,7 +334,7 @@ tools/check-test-environment.sh --exit-code-only
 - Preset configuration system (server, desktop, minimal)
 - Automated installation and deployment scripts
 - **Environment detection tool** for Ubuntu vs non-Ubuntu execution strategy
-- **Modal dialogs** for source selection and mirror confirmation
+- **Modal dialogs** for source selection and mirror confirmation with complete size system (8 CSS classes from `modal-container-mini` to `modal-container-xl`)
 - **CLI-style UI components** with keyboard-first operation
 
 ### In Development 🚧
