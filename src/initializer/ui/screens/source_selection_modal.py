@@ -111,6 +111,18 @@ class SourceSelectionModal(ModalScreen):
         height: 1;
         background: transparent;
     }
+
+    .selection-counter {
+        text-align: left;
+        color: $text-muted;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 1;
+        padding: 0;
+        background: transparent;
+        text-style: dim;
+    }
     """
     
     def __init__(self, package_manager, callback: Callable[[str], None], config_manager=None):
@@ -181,13 +193,16 @@ class SourceSelectionModal(ModalScreen):
         try:
             # Use call_after_refresh to ensure components are rendered
             self.call_after_refresh(self._update_mirror_display)
-            
+
             # Set initial title display
             self.call_after_refresh(lambda: self._show_error(""))
-            
+
+            # Initialize selection counter
+            self.call_after_refresh(self._update_selection_counter)
+
             # Try to ensure focus with higher priority
             self.focus()
-            
+
             # Set higher priority for this screen
             if hasattr(self.app, '_screen_stack'):
                 # Ensure this modal is at the top of the screen stack
@@ -261,6 +276,9 @@ class SourceSelectionModal(ModalScreen):
                             arrow = "▶ " if is_selected else "  "
                             text = f"{arrow}{name.title()}: {display_url}"
                             yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+
+                        # Fixed selection counter directly after mirror items
+                        yield Static("", id="selection-counter", classes="selection-counter")
             
             # Bottom shortcuts area - mimic main menu style exactly
             with Container(id="help-box"):
@@ -326,31 +344,33 @@ class SourceSelectionModal(ModalScreen):
         """Navigate down in the current focus area, skipping current source."""
         if not self.mirror_list:
             return
-            
+
         # Find next selectable item
         for next_index in range(self.selected_index + 1, len(self.mirror_list)):
             _, _, is_current = self.mirror_list[next_index]
             if not is_current:
                 self.selected_index = next_index
                 # Force immediate scroll and display update
-                self._scroll_to_current()  
+                self._scroll_to_current()
                 self._update_mirror_display()
+                self._update_selection_counter()
                 self._show_error("")
                 break
-    
+
     def action_nav_up(self) -> None:
         """Navigate up in the current focus area, skipping current source."""
         if not self.mirror_list:
             return
-            
+
         # Find previous selectable item
         for prev_index in range(self.selected_index - 1, -1, -1):
             _, _, is_current = self.mirror_list[prev_index]
             if not is_current:
                 self.selected_index = prev_index
                 # Force immediate scroll and display update
-                self._scroll_to_current()  
+                self._scroll_to_current()
                 self._update_mirror_display()
+                self._update_selection_counter()
                 self._show_error("")
                 break
     
@@ -381,9 +401,33 @@ class SourceSelectionModal(ModalScreen):
             # Store original title if not already stored
             if not hasattr(self, '_original_title'):
                 self._original_title = f"Select Mirror Source for {self.package_manager.name.upper()}"
-            
-            # Show current selection info along with any message
-            if (hasattr(self, 'selected_index') and self.mirror_list and 
+
+            # Show message or original title (no more selection info in title)
+            display_message = message or self._original_title
+            title_widget.update(display_message)
+
+            # Only reset after delay if there was a message
+            if message:
+                self.set_timer(2.0, lambda: self._reset_title())
+
+        except Exception as e:
+            # Fallback to simple title
+            try:
+                title_widget = self.query_one("#modal-title", Static)
+                title_widget.update(f"Select Mirror Source for {self.package_manager.name.upper()}")
+            except:
+                pass
+
+    def _reset_title(self) -> None:
+        """Reset title to original state."""
+        self._show_error("")  # This will show just the original title
+
+    def _update_selection_counter(self) -> None:
+        """Update the selection counter display."""
+        try:
+            counter_widget = self.query_one("#selection-counter", Static)
+
+            if (hasattr(self, 'selected_index') and self.mirror_list and
                 0 <= self.selected_index < len(self.mirror_list)):
                 # Count only selectable (non-current) items
                 selectable_count = sum(1 for _, _, is_current in self.mirror_list if not is_current)
@@ -395,33 +439,18 @@ class SourceSelectionModal(ModalScreen):
                             _, _, is_current = self.mirror_list[i]
                             if not is_current:
                                 selectable_position += 1
-                    
-                    current_name = self.mirror_list[self.selected_index][0].title()
-                    display_message = f"[{selectable_position}/{selectable_count}] {current_name}"
-                    if message:
-                        display_message += f" | {message}"
-                else:
-                    display_message = message or self._original_title
-            else:
-                display_message = message or self._original_title
-                
-            title_widget.update(display_message)
-            
-            # Only reset after delay if there was a message
-            if message:
-                self.set_timer(2.0, lambda: self._reset_title())
-                
-        except Exception as e:
-            # Fallback to simple title
-            try:
-                title_widget = self.query_one("#modal-title", Static)
-                title_widget.update(f"Select Mirror Source for {self.package_manager.name.upper()}")
-            except:
-                pass
 
-    def _reset_title(self) -> None:
-        """Reset title to show current selection."""
-        self._show_error("")  # This will show just the selection info
+                    # Simple x/y format
+                    counter_text = f"{selectable_position}/{selectable_count}"
+                    counter_widget.update(counter_text)
+                else:
+                    counter_widget.update("")
+            else:
+                counter_widget.update("")
+
+        except Exception:
+            # If counter widget not found, ignore silently
+            pass
     
     def action_dismiss(self) -> None:
         """Dismiss the modal."""
