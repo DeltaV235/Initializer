@@ -39,8 +39,16 @@ class SourceSelectionModal(ModalScreen):
         background: $surface;
     }
 
+    #available-sources-container {
+        height: 1fr;
+        layout: vertical;
+        padding: 0;
+        background: $surface;
+    }
+
     #available-sources-scroll {
         height: 1fr;
+        min-height: 3;
         padding: 0 1;
         background: $surface;
         overflow-y: auto;
@@ -271,21 +279,22 @@ class SourceSelectionModal(ModalScreen):
                     yield Rule(classes="section-divider")
 
                 # Scrollable Available Sources Section
-                with VerticalScroll(id="available-sources-scroll"):
+                with Container(id="available-sources-container"):
                     yield Label("Available Sources:", classes="section-header")
-                    with Vertical(id="mirror-list"):
-                        # Display selectable sources with arrows
-                        for i, name, url in selectable_sources:
-                            display_url = url
-                            if len(display_url) > 60:
-                                display_url = display_url[:57] + "..."
-                            is_selected = (i == self.selected_index)
-                            arrow = "▶ " if is_selected else "  "
-                            text = f"{arrow}{name.title()}: {display_url}"
-                            yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
+                    with VerticalScroll(id="available-sources-scroll"):
+                        with Vertical(id="mirror-list"):
+                            # Display selectable sources with arrows
+                            for i, name, url in selectable_sources:
+                                display_url = url
+                                if len(display_url) > 60:
+                                    display_url = display_url[:57] + "..."
+                                is_selected = (i == self.selected_index)
+                                arrow = "▶ " if is_selected else "  "
+                                text = f"{arrow}{name.title()}: {display_url}"
+                                yield Static(text, id=f"mirror-item-{i}", classes="mirror-item")
 
-                        # Fixed selection counter directly after mirror items
-                        yield Static("", id="selection-counter", classes="selection-counter")
+                    # Fixed selection counter outside of scroll area
+                    yield Static("", id="selection-counter", classes="selection-counter")
             
             # Bottom shortcuts area - mimic main menu style exactly
             with Container(id="help-box"):
