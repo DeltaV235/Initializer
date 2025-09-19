@@ -245,7 +245,7 @@ class MirrorConfirmationModal(ModalScreen):
             
             # Fixed action help at the bottom - mimic main menu style exactly
             with Container(id="help-box"):
-                yield Label("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
+                yield Label("J/K=Up/Down | Enter=Confirm | Esc=Cancel", classes="help-text")
     
     
     def on_mount(self) -> None:

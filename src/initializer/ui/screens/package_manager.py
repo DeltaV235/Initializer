@@ -289,7 +289,7 @@ class PackageManagerScreen(Screen):
             if pm is None and self.left_focused_item == 0:
                 # Show info about package manager installation
                 source_list_container.mount(Label("Package Manager Installation", classes="section-title"))
-                source_list_container.mount(Static("Press ENTER to manage package manager installations.", classes="info-message"))
+                source_list_container.mount(Static("Press Enter to manage package manager installations.", classes="info-message"))
                 source_list_container.mount(Label("Available Actions:", classes="section-header"))
                 source_list_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
                 source_list_container.mount(Static("• Uninstall existing package managers"))
@@ -307,7 +307,7 @@ class PackageManagerScreen(Screen):
                 else:
                     source_list_container.mount(Static("Not configured", classes="current-source-none"))
                 
-                source_list_container.mount(Static("ENTER=Change Source", classes="help-text"))
+                source_list_container.mount(Static("Enter=Change Source", classes="help-text"))
                 
         except Exception as e:
             self._show_error(f"Error displaying source options: {str(e)}")

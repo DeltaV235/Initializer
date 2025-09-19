@@ -185,7 +185,7 @@ class PackageManagerInstallModal(ModalScreen):
             
             # Bottom shortcuts area
             yield Rule()
-            yield Label("J/K=Up/Down | SPACE/ENTER=Toggle | I=Install/Uninstall | ESC=Cancel", classes="help-text")
+            yield Label("J/K=Up/Down | SPACE/Enter=Toggle | I=Install/Uninstall | Esc=Cancel", classes="help-text")
     
     def _update_display(self) -> None:
         """Update the package manager list display."""

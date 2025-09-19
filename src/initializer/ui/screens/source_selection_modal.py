@@ -298,7 +298,7 @@ class SourceSelectionModal(ModalScreen):
             
             # Bottom shortcuts area - mimic main menu style exactly
             with Container(id="help-box"):
-                yield Label("J/K=Up/Down | ENTER=Select | ESC=Cancel", classes="help-text")
+                yield Label("J/K=Up/Down | Enter=Select | Esc=Cancel", classes="help-text")
     
     def _update_mirror_display(self) -> None:
         """Update mirror list display with arrow indicators."""

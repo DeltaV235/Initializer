@@ -38,11 +38,12 @@ class HelpScreen(Screen):
 ### Navigation
 - **H/J/K/L**: Vim-style navigation (Left/Down/Up/Right)
 - **J/K=Up/Down**: Navigate up/down
-- **ENTER**: Select/Activate focused item
+- **Enter**: Select/Activate focused item | Confirm action
 - **TAB**: Move to next focusable element
 
 ### Actions
-- **Q** or **ESC**: Go back/quit
+- **Esc**: Go back/cancel | Close dialog
+- **Q**: Quit application
 - **1-5**: Quick segment selection (Main Menu)
 - **S**: Settings
 - **?**: Help

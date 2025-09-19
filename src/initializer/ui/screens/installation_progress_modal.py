@@ -184,7 +184,7 @@ class InstallationProgressModal(ModalScreen):
             
             # Buttons
             with Horizontal(id="button-container"):
-                yield Button("Close (ESC)", id="close", variant="default", disabled=True)
+                yield Button("Close (Esc)", id="close", variant="default", disabled=True)
     
     @work(exclusive=True, thread=True)
     async def _start_processing(self) -> None:
@@ -338,7 +338,7 @@ class InstallationProgressModal(ModalScreen):
         """Enable the close button when all tasks are complete."""
         close_button = self.query_one("#close", Button)
         close_button.disabled = False
-        close_button.label = "✅ Close (ESC)"
+        close_button.label = "✅ Close (Esc)"
         close_button.variant = "primary"
     
     @on(Button.Pressed, "#close")

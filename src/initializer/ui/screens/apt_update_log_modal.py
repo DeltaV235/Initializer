@@ -137,7 +137,7 @@ class APTUpdateLogModal(ModalScreen):
             # Help section at bottom
             with Container(id="help-container"):
                 yield Rule()
-                yield Static("ESC=Exit | Auto-scroll enabled", classes="help-text")
+                yield Static("Esc=Exit | Auto-scroll enabled", classes="help-text")
     
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
@@ -321,7 +321,7 @@ class APTUpdateLogModal(ModalScreen):
                     self.update_progress(self.current_progress, 100, f"Failed (code: {return_code})")
                     self.callback(False, f"APT update failed with return code: {return_code}")
                 
-                self.add_log_line("Press ESC to close this window", "normal")
+                self.add_log_line("Press Esc to close this window", "normal")
             
             self.app.call_from_thread(update_completion)
             
@@ -331,6 +331,6 @@ class APTUpdateLogModal(ModalScreen):
                 self.add_log_line(f"❌ Error during APT update: {str(e)}", "error")
                 self.update_progress(self.current_progress, 100, f"Error: {str(e)}")
                 self.callback(False, f"Error during APT update: {str(e)}")
-                self.add_log_line("Press ESC to close this window", "normal")
+                self.add_log_line("Press Esc to close this window", "normal")
             
             self.app.call_from_thread(show_error)

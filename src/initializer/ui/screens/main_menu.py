@@ -125,7 +125,7 @@ class MainMenuScreen(Screen):
             
             # Help box at the bottom
             with Container(id="help-box"):
-                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | ENTER=Select | 1-6=Quick Select", classes="help-text")
+                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | Enter=Select | 1-6=Quick Select", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -824,7 +824,7 @@ class MainMenuScreen(Screen):
         
         container.mount(Label("► Keyboard Shortcuts", classes="section-header"))
         container.mount(Static("Q=Quit | S=Settings | ?=Help", classes="help-item"))
-        container.mount(Static("H/J/K/L=Navigate | ENTER=Select", classes="help-item"))
+        container.mount(Static("H/J/K/L=Navigate | Enter=Select", classes="help-item"))
         container.mount(Static("1-5=Quick Select Segment", classes="help-item"))
         
         container.mount(Label("► Segments", classes="section-header"))
@@ -950,7 +950,7 @@ class MainMenuScreen(Screen):
         
         # Help text
         container.mount(Rule())
-        container.mount(Label("J/K=Navigate | SPACE/ENTER=Toggle | A=Apply Changes", classes="help-text"))
+        container.mount(Label("J/K=Navigate | SPACE/Enter=Toggle | A=Apply Changes", classes="help-text"))
     
     def _display_pending_changes(self, container: ScrollableContainer) -> None:
         """Display pending installation/uninstallation changes."""
