@@ -586,6 +586,8 @@ class MainMenuScreen(Screen):
     def _handle_pm_item_selection(self) -> None:
         """Handle selection of package manager items."""
         if self._pm_focused_item == "manager":
+            # Clear panel focus before showing modal
+            self._clear_panel_focus()
             # Show package manager installation modal instead of separate screen
             from .package_manager_install_modal import PackageManagerInstallModal
             def on_install_actions_selected(actions: list):
@@ -598,6 +600,9 @@ class MainMenuScreen(Screen):
     
     def _show_source_selection_modal(self) -> None:
         """Show source selection modal directly from main menu."""
+        # Clear panel focus before showing modal
+        self._clear_panel_focus()
+
         try:
             from ...modules.package_manager import PackageManagerDetector
             from .source_selection_modal import SourceSelectionModal
@@ -1114,6 +1119,8 @@ class MainMenuScreen(Screen):
                     self.update_settings_panel()
             
             modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
+            # Clear panel focus before showing modal
+            self._clear_panel_focus()
             self.app.push_screen(modal)
     
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
@@ -1254,6 +1261,8 @@ class MainMenuScreen(Screen):
             self.action_nav_right()
             
         elif button_id == "open-pm-config":
+            # Clear panel focus before showing modal
+            self._clear_panel_focus()
             # Open package manager installation modal
             from .package_manager_install_modal import PackageManagerInstallModal
             def on_install_actions_selected(actions: list):
@@ -1287,6 +1296,8 @@ class MainMenuScreen(Screen):
                     self._show_temp_message(f"❌ {message}")
         
         modal = SourceSelectionModal(self._primary_pm, on_source_selected, self.config_manager)
+        # Clear panel focus before showing modal
+        self._clear_panel_focus()
         self.app.push_screen(modal)
     
     def _show_temp_message(self, message: str) -> None:
@@ -1351,6 +1362,16 @@ class MainMenuScreen(Screen):
             # Silently fail if title widget not found
             pass
     
+    def _clear_panel_focus(self) -> None:
+        """Clear panel focus styles to prevent highlight leak to modals."""
+        try:
+            left_panel = self.query_one("#left-panel", Vertical)
+            right_panel = self.query_one("#right-panel", Vertical)
+            left_panel.remove_class("panel-focused")
+            right_panel.remove_class("panel-focused")
+        except:
+            pass
+
     def _update_panel_focus(self, is_left_focused: bool) -> None:
         """Update panel focus styles based on which panel has focus."""
         try:
