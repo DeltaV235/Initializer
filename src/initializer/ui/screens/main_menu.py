@@ -587,7 +587,7 @@ class MainMenuScreen(Screen):
         """Handle selection of package manager items."""
         if self._pm_focused_item == "manager":
             # Show package manager installation modal instead of separate screen
-            from .package_manager import PackageManagerInstallModal
+            from .package_manager_install_modal import PackageManagerInstallModal
             def on_install_actions_selected(actions: list):
                 # Handle installation actions if needed
                 pass
@@ -1255,7 +1255,7 @@ class MainMenuScreen(Screen):
             
         elif button_id == "open-pm-config":
             # Open package manager installation modal
-            from .package_manager import PackageManagerInstallModal
+            from .package_manager_install_modal import PackageManagerInstallModal
             def on_install_actions_selected(actions: list):
                 # Handle installation actions if needed
                 pass
