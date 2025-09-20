@@ -55,12 +55,6 @@ class PackageManagerScreen(Screen):
         margin: 0 0 1 0;
     }
 
-    .section-title {
-        text-style: bold;
-        color: white;
-        margin: 0 0 0 0;
-    }
-    
     .current-source-display {
         color: $success;
         margin: 0 0 0 1;
@@ -288,7 +282,7 @@ class PackageManagerScreen(Screen):
             
             if pm is None and self.left_focused_item == 0:
                 # Show info about package manager installation
-                source_list_container.mount(Label("Package Manager Installation", classes="section-title"))
+                source_list_container.mount(Label("Package Manager Installation", classes="section-header"))
                 source_list_container.mount(Static("Press Enter to manage package manager installations.", classes="info-message"))
                 source_list_container.mount(Label("Available Actions:", classes="section-header"))
                 source_list_container.mount(Static("• Install new package managers (Homebrew, Snap, Flatpak)"))
@@ -298,7 +292,7 @@ class PackageManagerScreen(Screen):
                 source_list_container.mount(Static("Select a package manager to configure", classes="info-message"))
             else:
                 # Show current package manager info
-                source_list_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-title"))
+                source_list_container.mount(Label(f"Package Manager: {pm.name.upper()}", classes="section-header"))
                 
                 # Show current source
                 source_list_container.mount(Label("Current Source:", classes="section-header"))

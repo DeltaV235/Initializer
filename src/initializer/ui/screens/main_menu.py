@@ -487,7 +487,7 @@ class MainMenuScreen(Screen):
         # Show primary package manager (available managers)
         primary = pkg_info.get("primary")
         if primary:
-            container.mount(Label("Available Package Managers", classes="section-title"))
+            container.mount(Label("Available Package Managers", classes="section-header"))
             # Use unique IDs to avoid conflicts
             import time
             unique_suffix = str(int(time.time() * 1000))[-6:]  # Use timestamp for uniqueness
@@ -499,7 +499,7 @@ class MainMenuScreen(Screen):
             container.mount(Rule())
             
             # Show current source (clickable)
-            container.mount(Label("Current Source", classes="section-title"))
+            container.mount(Label("Current Source", classes="section-header"))
             if primary.current_source:
                 # Truncate long URLs for display
                 source = primary.current_source
@@ -775,7 +775,7 @@ class MainMenuScreen(Screen):
         container.mount(Static(f"{auto_save}", classes="info-value"))
         
         container.mount(Rule())
-        container.mount(Label("Available Actions", classes="section-title"))
+        container.mount(Label("Available Actions", classes="section-header"))
         container.mount(Static("• Change theme", classes="action-item"))
         container.mount(Static("• Export configuration", classes="action-item"))
         container.mount(Static("• Reset to defaults", classes="action-item"))
@@ -835,7 +835,7 @@ class MainMenuScreen(Screen):
         container.mount(Static("Settings - Application configuration", classes="help-item"))
         
         container.mount(Rule())
-        container.mount(Label("Version Information", classes="section-title"))
+        container.mount(Label("Version Information", classes="section-header"))
         container.mount(Static(f"Application: {help_info['app_name']} v{help_info['app_version']}", classes="version-info"))
         container.mount(Static("Framework: Rich/Textual", classes="version-info"))
     
@@ -906,7 +906,7 @@ class MainMenuScreen(Screen):
             container.mount(Label(f"Error loading App info: {applications['error']}", classes="info-display"))
             return
         
-        container.mount(Label("Available Applications:", classes="section-title"))
+        container.mount(Label("Available Applications:", classes="section-header"))
         container.mount(Rule())
         
         # Generate unique suffix to avoid ID conflicts
