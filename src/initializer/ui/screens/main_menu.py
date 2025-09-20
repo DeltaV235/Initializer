@@ -586,9 +586,12 @@ class MainMenuScreen(Screen):
     def _handle_pm_item_selection(self) -> None:
         """Handle selection of package manager items."""
         if self._pm_focused_item == "manager":
-            # Navigate to package manager screen for manager configuration
-            from .package_manager import PackageManagerScreen
-            self.app.push_screen(PackageManagerScreen(self.config_manager))
+            # Show package manager installation modal instead of separate screen
+            from .package_manager import PackageManagerInstallModal
+            def on_install_actions_selected(actions: list):
+                # Handle installation actions if needed
+                pass
+            self.app.push_screen(PackageManagerInstallModal(on_install_actions_selected, self.config_manager))
         elif self._pm_focused_item == "source":
             # Directly show source selection modal without intermediate screen
             self._show_source_selection_modal()
@@ -1251,9 +1254,12 @@ class MainMenuScreen(Screen):
             self.action_nav_right()
             
         elif button_id == "open-pm-config":
-            # Open package manager configuration screen
-            from .package_manager import PackageManagerScreen
-            self.app.push_screen(PackageManagerScreen(self.config_manager))
+            # Open package manager installation modal
+            from .package_manager import PackageManagerInstallModal
+            def on_install_actions_selected(actions: list):
+                # Handle installation actions if needed
+                pass
+            self.app.push_screen(PackageManagerInstallModal(on_install_actions_selected, self.config_manager))
     
     def _open_source_selection_modal(self) -> None:
         """Open modal for source selection."""
