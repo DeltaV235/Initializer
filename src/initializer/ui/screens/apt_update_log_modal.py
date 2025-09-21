@@ -90,20 +90,6 @@ class APTUpdateLogModal(ModalScreen):
     .log-line-warning {
         color: $warning;
     }
-    
-    #help-container {
-        height: 2;
-        background: $surface;
-        layout: vertical;
-        padding: 0;
-    }
-    
-    .help-text {
-        height: 1;
-        text-align: center;
-        color: $text-muted;
-        background: $surface;
-    }
     """
     
     def __init__(self, callback: Callable[[bool, str], None], close_source_selection: bool = False, source_modal_ref=None, main_menu_ref=None):
@@ -137,10 +123,9 @@ class APTUpdateLogModal(ModalScreen):
                 with Vertical(id="log-output"):
                     yield Static("Starting APT update...", classes="log-line")
             
-            # Help section at bottom
-            with Container(id="help-container"):
-                yield Rule()
-                yield Static("Esc=Exit | Auto-scroll enabled", classes="help-text")
+            # Help section at bottom - use public styles from styles.css
+            with Container(id="help-box"):
+                yield Static("Esc=Exit | Progress continues in background", classes="help-text")
     
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
@@ -217,8 +202,9 @@ class APTUpdateLogModal(ModalScreen):
         """Handle modal dismissal."""
         if self.apt_is_running and not self.is_completed:
             # If update is still running, show warning but allow exit
-            self.add_log_line("⚠️ APT update was interrupted by user", "warning")
-            self.callback(False, "Update interrupted by user")
+            # APT process will continue running in background
+            self.add_log_line("⚠️ APT update continues in background", "warning")
+            self.callback(False, "Update running in background")
 
         # Close source selection modal when user dismisses this progress modal
         if self.close_source_selection:
