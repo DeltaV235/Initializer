@@ -87,6 +87,7 @@ class APTUpdateLogModal(ModalScreen):
         self.total_packages = 0
         self.current_package = 0
         self.log_lines = []
+        self._estimated_total = 0  # Track estimated total for progress calculation
         
     def compose(self) -> ComposeResult:
         """Compose the progress log modal using extra large modal container."""
@@ -283,29 +284,42 @@ class APTUpdateLogModal(ModalScreen):
     def parse_apt_progress(self, line: str) -> tuple[Optional[int], Optional[int], str]:
         """Parse APT output to extract progress information."""
         line = line.strip()
-        
-        # Pattern for "Get:X/Y" format
+
+        # Pattern for "Get:X/Y" format - this gives us accurate progress
         get_match = re.search(r'Get:(\d+)/(\d+)', line)
         if get_match:
             current = int(get_match.group(1))
             total = int(get_match.group(2))
-            return current, total, "Downloading"
-        
-        # Pattern for percentage
+            return current, total, "Downloading packages"
+
+        # Pattern for "Hit:X" or "Ign:X" format - also indicates progress
+        hit_ign_match = re.search(r'(?:Hit|Ign):(\d+)', line)
+        if hit_ign_match and hasattr(self, '_estimated_total') and self._estimated_total > 0:
+            current = int(hit_ign_match.group(1))
+            return current, self._estimated_total, "Updating repositories"
+
+        # Pattern for percentage in output
         percent_match = re.search(r'(\d+)%', line)
-        if percent_match and self.total_packages > 0:
+        if percent_match:
             percent = int(percent_match.group(1))
-            current = int((percent / 100) * self.total_packages)
-            return current, self.total_packages, "Processing"
-        
+            # Use the percentage directly
+            return percent, 100, "Processing"
+
+        # Detect total repository count for better progress estimation
+        if "packages" in line and "updated" in line:
+            packages_match = re.search(r'(\d+)\s+packages', line)
+            if packages_match:
+                self._estimated_total = int(packages_match.group(1))
+                return 0, self._estimated_total, "Starting update"
+
         # Check for completion indicators
         if "Reading package lists" in line:
-            return None, None, "Reading package lists"
+            return 95, 100, "Reading package lists"
         elif "Building dependency tree" in line:
-            return None, None, "Building dependency tree"
+            return 97, 100, "Building dependency tree"
         elif "Reading state information" in line:
-            return None, None, "Reading state information"
-        
+            return 99, 100, "Reading state information"
+
         return None, None, ""
     
     @work(exclusive=True, thread=True)
@@ -347,7 +361,7 @@ class APTUpdateLogModal(ModalScreen):
                         def update_ui(msg=line, curr=current, tot=total, stat=status, count=line_count):
                             # Add log line
                             self.add_log_line(f"  {msg}")
-                            
+
                             # Update progress if we have progress info
                             if curr is not None and tot is not None:
                                 self.update_progress(curr, tot, stat)
@@ -355,7 +369,13 @@ class APTUpdateLogModal(ModalScreen):
                                 # Update status without changing progress
                                 progress_text = self.query_one("#progress-text", Static)
                                 progress_text.update(f"Line {count} - {stat}")
-                        
+                            else:
+                                # Fallback: use line count as rough progress indicator
+                                # Estimate 50-100 lines for typical APT update
+                                estimated_progress = min(int((count / 80) * 90), 90)  # Cap at 90%
+                                if estimated_progress > self.current_progress:
+                                    self.update_progress(estimated_progress, 100, f"Processing line {count}")
+
                         self.app.call_from_thread(update_ui)
             
             return_code = process.poll()
@@ -370,7 +390,7 @@ class APTUpdateLogModal(ModalScreen):
                     self.callback(True, f"APT update completed successfully ({line_count} operations)")
                 else:
                     self.add_log_line(f"❌ APT update failed with return code: {return_code}", "error")
-                    self.update_progress(self.current_progress, 100, f"Failed (code: {return_code})")
+                    self.update_progress(100, 100, f"Failed (code: {return_code})")
                     self.callback(False, f"APT update failed with return code: {return_code}")
 
                 # Close source selection modal when APT update completes
@@ -385,7 +405,7 @@ class APTUpdateLogModal(ModalScreen):
             def show_error():
                 self.apt_is_running = False
                 self.add_log_line(f"❌ Error during APT update: {str(e)}", "error")
-                self.update_progress(self.current_progress, 100, f"Error: {str(e)}")
+                self.update_progress(100, 100, f"Error: {str(e)}")
                 self.callback(False, f"Error during APT update: {str(e)}")
 
                 # Close source selection modal when APT update encounters error
