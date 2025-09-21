@@ -1739,6 +1739,14 @@ class MainMenuScreen(Screen):
     def refresh_package_manager_page(self) -> None:
         """Public method to refresh package manager page after mirror changes."""
         try:
+            # Only save focus if we're currently in package manager segment
+            saved_focused_item = None
+            should_restore_focus = (self.selected_segment == "package_manager" and
+                                   hasattr(self, '_pm_focused_item') and self._pm_focused_item)
+
+            if should_restore_focus:
+                saved_focused_item = self._pm_focused_item
+
             # Clear package manager cache to force reload
             self.package_manager_cache = None
             self.package_manager_loading = False
@@ -1749,6 +1757,27 @@ class MainMenuScreen(Screen):
                 self.update_settings_panel()
                 # Refresh the UI
                 self.refresh()
+
+                # Only restore focus if we saved it and user is still on package manager page
+                if should_restore_focus and saved_focused_item and self.selected_segment == "package_manager":
+                    # Use call_after_refresh to ensure focus restoration happens after UI update
+                    def restore_focus():
+                        # Double-check user is still on package manager page
+                        if self.selected_segment == "package_manager":
+                            self._pm_focused_item = saved_focused_item
+
+                            # Set right panel focus to ensure arrows show properly
+                            try:
+                                right_container = self.query_one("#settings-scroll", ScrollableContainer)
+                                right_container.focus()
+                                self._update_panel_focus(is_left_focused=False)
+                            except Exception:
+                                pass
+
+                            # Update focus indicators to show the restored focus
+                            self._update_pm_focus_indicators(clear_left_arrows=True)
+
+                    self.call_after_refresh(restore_focus)
 
             # Also update the internal package manager reference
             self._update_package_manager_info()
