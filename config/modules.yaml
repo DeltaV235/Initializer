@@ -1,259 +1,299 @@
+installation_status:
+  Archive Tools:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.226208'
+  Build Tools:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.128128'
+  Database Clients:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.255207'
+  Docker:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.015454'
+  Git Tools:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.080599'
+  Network Tools:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.149190'
+  Node.js:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.039899'
+  Python Dev:
+    installed: true
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.064205'
+  System Monitor:
+    installed: false
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.161571'
+  Text Editors:
+    installed: true
+    package_manager: apt
+    timestamp: '2025-09-21T15:16:16.182326'
 modules:
-  system_info:
+  app_install:
+    applications:
+    - description: Container runtime and orchestration
+      name: Docker
+      package: docker.io docker-compose
+      post_install: usermod -aG docker $USER && systemctl enable docker
+    - description: JavaScript runtime and package manager
+      name: Node.js
+      package: nodejs npm
+      post_install: npm install -g yarn
+    - description: Python development tools
+      name: Python Dev
+      package: python3-pip python3-venv python3-dev
+      post_install: pip3 install --upgrade pip setuptools wheel
+    - description: Version control system and tools
+      name: Git Tools
+      package: git git-lfs gitk
+      post_install: git lfs install
+    - description: Essential compilation tools
+      name: Build Tools
+      package: build-essential cmake automake autoconf
+    - description: Network utilities and diagnostic tools
+      name: Network Tools
+      package: curl wget net-tools dnsutils
+    - description: System monitoring and disk usage tools
+      name: System Monitor
+      package: htop btop ncdu
+    - description: Terminal-based text editors
+      name: Text Editors
+      package: vim neovim nano
+    - description: File compression and archive utilities
+      name: Archive Tools
+      package: zip unzip tar gzip bzip2 xz-utils
+    - description: Database client tools
+      name: Database Clients
+      package: mysql-client postgresql-client redis-tools
     enabled: true
-    auto_refresh: true
-    export_formats: ["json", "yaml", "txt"]
-    components:
-      - distribution
-      - package_manager
-      - cpu_info
-      - memory_info
-      - disk_info
-      - network_info
-
   homebrew:
-    enabled: true
     auto_install: false
-    sources:
-      - name: "Official"
-        url: "https://github.com/Homebrew/brew"
-      - name: "Tuna Mirror"
-        url: "https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
     default_packages:
-      - git
-      - curl
-      - wget
-      - vim
-
+    - git
+    - curl
+    - wget
+    - vim
+    enabled: true
+    sources:
+    - name: Official
+      url: https://github.com/Homebrew/brew
+    - name: Tuna Mirror
+      url: https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git
   package_manager:
     enabled: true
-    supported:
-      - apt
-      - yum
-      - dnf
-      - pacman
-      - zypper
-      - brew
-      - apk
     mirrors:
-      apt:
-        default: "https://archive.ubuntu.com/ubuntu/"
-        sources:
-          - name: "Official Ubuntu"
-            key: "default"
-            url: "https://archive.ubuntu.com/ubuntu/"
-            description: "Official Ubuntu repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/ubuntu/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/ubuntu/"
-            description: "University of Science and Technology of China"
-          - name: "NetEase"
-            key: "163"
-            url: "https://mirrors.163.com/ubuntu/"
-            description: "NetEase mirror (China)"
-          - name: "Huawei Cloud"
-            key: "huawei"
-            url: "https://repo.huaweicloud.com/ubuntu/"
-            description: "Huawei Cloud mirror (China)"
-          - name: "Tencent Cloud"
-            key: "tencent"
-            url: "https://mirrors.cloud.tencent.com/ubuntu/"
-            description: "Tencent Cloud mirror (China)"
-          - name: "BFSU"
-            key: "bfsu"
-            url: "https://mirrors.bfsu.edu.cn/ubuntu/"
-            description: "Beijing Foreign Studies University"
-          - name: "NJU"
-            key: "nju"
-            url: "https://mirror.nju.edu.cn/ubuntu/"
-            description: "Nanjing University mirror"
-          - name: "SJTU"
-            key: "sjtu"
-            url: "https://mirror.sjtu.edu.cn/ubuntu/"
-            description: "Shanghai Jiao Tong University"
-          - name: "BJTU"
-            key: "bjtu"
-            url: "https://mirror.bjtu.edu.cn/ubuntu/"
-            description: "Beijing Jiaotong University"
-      yum:
-        default: "https://mirror.centos.org/centos/"
-        sources:
-          - name: "Official CentOS"
-            key: "default"
-            url: "https://mirror.centos.org/centos/"
-            description: "Official CentOS repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/centos/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/centos/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/centos/"
-            description: "University of Science and Technology of China"
-          - name: "NetEase"
-            key: "163"
-            url: "https://mirrors.163.com/centos/"
-            description: "NetEase mirror (China)"
-          - name: "Huawei Cloud"
-            key: "huawei"
-            url: "https://repo.huaweicloud.com/centos/"
-            description: "Huawei Cloud mirror (China)"
-      dnf:
-        default: "https://download.fedoraproject.org/pub/fedora/"
-        sources:
-          - name: "Official Fedora"
-            key: "default"
-            url: "https://download.fedoraproject.org/pub/fedora/"
-            description: "Official Fedora repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/fedora/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/fedora/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/fedora/"
-            description: "University of Science and Technology of China"
-          - name: "NetEase"
-            key: "163"
-            url: "https://mirrors.163.com/fedora/"
-            description: "NetEase mirror (China)"
-      pacman:
-        default: "https://archlinux.org/mirrorlist/"
-        sources:
-          - name: "Official Arch Linux"
-            key: "default"
-            url: "https://archlinux.org/mirrorlist/"
-            description: "Official Arch Linux repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch"
-            description: "University of Science and Technology of China"
-          - name: "NetEase"
-            key: "163"
-            url: "Server = https://mirrors.163.com/archlinux/$repo/os/$arch"
-            description: "NetEase mirror (China)"
-      zypper:
-        default: "https://download.opensuse.org/"
-        sources:
-          - name: "Official openSUSE"
-            key: "default"
-            url: "https://download.opensuse.org/"
-            description: "Official openSUSE repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/opensuse/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/opensuse/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/opensuse/"
-            description: "University of Science and Technology of China"
-      brew:
-        default: "https://github.com/Homebrew/brew.git"
-        sources:
-          - name: "Official Homebrew"
-            key: "default"
-            url: "https://github.com/Homebrew/brew.git"
-            description: "Official Homebrew repository"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/brew.git"
-            description: "University of Science and Technology of China"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/homebrew/brew.git"
-            description: "Alibaba Cloud mirror (China)"
       apk:
-        default: "https://dl-cdn.alpinelinux.org/alpine/"
+        default: https://dl-cdn.alpinelinux.org/alpine/
         sources:
-          - name: "Official Alpine Linux"
-            key: "default"
-            url: "https://dl-cdn.alpinelinux.org/alpine/"
-            description: "Official Alpine Linux repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/alpine/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/alpine/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/alpine/"
-            description: "University of Science and Technology of China"
-
+        - description: Official Alpine Linux repositories
+          key: default
+          name: Official Alpine Linux
+          url: https://dl-cdn.alpinelinux.org/alpine/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/alpine/
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/alpine/
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/alpine/
+      apt:
+        default: https://archive.ubuntu.com/ubuntu/
+        sources:
+        - description: Official Ubuntu repositories
+          key: default
+          name: Official Ubuntu
+          url: https://archive.ubuntu.com/ubuntu/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/ubuntu/
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/ubuntu/
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/ubuntu/
+        - description: NetEase mirror (China)
+          key: '163'
+          name: NetEase
+          url: https://mirrors.163.com/ubuntu/
+        - description: Huawei Cloud mirror (China)
+          key: huawei
+          name: Huawei Cloud
+          url: https://repo.huaweicloud.com/ubuntu/
+        - description: Tencent Cloud mirror (China)
+          key: tencent
+          name: Tencent Cloud
+          url: https://mirrors.cloud.tencent.com/ubuntu/
+        - description: Beijing Foreign Studies University
+          key: bfsu
+          name: BFSU
+          url: https://mirrors.bfsu.edu.cn/ubuntu/
+        - description: Nanjing University mirror
+          key: nju
+          name: NJU
+          url: https://mirror.nju.edu.cn/ubuntu/
+        - description: Shanghai Jiao Tong University
+          key: sjtu
+          name: SJTU
+          url: https://mirror.sjtu.edu.cn/ubuntu/
+        - description: Beijing Jiaotong University
+          key: bjtu
+          name: BJTU
+          url: https://mirror.bjtu.edu.cn/ubuntu/
+      brew:
+        default: https://github.com/Homebrew/brew.git
+        sources:
+        - description: Official Homebrew repository
+          key: default
+          name: Official Homebrew
+          url: https://github.com/Homebrew/brew.git
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/brew.git
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/homebrew/brew.git
+      dnf:
+        default: https://download.fedoraproject.org/pub/fedora/
+        sources:
+        - description: Official Fedora repositories
+          key: default
+          name: Official Fedora
+          url: https://download.fedoraproject.org/pub/fedora/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/fedora/
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/fedora/
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/fedora/
+        - description: NetEase mirror (China)
+          key: '163'
+          name: NetEase
+          url: https://mirrors.163.com/fedora/
+      pacman:
+        default: https://archlinux.org/mirrorlist/
+        sources:
+        - description: Official Arch Linux repositories
+          key: default
+          name: Official Arch Linux
+          url: https://archlinux.org/mirrorlist/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch
+        - description: NetEase mirror (China)
+          key: '163'
+          name: NetEase
+          url: Server = https://mirrors.163.com/archlinux/$repo/os/$arch
+      yum:
+        default: https://mirror.centos.org/centos/
+        sources:
+        - description: Official CentOS repositories
+          key: default
+          name: Official CentOS
+          url: https://mirror.centos.org/centos/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/centos/
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/centos/
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/centos/
+        - description: NetEase mirror (China)
+          key: '163'
+          name: NetEase
+          url: https://mirrors.163.com/centos/
+        - description: Huawei Cloud mirror (China)
+          key: huawei
+          name: Huawei Cloud
+          url: https://repo.huaweicloud.com/centos/
+      zypper:
+        default: https://download.opensuse.org/
+        sources:
+        - description: Official openSUSE repositories
+          key: default
+          name: Official openSUSE
+          url: https://download.opensuse.org/
+        - description: Alibaba Cloud mirror (China)
+          key: aliyun
+          name: Aliyun
+          url: https://mirrors.aliyun.com/opensuse/
+        - description: Tsinghua University mirror (China)
+          key: tuna
+          name: Tsinghua University
+          url: https://mirrors.tuna.tsinghua.edu.cn/opensuse/
+        - description: University of Science and Technology of China
+          key: ustc
+          name: USTC
+          url: https://mirrors.ustc.edu.cn/opensuse/
+    supported:
+    - apt
+    - yum
+    - dnf
+    - pacman
+    - zypper
+    - brew
+    - apk
+  system_info:
+    auto_refresh: true
+    components:
+    - distribution
+    - package_manager
+    - cpu_info
+    - memory_info
+    - disk_info
+    - network_info
+    enabled: true
+    export_formats:
+    - json
+    - yaml
+    - txt
   user_management:
-    enabled: true
-    create_sudo_user: true
-    default_shell: "/bin/bash"
     copy_skel: true
-
-  app_install:
+    create_sudo_user: true
+    default_shell: /bin/bash
     enabled: true
-    applications:
-      - name: "Docker"
-        package: "docker.io docker-compose"
-        description: "Container runtime and orchestration"
-        post_install: "usermod -aG docker $USER && systemctl enable docker"
-      - name: "Node.js"
-        package: "nodejs npm"
-        description: "JavaScript runtime and package manager"
-        post_install: "npm install -g yarn"
-      - name: "Python Dev"
-        package: "python3-pip python3-venv python3-dev"
-        description: "Python development tools"
-        post_install: "pip3 install --upgrade pip setuptools wheel"
-      - name: "Git Tools"
-        package: "git git-lfs gitk"
-        description: "Version control system and tools"
-        post_install: "git lfs install"
-      - name: "Build Tools"
-        package: "build-essential cmake automake autoconf"
-        description: "Essential compilation tools"
-      - name: "Network Tools"
-        package: "curl wget net-tools dnsutils"
-        description: "Network utilities and diagnostic tools"
-      - name: "System Monitor"
-        package: "htop btop ncdu"
-        description: "System monitoring and disk usage tools"
-      - name: "Text Editors"
-        package: "vim neovim nano"
-        description: "Terminal-based text editors"
-      - name: "Archive Tools"
-        package: "zip unzip tar gzip bzip2 xz-utils"
-        description: "File compression and archive utilities"
-      - name: "Database Clients"
-        package: "mysql-client postgresql-client redis-tools"
-        description: "Database client tools"
