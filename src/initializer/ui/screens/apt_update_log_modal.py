@@ -15,47 +15,30 @@ from typing import Callable, Optional
 class APTUpdateLogModal(ModalScreen):
     """Full-screen modal for displaying APT update progress and logs."""
     
-    # CSS styles for full-screen modal
+    # CSS styles for progress modal
     CSS = """
     APTUpdateLogModal {
         align: center middle;
     }
-    
-    #log-modal-container {
-        width: 95%;
-        height: 95%;
-        background: $surface;
-        border: round #7dd3fc;
-        padding: 1;
-        layout: vertical;
-    }
-    
-    #log-title {
-        height: 1;
-        text-align: center;
-        color: $text;
-        text-style: bold;
-        background: $surface;
-    }
-    
+
     #progress-container {
         height: 3;
         padding: 1 0;
         background: $surface;
     }
-    
+
     #progress-bar {
         height: 1;
         margin: 0 1;
     }
-    
+
     #progress-text {
         height: 1;
         text-align: center;
         color: $text-muted;
         background: $surface;
     }
-    
+
     #log-content-area {
         height: 1fr;
         overflow-y: auto;
@@ -63,30 +46,30 @@ class APTUpdateLogModal(ModalScreen):
         scrollbar-size: 1 1;
         background: $surface;
     }
-    
+
     #log-output {
         height: auto;
         min-height: 1;
         background: $surface;
     }
-    
+
     .log-line {
         height: auto;
         min-height: 1;
         color: $text;
         background: transparent;
     }
-    
+
     .log-line-success {
         color: $success;
         text-style: bold;
     }
-    
+
     .log-line-error {
         color: $error;
         text-style: bold;
     }
-    
+
     .log-line-warning {
         color: $warning;
     }
@@ -106,9 +89,9 @@ class APTUpdateLogModal(ModalScreen):
         self.log_lines = []
         
     def compose(self) -> ComposeResult:
-        """Compose the full-screen log modal."""
-        with Container(id="log-modal-container"):
-            yield Static("APT Update Progress", id="log-title")
+        """Compose the progress log modal using extra large modal container."""
+        with Container(classes="modal-container-xl"):
+            yield Static("APT Update Progress", id="modal-title")
             yield Rule()
             
             # Progress section
@@ -125,13 +108,21 @@ class APTUpdateLogModal(ModalScreen):
             
             # Help section at bottom - use public styles from styles.css
             with Container(id="help-box"):
-                yield Static("Esc=Exit | Progress continues in background", classes="help-text")
+                yield Static("J/K=Scroll | Esc=Exit | Progress continues in background", classes="help-text")
     
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
         """Handle key events for the log modal."""
         if event.key == "escape":
             self.action_dismiss()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "j":
+            self.action_scroll_down()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "k":
+            self.action_scroll_up()
             event.prevent_default()
             event.stop()
     
@@ -214,6 +205,22 @@ class APTUpdateLogModal(ModalScreen):
         self._refresh_package_manager_page()
 
         self.dismiss()
+
+    def action_scroll_down(self) -> None:
+        """Scroll log content down."""
+        try:
+            content = self.query_one("#log-content-area", ScrollableContainer)
+            content.scroll_down()
+        except Exception:
+            pass
+
+    def action_scroll_up(self) -> None:
+        """Scroll log content up."""
+        try:
+            content = self.query_one("#log-content-area", ScrollableContainer)
+            content.scroll_up()
+        except Exception:
+            pass
     
     def add_log_line(self, message: str, log_type: str = "normal") -> None:
         """Add a line to the log display."""
