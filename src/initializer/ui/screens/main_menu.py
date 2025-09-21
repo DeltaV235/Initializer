@@ -616,6 +616,9 @@ class MainMenuScreen(Screen):
                 self._show_message("No package manager detected", error=True)
                 return
             
+            # Create source selection modal first to capture its reference
+            source_modal_ref = SourceSelectionModal(primary_pm, None, self.config_manager)
+
             def on_source_selected(selected_source: str):
                 # Show confirmation modal
                 def on_confirmation_result(success: bool, message: str):
@@ -627,19 +630,20 @@ class MainMenuScreen(Screen):
                         self._show_message("Mirror source updated successfully")
                     else:
                         self._show_message(message, error=not success)
-                
-                # Show confirmation modal
+
+                # Show confirmation modal with source modal reference
                 try:
                     self.app.push_screen(
-                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager)
+                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager, source_modal_ref)
                     )
                 except Exception as e:
                     self._show_message(f"Error showing confirmation: {str(e)}", error=True)
-            
+
+            # Set the callback after creating the modal
+            source_modal_ref.callback = on_source_selected
+
             # Show source selection modal
-            self.app.push_screen(
-                SourceSelectionModal(primary_pm, on_source_selected, self.config_manager)
-            )
+            self.app.push_screen(source_modal_ref)
             
         except Exception as e:
             self._show_message(f"Error opening source selection: {str(e)}", error=True)

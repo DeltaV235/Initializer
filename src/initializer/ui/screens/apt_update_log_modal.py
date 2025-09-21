@@ -106,9 +106,11 @@ class APTUpdateLogModal(ModalScreen):
     }
     """
     
-    def __init__(self, callback: Callable[[bool, str], None]):
+    def __init__(self, callback: Callable[[bool, str], None], close_source_selection: bool = False, source_modal_ref=None):
         super().__init__()
         self.callback = callback
+        self.close_source_selection = close_source_selection  # Flag to close source selection modal
+        self.source_modal_ref = source_modal_ref  # Direct reference to source modal
         self.apt_is_running = False
         self.is_completed = False
         self.current_progress = 0
@@ -152,6 +154,44 @@ class APTUpdateLogModal(ModalScreen):
         self.focus()
         # Start the APT update process
         self.start_apt_update()
+
+    def _close_source_selection_modal(self) -> None:
+        """Close the source selection modal using multiple strategies."""
+        try:
+            # Method 1: Use direct reference if available
+            if self.source_modal_ref and hasattr(self.source_modal_ref, 'dismiss'):
+                try:
+                    # Use call_later to ensure it's executed in the correct context
+                    self.call_later(self.source_modal_ref.dismiss)
+                    return
+                except Exception:
+                    pass
+
+            # Method 2: Use a delayed approach with app.call_later
+            def delayed_close():
+                try:
+                    # Search for the source modal and close it
+                    for screen in list(self.app.screen_stack):
+                        if screen.__class__.__name__ == 'SourceSelectionModal':
+                            try:
+                                screen.dismiss()
+                                break
+                            except Exception:
+                                # If dismiss fails, try removing from stack
+                                try:
+                                    if screen in self.app.screen_stack:
+                                        self.app.screen_stack.remove(screen)
+                                except Exception:
+                                    pass
+                                break
+                except Exception:
+                    pass
+
+            # Call the close function after a small delay to ensure proper timing
+            self.call_later(delayed_close)
+
+        except Exception:
+            pass
     
     def can_focus(self) -> bool:
         """Return True to allow this modal to receive focus."""
@@ -168,6 +208,11 @@ class APTUpdateLogModal(ModalScreen):
             # If update is still running, show warning but allow exit
             self.add_log_line("⚠️ APT update was interrupted by user", "warning")
             self.callback(False, "Update interrupted by user")
+
+        # Close source selection modal when user dismisses this progress modal
+        if self.close_source_selection:
+            self._close_source_selection_modal()
+
         self.dismiss()
     
     def add_log_line(self, message: str, log_type: str = "normal") -> None:
@@ -311,7 +356,7 @@ class APTUpdateLogModal(ModalScreen):
             def update_completion():
                 self.apt_is_running = False
                 self.is_completed = True
-                
+
                 if return_code == 0:
                     self.add_log_line("✅ APT update completed successfully!", "success")
                     self.update_progress(100, 100, "Completed successfully")
@@ -320,7 +365,11 @@ class APTUpdateLogModal(ModalScreen):
                     self.add_log_line(f"❌ APT update failed with return code: {return_code}", "error")
                     self.update_progress(self.current_progress, 100, f"Failed (code: {return_code})")
                     self.callback(False, f"APT update failed with return code: {return_code}")
-                
+
+                # Close source selection modal when APT update completes
+                if self.close_source_selection:
+                    self._close_source_selection_modal()
+
                 self.add_log_line("Press Esc to close this window", "normal")
             
             self.app.call_from_thread(update_completion)
@@ -331,6 +380,11 @@ class APTUpdateLogModal(ModalScreen):
                 self.add_log_line(f"❌ Error during APT update: {str(e)}", "error")
                 self.update_progress(self.current_progress, 100, f"Error: {str(e)}")
                 self.callback(False, f"Error during APT update: {str(e)}")
+
+                # Close source selection modal when APT update encounters error
+                if self.close_source_selection:
+                    self._close_source_selection_modal()
+
                 self.add_log_line("Press Esc to close this window", "normal")
             
             self.app.call_from_thread(show_error)
