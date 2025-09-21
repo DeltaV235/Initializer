@@ -19,7 +19,7 @@ from .apt_update_log_modal import APTUpdateLogModal
 
 class MirrorConfirmationModal(ModalScreen):
     """Modal screen for confirming mirror source change."""
-    
+
     BINDINGS = [
         ("escape", "cancel_operation", "Cancel"),
         ("enter", "confirm_change", "Confirm"),
@@ -32,17 +32,102 @@ class MirrorConfirmationModal(ModalScreen):
         ("pagedown", "scroll_page_down", "Page Down"),
         ("pageup", "scroll_page_up", "Page Up"),
     ]
+
+    # CSS styles for the modal
+    CSS = """
+    MirrorConfirmationModal {
+        align: center middle;
+    }
+
+    #confirmation-content {
+        height: 1fr;
+        overflow-y: auto;
+        padding: 0 1;
+        scrollbar-size: 1 1;
+    }
+
+    .warning-title {
+        color: #f59e0b;
+        text-style: bold;
+        text-align: center;
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    .current-source {
+        height: auto;
+        min-height: 1;
+        color: $text-muted;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .new-source {
+        height: auto;
+        min-height: 1;
+        color: #22c55e;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .file-item {
+        height: auto;
+        min-height: 1;
+        color: $text;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .backup-info {
+        height: auto;
+        min-height: 1;
+        color: $text-muted;
+        text-style: dim;
+        background: $surface;
+        margin: 0 0 0 1;
+    }
+
+    .section-divider {
+        height: 1;
+        color: #7dd3fc;
+        margin: 0;
+    }
+
+    .help-text {
+        text-align: center;
+        color: $text-muted;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
+    }
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
+    }
+    """
     
-    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None):
+    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None, source_modal=None, main_menu_ref=None):
         super().__init__()
         self.package_manager = package_manager
         self.new_source = new_source
         self.callback = callback
         self.detector = PackageManagerDetector(config_manager)
-        
+        self.source_modal = source_modal  # Reference to the source selection modal
+        self.main_menu_ref = main_menu_ref  # Reference to the main menu for refreshing
+
         # State management
         self.is_executing = False
-        
+
         # Initialize APT mirror processor for complete handling
         if self.package_manager.name == "apt":
             self.apt_processor = APTMirrorProcessor(new_source)
@@ -86,7 +171,7 @@ class MirrorConfirmationModal(ModalScreen):
     
     def compose(self) -> ComposeResult:
         """Compose the confirmation interface."""
-        with Container(id="confirmation-container"):
+        with Container(classes="modal-container-xs"):
             yield Static(f"Confirm Mirror Change - {self.package_manager.name.upper()}", id="confirmation-title")
             yield Rule()
             
@@ -96,13 +181,13 @@ class MirrorConfirmationModal(ModalScreen):
                 yield Rule()
                 
                 # Current and new source info
-                yield Label("Current Source:", classes="info-key")
+                yield Label("Current Source:", classes="section-header")
                 current = self.package_manager.current_source or "Not configured"
                 if len(current) > 80:
                     current = current[:77] + "..."
                 yield Static(f"  {current}", classes="current-source")
                 
-                yield Label("New Source:", classes="info-key")
+                yield Label("New Source:", classes="section-header")
                 new = self.new_source
                 if len(new) > 80:
                     new = new[:77] + "..."
@@ -111,14 +196,14 @@ class MirrorConfirmationModal(ModalScreen):
                 yield Rule()
                 
                 # Files to be modified
-                yield Label("Files that will be modified:", classes="info-key")
+                yield Label("Files that will be modified:", classes="section-header")
                 for file_path in self.affected_files:
                     yield Static(f"  • {file_path}", classes="file-item")
                 
                 yield Rule()
                 
                 # Backup information - simplified to show only backup filenames
-                yield Label("Files to be backed up:", classes="info-key")
+                yield Label("Files to be backed up:", classes="section-header")
                 backup_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
                 
                 # Show specific backup file examples - only filenames
@@ -160,9 +245,9 @@ class MirrorConfirmationModal(ModalScreen):
                 elif self.package_manager.name == "apk":
                     yield Static(f"  • repositories.bak_{backup_suffix}", classes="backup-info")
             
-            # Fixed action help at the bottom - single line format like main menu
-            with Container(id="confirmation-actions"):
-                yield Static("J/K=Up/Down | ENTER=Confirm | ESC=Cancel", classes="help-text")
+            # Fixed action help at the bottom - mimic main menu style exactly
+            with Container(id="help-box"):
+                yield Label("J/K=Up/Down | Enter=Confirm | Esc=Cancel", classes="help-text")
     
     
     def on_mount(self) -> None:
@@ -202,8 +287,47 @@ class MirrorConfirmationModal(ModalScreen):
         """Confirm the mirror change."""
         if self.is_executing:
             return
-        
+
+        # Mark as executing immediately to prevent double execution
+        self.is_executing = True
+
+        # For non-APT package managers, close source selection modal immediately
+        # For APT, we'll let the progress modal handle the closing
+        if self.package_manager.name != "apt":
+            self._close_source_selection_modal()
+
+        # Start the execution
         self._execute_mirror_change()
+
+    def _close_source_selection_modal(self) -> None:
+        """Close ONLY the source selection modal using direct reference."""
+        try:
+            # Method 1: Use direct reference if available (most reliable)
+            if self.source_modal and hasattr(self.source_modal, 'dismiss'):
+                try:
+                    self.source_modal.dismiss()
+                    return
+                except Exception:
+                    pass
+
+            # Method 2: Search through screen stack as fallback
+            stack_copy = list(self.app.screen_stack)
+            for screen in stack_copy:
+                if screen.__class__.__name__ == 'SourceSelectionModal':
+                    try:
+                        screen.dismiss()
+                        break
+                    except Exception:
+                        # If dismiss fails, try removing from stack
+                        try:
+                            if screen in self.app.screen_stack:
+                                self.app.screen_stack.remove(screen)
+                        except Exception:
+                            pass
+                    break
+
+        except Exception:
+            pass
     
     def action_cancel_operation(self) -> None:
         """Cancel the operation."""
@@ -251,35 +375,53 @@ class MirrorConfirmationModal(ModalScreen):
         """Dismiss modal after successful operation."""
         self.dismiss()
     
-    @work(exclusive=True, thread=True)  
+    @work(exclusive=True, thread=True)
     async def _execute_mirror_change(self) -> None:
         """Execute the mirror change in background thread."""
-        self.is_executing = True
-        
         try:
             # Create backup
             backup_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
+
             # Perform the actual mirror change
             success, message = self._change_mirror_with_backup(backup_time)
-            
+
             def update_ui_complete():
                 if success:
                     self.callback(True, message)
-                    # Auto-dismiss after a short delay using a wrapper function
-                    self.set_timer(2.0, self._dismiss_after_success)
                 else:
                     self.callback(False, message)
-                
+
+                # Reset execution state
                 self.is_executing = False
-            
+
+                # For APT, the modal is already dismissed in _change_apt_mirror
+                # For other package managers, dismiss here and refresh package manager page
+                if self.package_manager.name != "apt":
+                    # Refresh package manager page in main menu for non-APT managers
+                    if self.main_menu_ref and hasattr(self.main_menu_ref, 'refresh_package_manager_page'):
+                        try:
+                            self.main_menu_ref.refresh_package_manager_page()
+                        except Exception:
+                            pass
+                    self.dismiss()
+
             self.app.call_from_thread(update_ui_complete)
-            
+
         except Exception as e:
             def show_error():
                 self.callback(False, f"Error: {str(e)}")
                 self.is_executing = False
-            
+
+                # Refresh package manager page in main menu on error for non-APT managers
+                if self.package_manager.name != "apt" and self.main_menu_ref and hasattr(self.main_menu_ref, 'refresh_package_manager_page'):
+                    try:
+                        self.main_menu_ref.refresh_package_manager_page()
+                    except Exception:
+                        pass
+
+                # Also dismiss on error
+                self.dismiss()
+
             self.app.call_from_thread(show_error)
     
     def _change_mirror_with_backup(self, backup_suffix: str) -> tuple[bool, str]:
@@ -299,36 +441,36 @@ class MirrorConfirmationModal(ModalScreen):
         """Change APT mirror source with complete backup and replacement."""
         if not self.apt_processor:
             return False, "APT processor not initialized"
-            
+
         try:
             # Use the complete processor for mirror change
             result = self.apt_processor.process_complete_mirror_change(backup_suffix)
-            
-            # Show the APT update log modal through main thread
-            def on_apt_update_complete(success: bool, message: str):
-                # This callback is called when APT update completes
-                if success:
-                    total_files = len(result['modified_main']) + len(result['modified_sources_d'])
-                    final_message = f"Successfully updated {total_files} configuration files and refreshed package index"
-                    self.callback(True, final_message)
-                else:
-                    self.callback(False, f"Mirror changed but apt update failed: {message}")
-                
-                # NOW dismiss the confirmation modal after APT is complete
-                self.set_timer(1.0, self._dismiss_after_success)
-            
-            def show_apt_log_modal():
-                # Push the APT update log modal from main thread  
-                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete))
-                # DO NOT dismiss this modal yet - let APT complete first
-            
-            # Call from thread to show modal in main thread
-            self.app.call_from_thread(show_apt_log_modal)
-            
+
+            # For APT, we need to dismiss this confirmation modal BEFORE showing the progress modal
+            def dismiss_and_show_apt_progress():
+                # First dismiss this confirmation modal
+                self.dismiss()
+
+                # Then show the APT progress modal with flag to close source selection modal
+                def on_apt_update_complete(success: bool, message: str):
+                    # This callback is called when APT update completes
+                    if success:
+                        total_files = len(result['modified_main']) + len(result['modified_sources_d'])
+                        final_message = f"Successfully updated {total_files} configuration files and refreshed package index"
+                        self.callback(True, final_message)
+                    else:
+                        self.callback(False, f"Mirror changed but apt update failed: {message}")
+
+                # Show the APT progress modal with source selection closing enabled and source modal reference
+                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete, close_source_selection=True, source_modal_ref=self.source_modal, main_menu_ref=self.main_menu_ref))
+
+            # Schedule the modal dismissal and progress display
+            self.app.call_from_thread(dismiss_and_show_apt_progress)
+
             # Return success for the mirror change itself
             total_files = len(result['modified_main']) + len(result['modified_sources_d'])
             return True, f"Mirror configuration updated ({total_files} files). APT update started in full-screen mode."
-                
+
         except Exception as e:
             return False, f"Failed to change APT mirror: {str(e)}"
     

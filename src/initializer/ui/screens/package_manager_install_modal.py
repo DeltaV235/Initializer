@@ -41,12 +41,7 @@ class PackageManagerInstallModal(ModalScreen):
         overflow-y: auto;
         padding: 0 1;
     }
-    
-    .info-key {
-        margin: 1 0 0 0;
-        color: #7dd3fc;
-    }
-    
+
     #pm-list {
         height: auto;
         min-height: 1;
@@ -165,7 +160,7 @@ class PackageManagerInstallModal(ModalScreen):
             yield Rule()
             
             with ScrollableContainer(id="modal-content"):
-                yield Label("Available Package Managers:", classes="info-key")
+                yield Label("Available Package Managers:", classes="section-header")
                 with Vertical(id="pm-list"):
                     for i, pm in enumerate(self.installable_pms):
                         with Horizontal(id=f"pm-item-{i}", classes="pm-item"):
@@ -190,7 +185,7 @@ class PackageManagerInstallModal(ModalScreen):
             
             # Bottom shortcuts area
             yield Rule()
-            yield Label("J/K=Up/Down | SPACE/ENTER=Toggle | I=Install/Uninstall | ESC=Cancel", classes="help-text")
+            yield Label("J/K=Up/Down | SPACE/Enter=Toggle | I=Install/Uninstall | Esc=Cancel", classes="help-text")
     
     def _update_display(self) -> None:
         """Update the package manager list display."""

@@ -155,10 +155,10 @@ Screen {
     margin: 0;
 }
 
-.info-key {
+.section-header {
     color: #7dd3fc;
     text-style: bold;
-    margin-top: 0;
+    margin: 1 0 1 0;
 }
 
 .info-value {
@@ -476,6 +476,128 @@ DataTable > .datatable--even-row {
     content-align: left middle;
 }
 
+/* Modal Container Styles - Complete Size System */
+
+/* Extra Large Modal Container Style */
+.modal-container-xl {
+    width: 95%;
+    min-width: 80;
+    max-width: 150;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Large Modal Container Style */
+.modal-container-lg {
+    width: 85%;
+    min-width: 70;
+    max-width: 130;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Medium Modal Container Style (Default) */
+.modal-container-md {
+    width: 75%;
+    min-width: 60;
+    max-width: 110;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Compact Modal Container Style */
+.modal-container-compact {
+    width: 75%;
+    min-width: 50;
+    max-width: 100;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Small Modal Container Style */
+.modal-container-sm {
+    width: 65%;
+    min-width: 45;
+    max-width: 85;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Small Modal Container Style (Alternative) */
+.modal-container-small {
+    width: 65%;
+    min-width: 45;
+    max-width: 85;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Extra Small Modal Container Style */
+.modal-container-xs {
+    width: 55%;
+    min-width: 40;
+    max-width: 70;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+/* Mini Modal Container Style */
+.modal-container-mini {
+    width: 45%;
+    min-width: 35;
+    max-width: 55;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
 /* Source Selection Modal Styles */
 #modal-container {
     layout: vertical;
@@ -629,16 +751,6 @@ ModalScreen > #confirmation-container {
     border: round white;
     height: auto;
     min-height: 5;
-}
-
-#confirmation-actions {
-    dock: bottom;
-    height: 3;
-    width: 100%;
-    margin-top: 1;
-    background: $surface;
-    border: round white;
-    padding: 0 1;
 }
 
 /* Rule/divider styles */
