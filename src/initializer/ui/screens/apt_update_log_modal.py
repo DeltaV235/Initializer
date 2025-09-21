@@ -21,18 +21,6 @@ class APTUpdateLogModal(ModalScreen):
         align: center middle;
     }
 
-    #progress-container {
-        height: 2;
-        padding: 0;
-        background: $surface;
-    }
-
-    #progress-bar {
-        height: 2;
-        margin: 0;
-        width: 100%;
-    }
-
     #log-content-area {
         height: 1fr;
         overflow-y: auto;
@@ -88,18 +76,12 @@ class APTUpdateLogModal(ModalScreen):
         with Container(classes="modal-container-xl"):
             yield Static("APT Update Progress", id="modal-title")
             yield Rule()
-            
-            # Progress section - only progress bar, no separate text
-            with Container(id="progress-container"):
-                yield ProgressBar(total=100, show_eta=False, id="progress-bar")
-            
-            yield Rule()
-            
-            # Log content area
+
+            # Log content area - full height
             with ScrollableContainer(id="log-content-area"):
                 with Vertical(id="log-output"):
                     yield Static("Starting APT update...", classes="log-line")
-            
+
             # Help section at bottom - use public styles from styles.css
             with Container(id="help-box"):
                 yield Static("J/K=Scroll | Esc=Exit | Progress continues in background", classes="help-text")
@@ -253,18 +235,15 @@ class APTUpdateLogModal(ModalScreen):
             pass
     
     def update_progress(self, current: int, total: int, status: str = "") -> None:
-        """Update the progress bar."""
+        """This method is kept for compatibility but does nothing."""
+        # Update internal tracking variables but don't display anything
         try:
             if total > 0:
                 progress = min(int((current / total) * 100), 100)
-                progress_bar = self.query_one("#progress-bar", ProgressBar)
-                progress_bar.update(progress=progress)
-
                 self.current_progress = progress
                 self.current_package = current
                 self.total_packages = total
         except Exception:
-            # Fail silently if UI update fails
             pass
     
     def parse_apt_progress(self, line: str) -> tuple[Optional[int], Optional[int], str]:
@@ -315,7 +294,6 @@ class APTUpdateLogModal(ModalScreen):
         
         def log_start():
             self.add_log_line("🚀 Starting APT repository update...")
-            self.update_progress(0, 100, "Initializing")
         
         self.app.call_from_thread(log_start)
         
@@ -345,16 +323,15 @@ class APTUpdateLogModal(ModalScreen):
                         current, total, status = self.parse_apt_progress(line)
                         
                         def update_ui(msg=line, curr=current, tot=total, stat=status, count=line_count):
-                            # Add log line
+                            # Add log line only
                             self.add_log_line(f"  {msg}")
 
-                            # Update progress if we have progress info
+                            # Update progress silently for internal tracking
                             if curr is not None and tot is not None:
                                 self.update_progress(curr, tot, stat)
                             else:
-                                # Fallback: use line count as rough progress indicator
-                                # Estimate 50-100 lines for typical APT update
-                                estimated_progress = min(int((count / 80) * 90), 90)  # Cap at 90%
+                                # Fallback: use line count for internal tracking
+                                estimated_progress = min(int((count / 80) * 90), 90)
                                 if estimated_progress > self.current_progress:
                                     self.update_progress(estimated_progress, 100, f"Processing line {count}")
 
@@ -368,11 +345,9 @@ class APTUpdateLogModal(ModalScreen):
 
                 if return_code == 0:
                     self.add_log_line("✅ APT update completed successfully!", "success")
-                    self.update_progress(100, 100, "Completed successfully")
                     self.callback(True, f"APT update completed successfully ({line_count} operations)")
                 else:
                     self.add_log_line(f"❌ APT update failed with return code: {return_code}", "error")
-                    self.update_progress(100, 100, f"Failed (code: {return_code})")
                     self.callback(False, f"APT update failed with return code: {return_code}")
 
                 # Close source selection modal when APT update completes
@@ -387,7 +362,6 @@ class APTUpdateLogModal(ModalScreen):
             def show_error():
                 self.apt_is_running = False
                 self.add_log_line(f"❌ Error during APT update: {str(e)}", "error")
-                self.update_progress(100, 100, f"Error: {str(e)}")
                 self.callback(False, f"Error during APT update: {str(e)}")
 
                 # Close source selection modal when APT update encounters error
