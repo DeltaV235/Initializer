@@ -631,10 +631,10 @@ class MainMenuScreen(Screen):
                     else:
                         self._show_message(message, error=not success)
 
-                # Show confirmation modal with source modal reference
+                # Show confirmation modal with source modal reference and main menu reference
                 try:
                     self.app.push_screen(
-                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager, source_modal_ref)
+                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager, source_modal_ref, self)
                     )
                 except Exception as e:
                     self._show_message(f"Error showing confirmation: {str(e)}", error=True)
@@ -1728,10 +1728,31 @@ class MainMenuScreen(Screen):
             from ...modules.package_manager import PackageManagerDetector
             detector = PackageManagerDetector(self.config_manager)
             self._primary_pm = detector.get_primary_package_manager()
-            
+
             # Update the package manager display in the UI
             if hasattr(self, '_primary_pm') and self._primary_pm:
                 self._display_package_manager()
+        except Exception as e:
+            # Silently fail to avoid disrupting the UI
+            pass
+
+    def refresh_package_manager_page(self) -> None:
+        """Public method to refresh package manager page after mirror changes."""
+        try:
+            # Clear package manager cache to force reload
+            self.package_manager_cache = None
+            self.package_manager_loading = False
+
+            # If currently viewing package manager segment, refresh it
+            if self.selected_segment == "package_manager":
+                # Force rebuild the panel content
+                self.update_settings_panel()
+                # Refresh the UI
+                self.refresh()
+
+            # Also update the internal package manager reference
+            self._update_package_manager_info()
+
         except Exception as e:
             # Silently fail to avoid disrupting the UI
             pass

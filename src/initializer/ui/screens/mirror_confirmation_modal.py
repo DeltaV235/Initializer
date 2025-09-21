@@ -116,13 +116,14 @@ class MirrorConfirmationModal(ModalScreen):
     }
     """
     
-    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None, source_modal=None):
+    def __init__(self, package_manager, new_source: str, callback: Callable[[bool, str], None], config_manager=None, source_modal=None, main_menu_ref=None):
         super().__init__()
         self.package_manager = package_manager
         self.new_source = new_source
         self.callback = callback
         self.detector = PackageManagerDetector(config_manager)
         self.source_modal = source_modal  # Reference to the source selection modal
+        self.main_menu_ref = main_menu_ref  # Reference to the main menu for refreshing
 
         # State management
         self.is_executing = False
@@ -394,8 +395,14 @@ class MirrorConfirmationModal(ModalScreen):
                 self.is_executing = False
 
                 # For APT, the modal is already dismissed in _change_apt_mirror
-                # For other package managers, dismiss here
+                # For other package managers, dismiss here and refresh package manager page
                 if self.package_manager.name != "apt":
+                    # Refresh package manager page in main menu for non-APT managers
+                    if self.main_menu_ref and hasattr(self.main_menu_ref, 'refresh_package_manager_page'):
+                        try:
+                            self.main_menu_ref.refresh_package_manager_page()
+                        except Exception:
+                            pass
                     self.dismiss()
 
             self.app.call_from_thread(update_ui_complete)
@@ -404,6 +411,14 @@ class MirrorConfirmationModal(ModalScreen):
             def show_error():
                 self.callback(False, f"Error: {str(e)}")
                 self.is_executing = False
+
+                # Refresh package manager page in main menu on error for non-APT managers
+                if self.package_manager.name != "apt" and self.main_menu_ref and hasattr(self.main_menu_ref, 'refresh_package_manager_page'):
+                    try:
+                        self.main_menu_ref.refresh_package_manager_page()
+                    except Exception:
+                        pass
+
                 # Also dismiss on error
                 self.dismiss()
 
@@ -447,7 +462,7 @@ class MirrorConfirmationModal(ModalScreen):
                         self.callback(False, f"Mirror changed but apt update failed: {message}")
 
                 # Show the APT progress modal with source selection closing enabled and source modal reference
-                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete, close_source_selection=True, source_modal_ref=self.source_modal))
+                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete, close_source_selection=True, source_modal_ref=self.source_modal, main_menu_ref=self.main_menu_ref))
 
             # Schedule the modal dismissal and progress display
             self.app.call_from_thread(dismiss_and_show_apt_progress)

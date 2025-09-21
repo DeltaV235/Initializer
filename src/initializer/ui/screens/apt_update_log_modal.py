@@ -106,11 +106,12 @@ class APTUpdateLogModal(ModalScreen):
     }
     """
     
-    def __init__(self, callback: Callable[[bool, str], None], close_source_selection: bool = False, source_modal_ref=None):
+    def __init__(self, callback: Callable[[bool, str], None], close_source_selection: bool = False, source_modal_ref=None, main_menu_ref=None):
         super().__init__()
         self.callback = callback
         self.close_source_selection = close_source_selection  # Flag to close source selection modal
         self.source_modal_ref = source_modal_ref  # Direct reference to source modal
+        self.main_menu_ref = main_menu_ref  # Reference to main menu for refreshing package manager page
         self.apt_is_running = False
         self.is_completed = False
         self.current_progress = 0
@@ -192,6 +193,16 @@ class APTUpdateLogModal(ModalScreen):
 
         except Exception:
             pass
+
+    def _refresh_package_manager_page(self) -> None:
+        """Refresh the package manager page in main menu after progress modal closes."""
+        try:
+            if self.main_menu_ref and hasattr(self.main_menu_ref, 'refresh_package_manager_page'):
+                # Use call_later to ensure it's executed in the correct context
+                self.call_later(self.main_menu_ref.refresh_package_manager_page)
+        except Exception:
+            # Silently fail if refresh is not available
+            pass
     
     def can_focus(self) -> bool:
         """Return True to allow this modal to receive focus."""
@@ -212,6 +223,9 @@ class APTUpdateLogModal(ModalScreen):
         # Close source selection modal when user dismisses this progress modal
         if self.close_source_selection:
             self._close_source_selection_modal()
+
+        # Refresh package manager page in main menu after closing
+        self._refresh_package_manager_page()
 
         self.dismiss()
     
