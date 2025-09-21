@@ -22,21 +22,15 @@ class APTUpdateLogModal(ModalScreen):
     }
 
     #progress-container {
-        height: 3;
-        padding: 1 0;
+        height: 2;
+        padding: 0;
         background: $surface;
     }
 
     #progress-bar {
-        height: 1;
-        margin: 0 1;
-    }
-
-    #progress-text {
-        height: 1;
-        text-align: center;
-        color: $text-muted;
-        background: $surface;
+        height: 2;
+        margin: 0;
+        width: 100%;
     }
 
     #log-content-area {
@@ -95,10 +89,9 @@ class APTUpdateLogModal(ModalScreen):
             yield Static("APT Update Progress", id="modal-title")
             yield Rule()
             
-            # Progress section
+            # Progress section - only progress bar, no separate text
             with Container(id="progress-container"):
                 yield ProgressBar(total=100, show_eta=False, id="progress-bar")
-                yield Static("Initializing...", id="progress-text")
             
             yield Rule()
             
@@ -260,23 +253,16 @@ class APTUpdateLogModal(ModalScreen):
             pass
     
     def update_progress(self, current: int, total: int, status: str = "") -> None:
-        """Update the progress bar and status text."""
+        """Update the progress bar."""
         try:
             if total > 0:
                 progress = min(int((current / total) * 100), 100)
                 progress_bar = self.query_one("#progress-bar", ProgressBar)
                 progress_bar.update(progress=progress)
-                
+
                 self.current_progress = progress
                 self.current_package = current
                 self.total_packages = total
-                
-                # Update progress text
-                progress_text = self.query_one("#progress-text", Static)
-                if status:
-                    progress_text.update(f"{current}/{total} packages - {status} ({progress}%)")
-                else:
-                    progress_text.update(f"{current}/{total} packages ({progress}%)")
         except Exception:
             # Fail silently if UI update fails
             pass
@@ -365,10 +351,6 @@ class APTUpdateLogModal(ModalScreen):
                             # Update progress if we have progress info
                             if curr is not None and tot is not None:
                                 self.update_progress(curr, tot, stat)
-                            elif stat:
-                                # Update status without changing progress
-                                progress_text = self.query_one("#progress-text", Static)
-                                progress_text.update(f"Line {count} - {stat}")
                             else:
                                 # Fallback: use line count as rough progress indicator
                                 # Estimate 50-100 lines for typical APT update
