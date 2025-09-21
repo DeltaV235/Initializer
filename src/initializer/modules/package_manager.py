@@ -43,49 +43,12 @@ class PackageManagerDetector:
             "description": "Fedora package manager",
             "installable": False,  # Usually pre-installed
         },
-        "pacman": {
-            "command": "pacman",
-            "description": "Arch Linux package manager",
-            "installable": False,  # Usually pre-installed
-        },
-        "zypper": {
-            "command": "zypper",
-            "description": "openSUSE package manager",
-            "installable": False,  # Usually pre-installed
-        },
         "brew": {
             "command": "brew",
             "description": "macOS/Linux package manager",
             "installable": True,  # Can be installed
             "install_script": '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
             "uninstall_script": '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"',
-        },
-        "apk": {
-            "command": "apk",
-            "description": "Alpine Linux package manager",
-            "installable": False,  # Usually pre-installed
-        },
-        "snap": {
-            "command": "snap",
-            "description": "Universal Linux package manager",
-            "installable": True,
-            "install_commands": {
-                "apt": ["apt-get", "update", "&&", "apt-get", "install", "-y", "snapd"],
-                "yum": ["yum", "install", "-y", "snapd"],
-                "dnf": ["dnf", "install", "-y", "snapd"],
-            }
-        },
-        "flatpak": {
-            "command": "flatpak",
-            "description": "Universal Linux application distribution",
-            "installable": True,
-            "install_commands": {
-                "apt": ["apt-get", "update", "&&", "apt-get", "install", "-y", "flatpak"],
-                "yum": ["yum", "install", "-y", "flatpak"],
-                "dnf": ["dnf", "install", "-y", "flatpak"],
-                "pacman": ["pacman", "-S", "--noconfirm", "flatpak"],
-                "zypper": ["zypper", "install", "-y", "flatpak"],
-            }
         },
     }
     
@@ -152,15 +115,7 @@ class PackageManagerDetector:
                             for line in f:
                                 if line.startswith('baseurl='):
                                     return line.split('=', 1)[1].strip()
-                                    
-            elif pm_name == "pacman":
-                mirrorlist = "/etc/pacman.d/mirrorlist"
-                if os.path.exists(mirrorlist):
-                    with open(mirrorlist, 'r') as f:
-                        for line in f:
-                            if line.startswith('Server ='):
-                                return line.split('=', 1)[1].strip()
-                                
+
             elif pm_name == "brew":
                 # Check Homebrew remote
                 result = subprocess.run(
@@ -170,14 +125,6 @@ class PackageManagerDetector:
                 )
                 if result.returncode == 0:
                     return result.stdout.strip()
-                    
-            elif pm_name == "apk":
-                repos_file = "/etc/apk/repositories"
-                if os.path.exists(repos_file):
-                    with open(repos_file, 'r') as f:
-                        for line in f:
-                            if line.strip() and not line.startswith('#'):
-                                return line.strip()
                                 
         except Exception:
             pass
@@ -187,13 +134,13 @@ class PackageManagerDetector:
     def get_primary_package_manager(self) -> Optional[PackageManager]:
         """Get the primary package manager for the system."""
         # Priority order for primary package manager
-        priority = ["apt", "yum", "dnf", "pacman", "zypper", "apk", "brew"]
-        
+        priority = ["apt", "yum", "dnf", "brew"]
+
         for pm_name in priority:
             for pm in self.package_managers:
                 if pm.name == pm_name:
                     return pm
-        
+
         # Return first available if none in priority list
         return self.package_managers[0] if self.package_managers else None
     
@@ -316,60 +263,39 @@ class PackageManagerDetector:
     
     def get_install_command(self, pm_name: str) -> Optional[str]:
         """Get the installation command for a package manager.
-        
+
         Args:
             pm_name: Package manager name
-        
+
         Returns:
             Installation command string or None if not installable
         """
         info = self.PACKAGE_MANAGERS_INFO.get(pm_name, {})
-        
+
         if not info.get("installable", False):
             return None
-        
+
         # For brew, return the install script
         if pm_name == "brew":
             return info.get("install_script")
-        
-        # For snap and flatpak, get the appropriate install command
-        if pm_name in ["snap", "flatpak"]:
-            install_commands = info.get("install_commands", {})
-            # Find primary package manager to use for installation
-            primary_pm = self.get_primary_package_manager()
-            if primary_pm and primary_pm.name in install_commands:
-                return " ".join(install_commands[primary_pm.name])
-        
+
         return None
     
     def get_uninstall_command(self, pm_name: str) -> Optional[str]:
         """Get the uninstallation command for a package manager.
-        
+
         Args:
             pm_name: Package manager name
-        
+
         Returns:
             Uninstallation command string or None if not uninstallable
         """
         info = self.PACKAGE_MANAGERS_INFO.get(pm_name, {})
-        
+
         # For brew, return the uninstall script
         if pm_name == "brew":
             return info.get("uninstall_script")
-        
-        # For snap and flatpak, generate uninstall command
-        if pm_name in ["snap", "flatpak"]:
-            primary_pm = self.get_primary_package_manager()
-            if primary_pm:
-                if primary_pm.name == "apt":
-                    return f"apt-get remove -y {pm_name}d" if pm_name == "snap" else f"apt-get remove -y {pm_name}"
-                elif primary_pm.name in ["yum", "dnf"]:
-                    return f"{primary_pm.command} remove -y {pm_name}d" if pm_name == "snap" else f"{primary_pm.command} remove -y {pm_name}"
-                elif primary_pm.name == "pacman":
-                    return f"pacman -R --noconfirm {pm_name}"
-                elif primary_pm.name == "zypper":
-                    return f"zypper remove -y {pm_name}"
-        
+
         return None
     
     def install_package_manager(self, pm_name: str) -> Tuple[bool, str, Optional[str]]:

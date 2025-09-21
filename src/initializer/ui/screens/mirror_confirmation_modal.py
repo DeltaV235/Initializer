@@ -153,18 +153,10 @@ class MirrorConfirmationModal(ModalScreen):
             files.extend([
                 "/etc/yum.repos.d/ (repo files)"
             ])
-        elif self.package_manager.name == "pacman":
-            files.extend([
-                "/etc/pacman.d/mirrorlist"
-            ])
         elif self.package_manager.name == "brew":
             files.extend([
                 "/usr/local/Homebrew/.git/config",
                 "Homebrew repository remote URL"
-            ])
-        elif self.package_manager.name == "apk":
-            files.extend([
-                "/etc/apk/repositories"
             ])
         
         return files
@@ -240,10 +232,6 @@ class MirrorConfirmationModal(ModalScreen):
                     yield Static(f"  • config.bak_{backup_suffix}", classes="backup-info")
                 elif self.package_manager.name in ["yum", "dnf"]:
                     yield Static(f"  • *.repo.bak_{backup_suffix}", classes="backup-info")
-                elif self.package_manager.name == "pacman":
-                    yield Static(f"  • mirrorlist.bak_{backup_suffix}", classes="backup-info")
-                elif self.package_manager.name == "apk":
-                    yield Static(f"  • repositories.bak_{backup_suffix}", classes="backup-info")
             
             # Fixed action help at the bottom - mimic main menu style exactly
             with Container(id="help-box"):

@@ -31,10 +31,7 @@ modules:
       - apt
       - yum
       - dnf
-      - pacman
-      - zypper
       - brew
-      - apk
     mirrors:
       apt:
         default: "https://archive.ubuntu.com/ubuntu/"
@@ -133,48 +130,6 @@ modules:
             key: "163"
             url: "https://mirrors.163.com/fedora/"
             description: "NetEase mirror (China)"
-      pacman:
-        default: "https://archlinux.org/mirrorlist/"
-        sources:
-          - name: "Official Arch Linux"
-            key: "default"
-            url: "https://archlinux.org/mirrorlist/"
-            description: "Official Arch Linux repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch"
-            description: "University of Science and Technology of China"
-          - name: "NetEase"
-            key: "163"
-            url: "Server = https://mirrors.163.com/archlinux/$repo/os/$arch"
-            description: "NetEase mirror (China)"
-      zypper:
-        default: "https://download.opensuse.org/"
-        sources:
-          - name: "Official openSUSE"
-            key: "default"
-            url: "https://download.opensuse.org/"
-            description: "Official openSUSE repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/opensuse/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/opensuse/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/opensuse/"
-            description: "University of Science and Technology of China"
       brew:
         default: "https://github.com/Homebrew/brew.git"
         sources:
@@ -194,25 +149,6 @@ modules:
             key: "aliyun"
             url: "https://mirrors.aliyun.com/homebrew/brew.git"
             description: "Alibaba Cloud mirror (China)"
-      apk:
-        default: "https://dl-cdn.alpinelinux.org/alpine/"
-        sources:
-          - name: "Official Alpine Linux"
-            key: "default"
-            url: "https://dl-cdn.alpinelinux.org/alpine/"
-            description: "Official Alpine Linux repositories"
-          - name: "Aliyun"
-            key: "aliyun"
-            url: "https://mirrors.aliyun.com/alpine/"
-            description: "Alibaba Cloud mirror (China)"
-          - name: "Tsinghua University"
-            key: "tuna"
-            url: "https://mirrors.tuna.tsinghua.edu.cn/alpine/"
-            description: "Tsinghua University mirror (China)"
-          - name: "USTC"
-            key: "ustc"
-            url: "https://mirrors.ustc.edu.cn/alpine/"
-            description: "University of Science and Technology of China"
 
   user_management:
     enabled: true

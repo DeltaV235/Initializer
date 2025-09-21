@@ -4,7 +4,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label, Checkbox
+from textual.widgets import Button, Static, Rule, Label
 from textual.events import Key
 from typing import Callable, Optional, List, Dict
 from textual.reactive import reactive
@@ -50,23 +50,19 @@ class PackageManagerInstallModal(ModalScreen):
     
     .pm-item {
         height: auto;
-        min-height: 2;
+        min-height: 3;
         padding: 0 0;
+        layout: horizontal;
+        align: left middle;
     }
     
     .pm-item-selected {
         background: $primary;
     }
     
-    .pm-checkbox {
-        width: 3;
-        height: 1;
-        padding: 0;
-        margin: 0 1 0 0;
-    }
-    
-    .pm-name {
+    .pm-content {
         width: auto;
+        height: 1;
         padding: 0;
         margin: 0;
     }
@@ -103,9 +99,9 @@ class PackageManagerInstallModal(ModalScreen):
         self.detector = PackageManagerDetector(config_manager)
         self.all_package_managers = self.detector.all_package_managers
         
-        # Filter to only show installable package managers
-        self.installable_pms = [pm for pm in self.all_package_managers 
-                                if pm.installable or pm.available]
+        # Show all package managers (whether installed, installable, or neither)
+        # This allows users to see what package managers are supported
+        self.installable_pms = self.all_package_managers
         
         # Track selection state for each package manager
         # Initialize: installed PMs are checked, uninstalled are unchecked
@@ -158,31 +154,33 @@ class PackageManagerInstallModal(ModalScreen):
         with Container(id="modal-container"):
             yield Static("Select Package Managers to Install/Uninstall", id="modal-title")
             yield Rule()
-            
+
             with ScrollableContainer(id="modal-content"):
                 yield Label("Available Package Managers:", classes="section-header")
                 with Vertical(id="pm-list"):
                     for i, pm in enumerate(self.installable_pms):
                         with Horizontal(id=f"pm-item-{i}", classes="pm-item"):
-                            # Arrow indicator for current selection
+                            # Create full content with arrow, checkbox symbol and text
                             arrow = "▶ " if i == self.selected_index else "  "
-                            
-                            # Checkbox state
-                            check = "[X]" if self.selection_state.get(pm.name, False) else "[ ]"
-                            
+                            checkbox_symbol = "■" if self.selection_state.get(pm.name, False) else "□"
+
                             # Package manager info
-                            pm_text = f"{arrow}{check} {pm.name.upper()}"
+                            pm_text = f"{arrow}{checkbox_symbol} {pm.name.upper()}"
                             if pm.description:
                                 pm_text += f" - {pm.description}"
-                            
+
                             # Status indicator
                             if pm.available:
                                 pm_text += " (Installed)"
-                            
-                            yield Static(pm_text, classes="pm-display")
-                    
+                            elif pm.installable:
+                                pm_text += " (Available for install)"
+                            else:
+                                pm_text += " (System package manager)"
+
+                            yield Static(pm_text, classes="pm-content", id=f"pm-content-{i}")
+
                     yield Static("", classes="bottom-spacer")
-            
+
             # Bottom shortcuts area
             yield Rule()
             yield Label("J/K=Up/Down | SPACE/Enter=Toggle | I=Install/Uninstall | Esc=Cancel", classes="help-text")
@@ -190,29 +188,31 @@ class PackageManagerInstallModal(ModalScreen):
     def _update_display(self) -> None:
         """Update the package manager list display."""
         try:
-            pm_list = self.query_one("#pm-list", Vertical)
-            
-            # Update each item
+            # Update each item's complete content
             for i, pm in enumerate(self.installable_pms):
-                pm_item = pm_list.query_one(f"#pm-item-{i} .pm-display", Static)
-                
-                # Arrow indicator
+                # Create full content with arrow, checkbox symbol and text
                 arrow = "▶ " if i == self.selected_index else "  "
-                
-                # Checkbox state
-                check = "[X]" if self.selection_state.get(pm.name, False) else "[ ]"
-                
+                checkbox_symbol = "■" if self.selection_state.get(pm.name, False) else "□"
+
                 # Package manager info
-                pm_text = f"{arrow}{check} {pm.name.upper()}"
+                pm_text = f"{arrow}{checkbox_symbol} {pm.name.upper()}"
                 if pm.description:
                     pm_text += f" - {pm.description}"
-                
+
                 # Status indicator
                 if pm.available:
                     pm_text += " (Installed)"
-                
-                pm_item.update(pm_text)
-                
+                elif pm.installable:
+                    pm_text += " (Available for install)"
+                else:
+                    pm_text += " (System package manager)"
+
+                try:
+                    content_item = self.query_one(f"#pm-content-{i}", Static)
+                    content_item.update(pm_text)
+                except:
+                    pass
+
         except Exception as e:
             # Fallback if update fails
             pass
@@ -236,9 +236,12 @@ class PackageManagerInstallModal(ModalScreen):
         if 0 <= self.selected_index < len(self.installable_pms):
             pm = self.installable_pms[self.selected_index]
             # Toggle the selection state
-            self.selection_state[pm.name] = not self.selection_state.get(pm.name, False)
+            new_value = not self.selection_state.get(pm.name, False)
+            self.selection_state[pm.name] = new_value
+
+            # Update the display to reflect the change
             self._update_display()
-    
+
     def action_install_selected(self) -> None:
         """Process the selected package managers for installation/uninstallation."""
         # Determine what actions to take
