@@ -25,7 +25,7 @@ class PackageManagerInstallModal(ModalScreen):
     PackageManagerInstallModal {
         align: center middle;
     }
-    
+
     #modal-container {
         width: 80%;
         height: 80%;
@@ -35,7 +35,7 @@ class PackageManagerInstallModal(ModalScreen):
         padding: 1;
         layout: vertical;
     }
-    
+
     #modal-content {
         height: 1fr;
         overflow-y: auto;
