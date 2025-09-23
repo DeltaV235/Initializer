@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 from ..config_manager import ConfigManager
+from ..utils.logger import get_module_logger
 
 
 @dataclass
@@ -54,18 +55,28 @@ class PackageManagerDetector:
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         self.config_manager = config_manager or ConfigManager()
+        self.logger = get_module_logger("package_manager")
+
+        self.logger.info("Initializing package manager detector")
         self._mirror_sources = self._load_mirror_sources_from_config()
         self.all_package_managers = self._get_all_package_managers()
         self.package_managers = [pm for pm in self.all_package_managers if pm.available]
-    
+
+        self.logger.info(f"Detected {len(self.package_managers)} available package managers: "
+                        f"{[pm.name for pm in self.package_managers]}")
+
     def _get_all_package_managers(self) -> List[PackageManager]:
         """Get all package managers (installed and installable)."""
+        self.logger.debug("Scanning for package managers")
         managers = []
-        
+
         for name, info in self.PACKAGE_MANAGERS_INFO.items():
             command = info["command"]
             is_available = shutil.which(command) is not None
-            
+
+            self.logger.debug(f"Checking package manager '{name}' (command: {command}): "
+                            f"{'available' if is_available else 'not available'}")
+
             pm = PackageManager(
                 name=name,
                 command=command,
@@ -75,7 +86,7 @@ class PackageManagerDetector:
                 current_source=self._get_current_source(name) if is_available else None
             )
             managers.append(pm)
-        
+
         return managers
     
     def _detect_package_managers(self) -> List[PackageManager]:
@@ -300,60 +311,82 @@ class PackageManagerDetector:
     
     def install_package_manager(self, pm_name: str) -> Tuple[bool, str, Optional[str]]:
         """Install a package manager.
-        
+
         Args:
             pm_name: Package manager name
-        
+
         Returns:
             Tuple of (success, message, command_used)
         """
+        self.logger.info(f"Starting installation of package manager: {pm_name}")
         command = self.get_install_command(pm_name)
-        
+
         if not command:
+            self.logger.error(f"Package manager {pm_name} is not installable")
             return False, f"Package manager {pm_name} is not installable", None
-        
+
+        self.logger.debug(f"Using install command: {command}")
+
         try:
             # For scripts (like Homebrew), use shell execution
             if pm_name == "brew":
+                self.logger.debug("Executing Homebrew installation script")
                 result = subprocess.run(command, shell=True, capture_output=True, text=True)
             else:
                 # For regular commands
+                self.logger.debug("Executing regular installation command")
                 result = subprocess.run(command.split(), capture_output=True, text=True)
-            
+
             if result.returncode == 0:
+                self.logger.info(f"Successfully installed package manager: {pm_name}")
+                self.logger.debug(f"Installation output: {result.stdout}")
                 return True, f"Successfully installed {pm_name}", command
             else:
+                self.logger.error(f"Failed to install {pm_name}. Return code: {result.returncode}")
+                self.logger.error(f"Error output: {result.stderr}")
                 return False, f"Failed to install {pm_name}: {result.stderr}", command
-                
+
         except Exception as e:
+            self.logger.error(f"Exception during installation of {pm_name}: {str(e)}")
             return False, f"Error installing {pm_name}: {str(e)}", command
-    
+
     def uninstall_package_manager(self, pm_name: str) -> Tuple[bool, str, Optional[str]]:
         """Uninstall a package manager.
-        
+
         Args:
             pm_name: Package manager name
-        
+
         Returns:
             Tuple of (success, message, command_used)
         """
+        self.logger.info(f"Starting uninstallation of package manager: {pm_name}")
         command = self.get_uninstall_command(pm_name)
-        
+
         if not command:
+            self.logger.error(f"Package manager {pm_name} cannot be uninstalled")
             return False, f"Package manager {pm_name} cannot be uninstalled", None
-        
+
+        self.logger.debug(f"Using uninstall command: {command}")
+
         try:
             # For scripts (like Homebrew), use shell execution
             if pm_name == "brew":
+                self.logger.debug("Executing Homebrew uninstallation script")
                 result = subprocess.run(command, shell=True, capture_output=True, text=True)
             else:
                 # For regular commands
+                self.logger.debug("Executing regular uninstallation command")
                 result = subprocess.run(command.split(), capture_output=True, text=True)
-            
+
             if result.returncode == 0:
+                self.logger.info(f"Successfully uninstalled package manager: {pm_name}")
+                self.logger.debug(f"Uninstallation output: {result.stdout}")
                 return True, f"Successfully uninstalled {pm_name}", command
             else:
+                self.logger.error(f"Failed to uninstall {pm_name}. Return code: {result.returncode}")
+                self.logger.error(f"Error output: {result.stderr}")
                 return False, f"Failed to uninstall {pm_name}: {result.stderr}", command
-                
+
         except Exception as e:
+            self.logger.error(f"Exception during uninstallation of {pm_name}: {str(e)}")
             return False, f"Error uninstalling {pm_name}: {str(e)}", command

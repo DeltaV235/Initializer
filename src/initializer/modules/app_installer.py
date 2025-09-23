@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from pathlib import Path
 from ..utils.log_manager import InstallationLogManager, LogLevel
+from ..utils.logger import get_module_logger
 
 
 @dataclass
@@ -38,8 +39,9 @@ class AppInstaller:
         self.applications = self._load_applications()
         self.package_manager = self._detect_package_manager()
 
-        # Initialize log manager
+        # Initialize loggers
         self.log_manager = InstallationLogManager(config_manager.config_dir)
+        self.logger = get_module_logger("app_installer")
     
     def _load_applications(self) -> List[Application]:
         """Load applications from configuration."""
@@ -110,7 +112,7 @@ class AppInstaller:
             return True
 
         except Exception as e:
-            print(f"保存安装状态失败: {str(e)}")
+            self.logger.error(f"Failed to save installation state: {str(e)}")
             return False
 
     def load_installation_status(self, app_name: str) -> Optional[bool]:
@@ -132,7 +134,7 @@ class AppInstaller:
             return None
 
         except Exception as e:
-            print(f"加载安装状态失败: {str(e)}")
+            self.logger.error(f"Failed to load installation state: {str(e)}")
             return None
 
     def get_all_installation_status(self) -> Dict[str, Dict]:
@@ -176,7 +178,7 @@ class AppInstaller:
             return True
 
         except Exception as e:
-            print(f"清理安装状态失败: {str(e)}")
+            self.logger.error(f"Failed to cleanup installation state: {str(e)}")
             return False
 
     def analyze_error_and_suggest_solution(self, error_output: str, command: str, app_name: str) -> str:
@@ -759,7 +761,7 @@ class AppInstaller:
         """
         try:
             # Log the command being executed (for debugging)
-            print(f"执行命令: {command}")
+            self.logger.debug(f"Executing command: {command}")
 
             result = subprocess.run(
                 command,
@@ -830,41 +832,73 @@ class AppInstaller:
     
     def install_application(self, app: Application) -> Tuple[bool, str]:
         """Install an application.
-        
+
         Args:
             app: Application to install
-            
+
         Returns:
             Tuple of (success, message)
         """
+        self.logger.info(f"Starting installation of application: {app.name}")
+        self.logger.debug(f"Application package: {app.package}")
+
         install_cmd = self.get_install_command(app)
         if not install_cmd:
-            return False, "No package manager detected"
-        
+            error_msg = "No package manager detected"
+            self.logger.error(error_msg)
+            return False, error_msg
+
+        self.logger.debug(f"Using install command: {install_cmd}")
+
         success, output = self.execute_command(install_cmd)
-        
-        if success and app.post_install:
-            # Execute post-installation commands
-            post_success, post_output = self.execute_command(app.post_install)
-            if not post_success:
-                return True, f"Application installed but post-install failed: {post_output}"
-        
+
+        if success:
+            self.logger.info(f"Successfully installed application: {app.name}")
+
+            if app.post_install:
+                self.logger.info(f"Executing post-install commands for: {app.name}")
+                self.logger.debug(f"Post-install command: {app.post_install}")
+
+                # Execute post-installation commands
+                post_success, post_output = self.execute_command(app.post_install)
+                if not post_success:
+                    self.logger.warning(f"Post-install commands failed for {app.name}: {post_output}")
+                    return True, f"Application installed but post-install failed: {post_output}"
+                else:
+                    self.logger.info(f"Post-install commands completed successfully for: {app.name}")
+        else:
+            self.logger.error(f"Failed to install application {app.name}: {output}")
+
         return success, output
-    
+
     def uninstall_application(self, app: Application) -> Tuple[bool, str]:
         """Uninstall an application.
-        
+
         Args:
             app: Application to uninstall
-            
+
         Returns:
             Tuple of (success, message)
         """
+        self.logger.info(f"Starting uninstallation of application: {app.name}")
+        self.logger.debug(f"Application package: {app.package}")
+
         uninstall_cmd = self.get_uninstall_command(app)
         if not uninstall_cmd:
-            return False, "No package manager detected"
-        
-        return self.execute_command(uninstall_cmd)
+            error_msg = "No package manager detected"
+            self.logger.error(error_msg)
+            return False, error_msg
+
+        self.logger.debug(f"Using uninstall command: {uninstall_cmd}")
+
+        success, output = self.execute_command(uninstall_cmd)
+
+        if success:
+            self.logger.info(f"Successfully uninstalled application: {app.name}")
+        else:
+            self.logger.error(f"Failed to uninstall application {app.name}: {output}")
+
+        return success, output
 
     # Log Management Methods
 
@@ -877,14 +911,22 @@ class AppInstaller:
         Returns:
             Session ID
         """
-        return self.log_manager.start_session(
+        self.logger.info("Starting new installation logging session")
+        self.logger.debug(f"Package manager: {self.package_manager or 'unknown'}")
+
+        session_id = self.log_manager.start_session(
             package_manager=self.package_manager or "unknown",
             system_info=system_info
         )
 
+        self.logger.info(f"Installation logging session started with ID: {session_id}")
+        return session_id
+
     def end_logging_session(self) -> None:
         """End the current logging session."""
+        self.logger.info("Ending installation logging session")
         self.log_manager.end_session()
+        self.logger.debug("Installation logging session ended successfully")
 
     def log_installation_event(self, level: LogLevel, message: str,
                              application: str = None, action: str = None,
@@ -901,6 +943,10 @@ class AppInstaller:
             output: Command output
             error: Error message
         """
+        self.logger.debug(f"Logging installation event: {level.value} - {message}")
+        if application:
+            self.logger.debug(f"Event for application: {application}")
+
         self.log_manager.log(
             level=level,
             message=message,
@@ -917,6 +963,7 @@ class AppInstaller:
         Args:
             count: Total application count
         """
+        self.logger.info(f"Setting total applications count: {count}")
         self.log_manager.set_total_apps(count)
 
     def export_installation_logs(self, session_id: str = None,

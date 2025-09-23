@@ -9,6 +9,8 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 
+from .logger import get_utils_logger
+
 
 class LogLevel(Enum):
     """Log level enumeration."""
@@ -60,8 +62,12 @@ class InstallationLogManager:
             config_dir: Configuration directory path
         """
         self.config_dir = config_dir
-        self.logs_dir = config_dir / "logs"
+        # Use project root logs directory
+        self.logs_dir = Path("logs")
         self.logs_dir.mkdir(exist_ok=True)
+
+        # Initialize logger
+        self.logger = get_utils_logger("log_manager")
 
         # Current session
         self.current_session: Optional[InstallationSession] = None
@@ -92,7 +98,7 @@ class InstallationLogManager:
         # Create log file for this session
         self.current_log_file = self.logs_dir / f"install_session_{session_id}.json"
 
-        self.log(LogLevel.INFO, f"安装会话开始 - 包管理器: {package_manager}")
+        self.log(LogLevel.INFO, f"Installation session started - package manager: {package_manager}")
 
         return session_id
 
@@ -111,8 +117,8 @@ class InstallationLogManager:
         self.current_session.failed_apps = self.current_session.total_apps - success_count
 
         self.log(LogLevel.INFO,
-                f"安装会话结束 - 成功: {self.current_session.successful_apps}, "
-                f"失败: {self.current_session.failed_apps}")
+                f"Installation session ended - successful: {self.current_session.successful_apps}, "
+                f"failed: {self.current_session.failed_apps}")
 
         # Save final session data
         self._save_session()
@@ -180,7 +186,7 @@ class InstallationLogManager:
                 json.dump(session_dict, f, indent=2, ensure_ascii=False)
 
         except Exception as e:
-            print(f"保存日志会话失败: {e}")
+            self.logger.error(f"Failed to save log session: {e}")
 
     def export_logs(self, session_id: str = None, format: str = "json",
                    output_file: str = None) -> str:
@@ -247,7 +253,7 @@ class InstallationLogManager:
             with open(log_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"加载日志会话失败: {e}")
+            self.logger.error(f"Failed to load log session: {e}")
             return None
 
     def _export_json(self, session_data: Dict[str, Any], output_file: Path) -> str:
@@ -434,7 +440,7 @@ class InstallationLogManager:
                 })
 
             except Exception as e:
-                print(f"加载会话文件 {log_file} 失败: {e}")
+                self.logger.error(f"Failed to load session file {log_file}: {e}")
 
         # Sort by start time (newest first)
         sessions.sort(key=lambda x: x['start_time'], reverse=True)
@@ -458,6 +464,6 @@ class InstallationLogManager:
                     log_file.unlink()
                     deleted_count += 1
             except Exception as e:
-                print(f"删除日志文件 {log_file} 失败: {e}")
+                self.logger.error(f"Failed to delete log file {log_file}: {e}")
 
         return deleted_count

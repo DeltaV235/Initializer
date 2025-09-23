@@ -1,0 +1,124 @@
+# Linux System Initializer - Logging Configuration
+# 浮浮酱为主人精心设计的日志配置 ♡
+
+# 全局日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+level: INFO
+
+# 控制台输出级别
+console_level: INFO
+
+# 文件输出级别
+file_level: DEBUG
+
+# 日志格式配置
+format:
+  # 控制台格式 (Rich 处理美化)
+  console: "%(message)s"
+
+  # 文件格式 (详细信息便于调试)
+  file: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+
+# 模块级别的日志配置
+modules:
+  # 主应用
+  initializer.app: INFO
+
+  # 核心模块
+  initializer.modules.system_info: INFO
+  initializer.modules.package_manager: INFO
+  initializer.modules.app_installer: INFO
+
+  # UI 组件 (减少噪音)
+  initializer.ui.screens: WARNING
+  initializer.ui.components: WARNING
+
+  # 工具模块
+  initializer.utils.config_manager: INFO
+  initializer.utils.log_manager: INFO
+  initializer.utils.logger: INFO
+
+  # 第三方库 (减少输出)
+  textual: WARNING
+  rich: WARNING
+  urllib3: WARNING
+
+# 开发模式覆盖 (debug=True 时使用)
+debug_overrides:
+  level: DEBUG
+  console_level: DEBUG
+  modules:
+    initializer.ui.screens: INFO
+    initializer.ui.components: INFO
+    initializer.utils: DEBUG
+
+# 文件处理配置
+file_handling:
+  # 日志文件名
+  filename: "initializer.log"
+
+  # 最大文件大小 (MB)
+  max_bytes: 10
+
+  # 保留文件数量
+  backup_count: 5
+
+  # 编码
+  encoding: "utf-8"
+
+# Rich Handler 配置
+rich_config:
+  # 显示路径信息
+  show_path: true
+
+  # 启用链接路径 (支持的终端)
+  enable_link_path: true
+
+  # 美化异常追踪
+  rich_tracebacks: true
+
+  # 支持 Rich 标记语言
+  markup: true
+
+  # 显示时间 (Rich 控制台处理)
+  show_time: false
+
+# 性能监控配置
+performance:
+  # 启用性能日志
+  enabled: false
+
+  # 慢操作阈值 (秒)
+  slow_threshold: 1.0
+
+  # 记录函数执行时间
+  log_execution_time: false
+
+# 错误处理配置
+error_handling:
+  # 自动记录未捕获异常
+  log_uncaught_exceptions: true
+
+  # 包含堆栈追踪
+  include_traceback: true
+
+  # 敏感信息过滤
+  filter_sensitive: true
+
+  # 敏感信息关键词
+  sensitive_keywords:
+    - password
+    - token
+    - key
+    - secret
+    - auth
+
+# 日志轮转配置
+rotation:
+  # 启用时间轮转
+  time_based: false
+
+  # 轮转间隔 (days)
+  interval: 1
+
+  # 启用大小轮转
+  size_based: true

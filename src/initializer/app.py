@@ -14,6 +14,7 @@ from textual.screen import Screen
 from textual.binding import Binding
 
 from .config_manager import ConfigManager
+from .utils.logger import init_logging, get_app_logger
 
 
 def cleanup_terminal_state():
@@ -96,25 +97,33 @@ class InitializerApp(App):
         Binding("f12", "force_quit", "", show=False, priority=True),    # Hidden shortcut for testing
     ]
     
-    def __init__(self, config_manager: ConfigManager, preset: str = None, 
+    def __init__(self, config_manager: ConfigManager, preset: str = None,
                  headless: bool = False, debug: bool = False):
         super().__init__()
-        
+
         self.config_manager = config_manager
         self.preset = preset
         self.headless = headless
         self.debug_mode = debug
         self.console = Console()
-        
+
+        # Initialize logging system first
+        init_logging(config_manager.config_dir, debug, self.console)
+        self.logger = get_app_logger()
+
         # Load configuration
         self.app_config = config_manager.get_app_config()
         self.modules_config = config_manager.get_modules_config()
         self.theme_config = config_manager.get_theme_config()
-        
+
+        self.logger.info(f"Application initialized - version: {self.app_config.version}")
+        if debug:
+            self.logger.debug("Debug mode enabled")
+
         # Apply preset if specified
         if preset:
             self._apply_preset(preset)
-            
+
         # Update title
         self.title = self.app_config.name
         self.sub_title = f"v{self.app_config.version}"
@@ -123,9 +132,9 @@ class InitializerApp(App):
         """Apply a configuration preset."""
         try:
             preset_config = self.config_manager.load_preset(preset_name)
-            if self.debug_mode:
-                self.console.print(f"[green]Applied preset: {preset_name}[/green]")
+            self.logger.info(f"Preset configuration applied: {preset_name}")
         except FileNotFoundError:
+            self.logger.warning(f"Preset configuration not found: {preset_name}")
             if self.debug_mode:
                 self.console.print(f"[yellow]Preset not found: {preset_name}[/yellow]")
         
