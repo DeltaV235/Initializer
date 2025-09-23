@@ -87,6 +87,7 @@ class InitializerApp(App):
     SUB_TITLE = "Modern TUI for System Setup"
     
     BINDINGS = [
+        ("escape", "quit", "Quit"),
         ("q", "quit", "Quit"),
         ("s", "settings", "Settings"),
         ("h", "help", "Help"),

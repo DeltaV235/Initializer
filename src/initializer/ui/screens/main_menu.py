@@ -20,6 +20,7 @@ class MainMenuScreen(Screen):
     """Main menu screen with configurator interface."""
     
     BINDINGS = [
+        ("escape", "quit", "Quit"),
         ("1", "select_segment", "System Status"),
         ("2", "select_segment", "Package Manager"),
         ("3", "select_segment", "Application Manager"),
@@ -125,7 +126,7 @@ class MainMenuScreen(Screen):
             
             # Help box at the bottom
             with Container(id="help-box"):
-                yield Label("Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | Enter=Select | 1-6=Quick Select", classes="help-text")
+                yield Label("Esc/Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | Enter=Select | 1-6=Quick Select", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
