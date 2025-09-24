@@ -1,0 +1,146 @@
+# APT 包管理器应用配置文件
+# Configuration file for applications installed via APT package manager
+
+# 元数据
+metadata:
+  package_manager: apt
+  description: "Applications configured for APT (Advanced Package Tool) package manager"
+  last_updated: "2025-09-24"
+  version: "1.0.0"
+
+# 应用程序列表
+applications:
+  # 开发工具类
+  - name: Docker
+    description: Container runtime and orchestration
+    category: development
+    package: docker.io docker-compose
+    post_install: usermod -aG docker $USER && systemctl enable docker
+    tags: [container, devops, docker]
+    recommended: true
+
+  - name: Node.js
+    description: JavaScript runtime and package manager
+    category: development
+    package: nodejs npm
+    post_install: npm install -g yarn
+    tags: [javascript, nodejs, runtime, npm]
+    recommended: true
+
+  - name: Python Dev
+    description: Python development tools
+    category: development
+    package: python3-pip python3-venv python3-dev
+    post_install: pip3 install --upgrade pip setuptools wheel
+    tags: [python, development, pip]
+    recommended: true
+
+  - name: Git Tools
+    description: Version control system and tools
+    category: development
+    package: git git-lfs gitk
+    post_install: git lfs install
+    tags: [git, vcs, version-control]
+    recommended: true
+
+  - name: Build Tools
+    description: Essential compilation tools
+    category: development
+    package: build-essential cmake automake autoconf
+    post_install: null
+    tags: [build, compilation, development]
+    recommended: true
+
+  # 系统工具类
+  - name: Network Tools
+    description: Network utilities and diagnostic tools
+    category: system
+    package: curl wget net-tools dnsutils
+    post_install: null
+    tags: [network, utilities, diagnostic]
+    recommended: true
+
+  - name: System Monitor
+    description: System monitoring and disk usage tools
+    category: system
+    package: htop btop ncdu
+    post_install: null
+    tags: [monitoring, system, disk-usage]
+    recommended: true
+
+  - name: Archive Tools
+    description: File compression and archive utilities
+    category: system
+    package: zip unzip tar gzip bzip2 xz-utils
+    post_install: null
+    tags: [compression, archive, utilities]
+    recommended: true
+
+  # 编辑器类
+  - name: Text Editors
+    description: Terminal-based text editors
+    category: editor
+    package: vim neovim nano
+    post_install: null
+    tags: [editor, terminal, vim, nano]
+    recommended: true
+
+  # 数据库工具类
+  - name: Database Clients
+    description: Database client tools
+    category: database
+    package: mysql-client postgresql-client redis-tools
+    post_install: null
+    tags: [database, client, mysql, postgresql, redis]
+    recommended: false
+
+# 分类定义
+categories:
+  development:
+    name: "开发工具"
+    description: "Software development and programming tools"
+    icon: "🛠️"
+
+  system:
+    name: "系统工具"
+    description: "System utilities and administration tools"
+    icon: "⚙️"
+
+  editor:
+    name: "文本编辑器"
+    description: "Text editors and IDE tools"
+    icon: "📝"
+
+  database:
+    name: "数据库工具"
+    description: "Database clients and management tools"
+    icon: "🗃️"
+
+# APT 特定配置
+apt_config:
+  # 更新命令
+  update_command: "sudo apt-get update"
+
+  # 安装命令模板
+  install_command: "sudo apt-get install -y"
+
+  # 卸载命令模板
+  remove_command: "sudo apt-get remove -y"
+
+  # 清理命令
+  cleanup_command: "sudo apt-get autoremove -y && sudo apt-get autoclean"
+
+  # 软件源更新频率（小时）
+  update_interval_hours: 24
+
+  # 是否自动确认安装
+  auto_yes: true
+
+  # 是否显示详细输出
+  verbose: false
+
+  # 推荐包处理
+  install_recommends: true
+
+  # 建议包处理
+  install_suggests: false

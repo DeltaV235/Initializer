@@ -36,29 +36,114 @@ class AppInstaller:
         # Load raw configuration directly
         modules_config = config_manager.load_config("modules")
         self.app_config = modules_config.get('modules', {}).get('app_install', {})
-        self.applications = self._load_applications()
+
+        # 先检测包管理器
         self.package_manager = self._detect_package_manager()
+
+        # 然后加载应用列表
+        self.applications = self._load_applications()
 
         # Initialize loggers
         self.log_manager = InstallationLogManager(config_manager.config_dir)
         self.logger = get_module_logger("app_installer")
     
     def _load_applications(self) -> List[Application]:
-        """Load applications from configuration."""
+        """Load applications from package manager specific configuration file."""
         applications = []
-        app_list = self.app_config.get("applications", [])
-        
-        for app_data in app_list:
-            app = Application(
-                name=app_data.get("name", ""),
-                package=app_data.get("package", ""),
-                description=app_data.get("description", ""),
-                post_install=app_data.get("post_install")
-            )
-            applications.append(app)
-        
+
+        # 根据包管理器类型加载对应的配置文件
+        if self.package_manager == "apt" or self.package_manager == "apt-get":
+            config_file = "applications_apt.yaml"
+        elif self.package_manager == "brew":
+            config_file = "applications_homebrew.yaml"
+        else:
+            # 回退到原始配置方法
+            app_list = self.app_config.get("applications", [])
+            for app_data in app_list:
+                app = Application(
+                    name=app_data.get("name", ""),
+                    package=app_data.get("package", ""),
+                    description=app_data.get("description", ""),
+                    post_install=app_data.get("post_install")
+                )
+                applications.append(app)
+            return applications
+
+        # 加载包管理器特定的配置文件
+        try:
+            import yaml
+            config_path = self.config_manager.config_dir / config_file
+
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+
+                app_list = config_data.get("applications", [])
+
+                for app_data in app_list:
+                    # 处理不同包管理器的包名字段
+                    package_name = self._get_package_name_for_manager(app_data)
+
+                    app = Application(
+                        name=app_data.get("name", ""),
+                        package=package_name,
+                        description=app_data.get("description", ""),
+                        post_install=app_data.get("post_install")
+                    )
+                    applications.append(app)
+            else:
+                # 如果特定配置文件不存在，回退到原始配置
+                self.logger.warning(f"Package manager specific config {config_file} not found, falling back to modules.yaml")
+                app_list = self.app_config.get("applications", [])
+                for app_data in app_list:
+                    app = Application(
+                        name=app_data.get("name", ""),
+                        package=app_data.get("package", ""),
+                        description=app_data.get("description", ""),
+                        post_install=app_data.get("post_install")
+                    )
+                    applications.append(app)
+
+        except Exception as e:
+            self.logger.error(f"Failed to load package manager specific config: {str(e)}")
+            # 回退到原始配置
+            app_list = self.app_config.get("applications", [])
+            for app_data in app_list:
+                app = Application(
+                    name=app_data.get("name", ""),
+                    package=app_data.get("package", ""),
+                    description=app_data.get("description", ""),
+                    post_install=app_data.get("post_install")
+                )
+                applications.append(app)
+
         return applications
-    
+
+    def _get_package_name_for_manager(self, app_data: dict) -> str:
+        """Get package name based on package manager type.
+
+        Args:
+            app_data: Application data from configuration
+
+        Returns:
+            Package name string for the current package manager
+        """
+        if self.package_manager == "brew":
+            # Homebrew 可能使用 formula 或 cask
+            app_type = app_data.get("type", "formula")
+
+            if app_type == "cask":
+                return app_data.get("cask", "")
+            elif app_type == "both":
+                # 优先使用 cask（GUI 应用）
+                return app_data.get("cask", app_data.get("formula", ""))
+            else:
+                # 默认使用 formula
+                return app_data.get("formula", "")
+        else:
+            # APT 等使用标准 package 字段
+            return app_data.get("package", "")
+
     def _detect_package_manager(self) -> Optional[str]:
         """Detect the system's package manager."""
         package_managers = {
@@ -623,16 +708,40 @@ class AppInstaller:
     
     def _is_package_installed(self, package: str) -> bool:
         """Check if a specific package is installed.
-        
+
         Args:
             package: Package name to check
-            
+
         Returns:
             True if installed, False otherwise
         """
         if not self.package_manager:
             return False
-        
+
+        # 处理 Homebrew 特殊情况
+        if self.package_manager == "brew":
+            check_commands = [
+                ["brew", "list", package],      # 检查 formula
+                ["brew", "list", "--cask", package]  # 检查 cask
+            ]
+
+            # 尝试两种检查方式，任一成功即表示已安装
+            for cmd in check_commands:
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if result.returncode == 0:
+                        return True
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    continue
+
+            return False
+
+        # 其他包管理器保持原有逻辑
         check_commands = {
             "apt": ["dpkg", "-l", package],
             "apt-get": ["dpkg", "-l", package],
@@ -642,11 +751,11 @@ class AppInstaller:
             "zypper": ["rpm", "-q", package],
             "apk": ["apk", "info", "-e", package]
         }
-        
+
         cmd = check_commands.get(self.package_manager)
         if not cmd:
             return False
-        
+
         try:
             result = subprocess.run(
                 cmd,
@@ -660,18 +769,33 @@ class AppInstaller:
     
     def get_install_command(self, app: Application) -> Optional[str]:
         """Get the installation command for an application.
-        
+
         Args:
             app: Application to install
-            
+
         Returns:
             Installation command string or None
         """
         if not self.package_manager:
             return None
-        
+
         packages = app.package
-        
+
+        # 处理 Homebrew 特殊情况
+        if self.package_manager == "brew":
+            # 尝试从配置文件获取应用类型信息
+            app_type = self._get_app_type_from_config(app.name)
+
+            if app_type == "cask":
+                return f"brew install --cask {packages}"
+            elif app_type == "both":
+                # 默认使用 cask 安装（GUI 应用优先）
+                return f"brew install --cask {packages}"
+            else:
+                # 默认使用 formula 安装
+                return f"brew install {packages}"
+
+        # 其他包管理器保持原有逻辑
         install_commands = {
             "apt": f"sudo apt-get update && sudo apt-get install -y {packages}",
             "apt-get": f"sudo apt-get update && sudo apt-get install -y {packages}",
@@ -681,23 +805,60 @@ class AppInstaller:
             "zypper": f"sudo zypper install -y {packages}",
             "apk": f"sudo apk add {packages}"
         }
-        
+
         return install_commands.get(self.package_manager)
-    
+
+    def _get_app_type_from_config(self, app_name: str) -> str:
+        """Get application type from configuration file for Homebrew.
+
+        Args:
+            app_name: Name of the application
+
+        Returns:
+            Application type ('formula', 'cask', 'both') or 'formula' as default
+        """
+        if self.package_manager != "brew":
+            return "formula"
+
+        try:
+            import yaml
+            config_path = self.config_manager.config_dir / "applications_homebrew.yaml"
+
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+
+                app_list = config_data.get("applications", [])
+
+                for app_data in app_list:
+                    if app_data.get("name") == app_name:
+                        return app_data.get("type", "formula")
+
+        except Exception as e:
+            self.logger.debug(f"Failed to get app type from config: {str(e)}")
+
+        return "formula"  # 默认返回 formula
     def get_uninstall_command(self, app: Application) -> Optional[str]:
         """Get the uninstallation command for an application.
-        
+
         Args:
             app: Application to uninstall
-            
+
         Returns:
             Uninstallation command string or None
         """
         if not self.package_manager:
             return None
-        
+
         packages = app.package
-        
+
+        # 处理 Homebrew 特殊情况
+        if self.package_manager == "brew":
+            # 对于 Homebrew，卸载命令统一使用 brew uninstall
+            # 不论是 formula 还是 cask 都用相同的命令
+            return f"brew uninstall {packages}"
+
+        # 其他包管理器保持原有逻辑
         uninstall_commands = {
             "apt": f"sudo apt-get remove -y {packages}",
             "apt-get": f"sudo apt-get remove -y {packages}",
@@ -707,7 +868,7 @@ class AppInstaller:
             "zypper": f"sudo zypper remove -y {packages}",
             "apk": f"sudo apk del {packages}"
         }
-        
+
         return uninstall_commands.get(self.package_manager)
     
     def get_post_install_command(self, app: Application) -> Optional[str]:

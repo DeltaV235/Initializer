@@ -41,42 +41,16 @@ installation_status:
     timestamp: '2025-09-21T15:16:16.182326'
 modules:
   app_install:
-    applications:
-    - description: Container runtime and orchestration
-      name: Docker
-      package: docker.io docker-compose
-      post_install: usermod -aG docker $USER && systemctl enable docker
-    - description: JavaScript runtime and package manager
-      name: Node.js
-      package: nodejs npm
-      post_install: npm install -g yarn
-    - description: Python development tools
-      name: Python Dev
-      package: python3-pip python3-venv python3-dev
-      post_install: pip3 install --upgrade pip setuptools wheel
-    - description: Version control system and tools
-      name: Git Tools
-      package: git git-lfs gitk
-      post_install: git lfs install
-    - description: Essential compilation tools
-      name: Build Tools
-      package: build-essential cmake automake autoconf
-    - description: Network utilities and diagnostic tools
-      name: Network Tools
-      package: curl wget net-tools dnsutils
-    - description: System monitoring and disk usage tools
-      name: System Monitor
-      package: htop btop ncdu
-    - description: Terminal-based text editors
-      name: Text Editors
-      package: vim neovim nano
-    - description: File compression and archive utilities
-      name: Archive Tools
-      package: zip unzip tar gzip bzip2 xz-utils
-    - description: Database client tools
-      name: Database Clients
-      package: mysql-client postgresql-client redis-tools
+    # 应用配置现在使用包管理器特定的独立文件
+    # APT: applications_apt.yaml
+    # Homebrew: applications_homebrew.yaml
     enabled: true
+    description: "Application installation and management"
+    config_notes:
+      - "Applications are now configured in package manager specific files"
+      - "APT applications: config/applications_apt.yaml"
+      - "Homebrew applications: config/applications_homebrew.yaml"
+      - "This provides better organization and package manager specific features"
   homebrew:
     auto_install: false
     default_packages:

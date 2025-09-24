@@ -1,0 +1,262 @@
+# Homebrew 包管理器应用配置文件
+# Configuration file for applications installed via Homebrew package manager
+
+# 元数据
+metadata:
+  package_manager: homebrew
+  description: "Applications configured for Homebrew package manager (macOS and Linux)"
+  last_updated: "2025-09-24"
+  version: "1.0.0"
+
+# 应用程序列表
+applications:
+  # 开发工具类
+  - name: Git
+    description: Distributed version control system
+    category: development
+    formula: git
+    post_install: null
+    tags: [git, vcs, version-control]
+    recommended: true
+    type: formula
+
+  - name: Node.js
+    description: JavaScript runtime built on Chrome's V8 engine
+    category: development
+    formula: node
+    post_install: npm install -g yarn pnpm
+    tags: [javascript, nodejs, runtime, npm]
+    recommended: true
+    type: formula
+
+  - name: Python
+    description: Interpreted, interactive, object-oriented programming language
+    category: development
+    formula: python@3.12
+    post_install: pip3 install --upgrade pip setuptools wheel virtualenv
+    tags: [python, development, pip]
+    recommended: true
+    type: formula
+
+  - name: Docker
+    description: Container runtime and orchestration (Docker Desktop)
+    category: development
+    formula: docker
+    cask: docker
+    post_install: null
+    tags: [container, devops, docker]
+    recommended: true
+    type: both
+
+  - name: Go
+    description: Open source programming language from Google
+    category: development
+    formula: go
+    post_install: null
+    tags: [golang, programming, google]
+    recommended: false
+    type: formula
+
+  - name: Rust
+    description: Safe, concurrent, practical language
+    category: development
+    formula: rust
+    post_install: null
+    tags: [rust, programming, mozilla]
+    recommended: false
+    type: formula
+
+  # 系统工具类
+  - name: wget
+    description: Internet file retriever
+    category: system
+    formula: wget
+    post_install: null
+    tags: [download, utilities, network]
+    recommended: true
+    type: formula
+
+  - name: curl
+    description: Get a file from an HTTP, HTTPS or FTP server
+    category: system
+    formula: curl
+    post_install: null
+    tags: [download, utilities, network, http]
+    recommended: true
+    type: formula
+
+  - name: htop
+    description: Improved top (interactive process viewer)
+    category: system
+    formula: htop
+    post_install: null
+    tags: [monitoring, system, process]
+    recommended: true
+    type: formula
+
+  - name: btop
+    description: Resource monitor that shows usage and stats
+    category: system
+    formula: btop
+    post_install: null
+    tags: [monitoring, system, resources]
+    recommended: true
+    type: formula
+
+  - name: tree
+    description: Display directories as trees (with optional color/HTML output)
+    category: system
+    formula: tree
+    post_install: null
+    tags: [filesystem, utilities, directory]
+    recommended: true
+    type: formula
+
+  - name: jq
+    description: Lightweight and flexible command-line JSON processor
+    category: system
+    formula: jq
+    post_install: null
+    tags: [json, parser, utilities]
+    recommended: true
+    type: formula
+
+  # 编辑器类
+  - name: Vim
+    description: Vi 'workalike' with many additional features
+    category: editor
+    formula: vim
+    post_install: null
+    tags: [editor, terminal, vim]
+    recommended: true
+    type: formula
+
+  - name: Neovim
+    description: Ambitious Vim-fork focused on extensibility and agility
+    category: editor
+    formula: neovim
+    post_install: null
+    tags: [editor, terminal, neovim, vim]
+    recommended: false
+    type: formula
+
+  - name: Visual Studio Code
+    description: Open-source code editor redefined and optimized for building and debugging
+    category: editor
+    cask: visual-studio-code
+    post_install: null
+    tags: [editor, ide, microsoft, vscode]
+    recommended: false
+    type: cask
+
+  # 数据库工具类
+  - name: MySQL Client
+    description: Open source relational database management system
+    category: database
+    formula: mysql-client
+    post_install: null
+    tags: [database, client, mysql]
+    recommended: false
+    type: formula
+
+  - name: PostgreSQL Client
+    description: Object-relational database system
+    category: database
+    formula: postgresql@15
+    post_install: null
+    tags: [database, client, postgresql]
+    recommended: false
+    type: formula
+
+  - name: Redis
+    description: Persistent key-value database, with built-in net interface
+    category: database
+    formula: redis
+    post_install: brew services start redis
+    tags: [database, redis, cache, nosql]
+    recommended: false
+    type: formula
+
+# 分类定义
+categories:
+  development:
+    name: "开发工具"
+    description: "Software development and programming tools"
+    icon: "🛠️"
+
+  system:
+    name: "系统工具"
+    description: "System utilities and command-line tools"
+    icon: "⚙️"
+
+  editor:
+    name: "文本编辑器"
+    description: "Text editors and IDE tools"
+    icon: "📝"
+
+  database:
+    name: "数据库工具"
+    description: "Database servers and management tools"
+    icon: "🗃️"
+
+# Homebrew 特定配置
+homebrew_config:
+  # 更新命令
+  update_command: "brew update"
+
+  # Formula 安装命令模板
+  install_formula_command: "brew install"
+
+  # Cask 安装命令模板
+  install_cask_command: "brew install --cask"
+
+  # 卸载命令模板
+  remove_command: "brew uninstall"
+
+  # 清理命令
+  cleanup_command: "brew cleanup"
+
+  # 服务管理命令
+  service_start_command: "brew services start"
+  service_stop_command: "brew services stop"
+
+  # 更新频率（小时）
+  update_interval_hours: 24
+
+  # 是否自动清理
+  auto_cleanup: true
+
+  # 是否安装依赖
+  install_dependencies: true
+
+  # 是否强制链接
+  force_link: false
+
+  # 默认 Tap 仓库
+  default_taps:
+    - homebrew/core
+    - homebrew/cask
+    - homebrew/services
+
+  # 镜像配置
+  mirrors:
+    china_ustc: https://mirrors.ustc.edu.cn/brew.git
+    china_tuna: https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git
+    china_aliyun: https://mirrors.aliyun.com/homebrew/brew.git
+
+# 应用程序类型定义
+app_types:
+  formula:
+    name: "Formula"
+    description: "Command-line software packages"
+    install_command: "brew install"
+
+  cask:
+    name: "Cask"
+    description: "GUI applications and large binaries"
+    install_command: "brew install --cask"
+
+  both:
+    name: "Both"
+    description: "Available as both formula and cask"
+    prefer: "cask"
