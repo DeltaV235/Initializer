@@ -105,6 +105,20 @@ class MainMenuScreen(Screen):
             is_left_focused = (new_value == "left")
             logger.debug(f"Updating segment buttons for '{self.selected_segment}' with arrow: {is_left_focused}")
             self._update_segment_buttons(self.selected_segment, show_arrow=is_left_focused)
+
+            # Update right panel arrows based on current segment and focus
+            if new_value == "left":
+                # When switching to left panel, clear right panel arrows
+                if self.selected_segment == "package_manager":
+                    self._clear_pm_focus_indicators()
+                elif self.selected_segment == "app_install":
+                    self._clear_app_focus_indicators()
+            elif new_value == "right":
+                # When switching to right panel, update right panel arrows based on current focus
+                if self.selected_segment == "package_manager" and hasattr(self, '_pm_focused_item') and self._pm_focused_item:
+                    self._update_pm_focus_indicators()
+                elif self.selected_segment == "app_install":
+                    self._update_app_focus_indicators()
         else:
             logger.debug("Panel focus value same, no update needed")
         
@@ -625,34 +639,43 @@ class MainMenuScreen(Screen):
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
 
-        # Clear all app item arrows
+        # Clear all app item arrows - use container structure like _update_app_focus_indicators
         try:
             for i, app in enumerate(self.app_install_cache):
-                item_id = f"app-item-{i}-{self._app_unique_suffix}"
+                container_id = f"app-container-{i}-{self._app_unique_suffix}"
                 try:
-                    item_widget = self.query_one(f"#{item_id}", Static)
+                    from textual.containers import Horizontal
+                    container_widget = self.query_one(f"#{container_id}", Horizontal)
 
-                    # Determine status based on current state and selection
-                    is_selected = self.app_selection_state.get(app.name, False)
+                    # Get the status widget (first child)
+                    status_widgets = container_widget.query(".app-item-status")
+                    if status_widgets:
+                        status_widget = status_widgets.first()
 
-                    if app.installed and not is_selected:
-                        status = "[red]- To Uninstall[/red]"
-                    elif app.installed and is_selected:
-                        status = "[green]✓ Installed[/green]"
-                    elif not app.installed and is_selected:
-                        status = "[yellow]+ To Install[/yellow]"
-                    else:
-                        status = "[bright_black]○ Available[/bright_black]"
+                        # Determine status based on current state and selection
+                        is_selected = self.app_selection_state.get(app.name, False)
 
-                    # Update without arrow (always use spaces)
-                    app_text = f"  {status} - {app.name}"
-                    if app.description:
-                        app_text += f" - {app.description}"
+                        if app.installed and not is_selected:
+                            # Installed and will be uninstalled - red color for removal
+                            status_text = "[red]- To Uninstall[/red]"
+                        elif app.installed and is_selected:
+                            # Installed and staying installed (default state) - green for installed
+                            status_text = "[green]✓ Installed[/green]"
+                        elif not app.installed and is_selected:
+                            # Not installed but marked for installation - yellow for pending install
+                            status_text = "[yellow]+ To Install[/yellow]"
+                        else:
+                            # Not installed and staying that way (default state) - bright_black for neutral available
+                            status_text = "[bright_black]○ Available[/bright_black]"
 
-                    item_widget.update(app_text)
-                except:
-                    pass
-        except:
+                        # Update without arrow (always use spaces)
+                        status_display = f"  {status_text}"
+                        status_widget.update(status_display)
+
+                except Exception:
+                    # If we can't find the container, skip this item
+                    continue
+        except Exception:
             pass
     
     def _handle_pm_item_selection(self) -> None:
