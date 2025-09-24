@@ -20,13 +20,6 @@ class MainMenuScreen(Screen):
     """Main menu screen with configurator interface."""
     
     BINDINGS = [
-        ("escape", "quit", "Quit"),
-        ("1", "select_segment", "System Status"),
-        ("2", "select_segment", "Package Manager"),
-        ("3", "select_segment", "Application Manager"),
-        ("4", "select_segment", "Homebrew"),
-        ("5", "select_segment", "User Management"),
-        ("6", "select_segment", "Settings"),
         ("s", "select_segment", "Settings"),
         ("q", "quit", "Quit"),
         ("enter", "select_item", "Select"),
@@ -40,6 +33,9 @@ class MainMenuScreen(Screen):
     ]
     
     selected_segment = reactive("system_info")
+
+    # Track which panel currently has focus for reliable Esc key behavior
+    current_panel_focus = reactive("left")  # "left" or "right"
     
     # Cache and loading states for each segment
     system_info_cache = reactive(None)
@@ -91,6 +87,8 @@ class MainMenuScreen(Screen):
             is_left_focused = self._is_focus_in_left_panel()
             self._update_segment_buttons(new_value, show_arrow=is_left_focused)
             self._update_panel_title(new_value)
+            # Update help text when segment changes
+            self._update_help_text()
         
     def compose(self) -> ComposeResult:
         """Compose the configurator interface."""
@@ -126,7 +124,7 @@ class MainMenuScreen(Screen):
             
             # Help box at the bottom
             with Container(id="help-box"):
-                yield Label("Esc/Q=Quit | S=Settings | TAB/H/L=Switch Panel | J/K=Up/Down | Enter=Select | 1-6=Quick Select", classes="help-text")
+                yield Label("Loading...", classes="help-text")
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
@@ -144,9 +142,12 @@ class MainMenuScreen(Screen):
             self._update_panel_focus(is_left_focused=True)
         except:
             pass
-        
+
         # Schedule immediate content update after mount to ensure it's visible
         self.call_after_refresh(self._initial_content_load)
+
+        # Initialize help text after everything is set up
+        self.call_after_refresh(self._update_help_text)
     
     def _initial_content_load(self) -> None:
         """Load initial content for the default selected segment."""
@@ -179,11 +180,10 @@ class MainMenuScreen(Screen):
                 self._pm_focused_item = None
                 if hasattr(self, '_pm_unique_suffix'):
                     del self._pm_unique_suffix
-            
+
             # Reset app install focus state when switching segments
             if self.selected_segment != "app_install":
                 self.app_focused_index = 0
-                self._app_focus_initialized = False
             
             # Force a refresh to ensure widgets are fully cleared
             self.refresh()
@@ -889,13 +889,19 @@ class MainMenuScreen(Screen):
             # Update cache and loading state on main thread using call_from_thread
             def update_ui():
                 self.app_install_cache = applications
+                # Initialize selection state based on current installation status
+                selection_state = {}
+                for app in applications:
+                    selection_state[app.name] = app.installed
                 self.app_selection_state = selection_state
                 self.app_install_loading = False
                 self.app_focused_index = 0
-                
+
                 # Refresh the panel if we're still on app_install segment
                 if self.selected_segment == "app_install":
                     self.update_settings_panel()
+                    # Update help text for app section
+                    self._update_help_text()
                     # Force refresh the UI
                     self.refresh()
             
@@ -919,102 +925,46 @@ class MainMenuScreen(Screen):
         if isinstance(applications, dict) and "error" in applications:
             container.mount(Label(f"Error loading App info: {applications['error']}", classes="info-display"))
             return
-        
+
         container.mount(Label("Available Applications:", classes="section-header"))
         container.mount(Rule())
-        
+
         # Generate unique suffix to avoid ID conflicts
         import time
         unique_suffix = str(int(time.time() * 1000))[-6:]
-        
+
         # Store unique suffix for scrolling reference
         self._app_unique_suffix = unique_suffix
-        
-        # Display each application with checkbox
+
+        # Display each application with interactive selection
         for i, app in enumerate(applications):
             # Arrow indicator for current selection
             arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
-            
-            # Checkbox state
+
+            # Determine status based on current state and selection
             is_selected = self.app_selection_state.get(app.name, False)
-            checkbox = "[X]" if is_selected else "[ ]"
-            
-            # Status indicator
-            status = " (Installed)" if app.installed else ""
-            
-            # Create the display text
-            app_text = f"{arrow}{checkbox} {app.name}{status}"
-            container.mount(Static(app_text, id=f"app-item-{i}-{unique_suffix}", classes="pm-item-text"))
-            
-            # Add description
-            if app.description:
-                container.mount(Static(f"     {app.description}", classes="info-display"))
-        
-        # Show changes to apply
-        container.mount(Rule())
-        self._display_pending_changes(container)
-        
-        # Add Apply button
-        container.mount(Rule())
-        changes = self._calculate_changes(applications)
-        if changes["install"] or changes["uninstall"]:
-            container.mount(Button("Apply Changes (A)", id=f"apply-app-changes-{unique_suffix}", variant="primary"))
-        else:
-            container.mount(Static("No changes to apply", classes="info-display"))
-        
-        # Help text
-        container.mount(Rule())
-        container.mount(Label("J/K=Navigate | SPACE/Enter=Toggle | A=Apply Changes", classes="help-text"))
-    
-    def _display_pending_changes(self, container: ScrollableContainer) -> None:
-        """Display pending installation/uninstallation changes."""
-        if not self.app_install_cache:
-            return
-        
-        changes = self._calculate_changes(self.app_install_cache)
-        
-        container.mount(Label("Changes to apply:", classes="section-header"))
-        
-        if changes["install"]:
-            install_list = ", ".join(changes["install"])
-            container.mount(Static(f"• Install: {install_list}", classes="info-display"))
-        
-        if changes["uninstall"]:
-            uninstall_list = ", ".join(changes["uninstall"])
-            container.mount(Static(f"• Uninstall: {uninstall_list}", classes="info-display"))
-        
-        if not changes["install"] and not changes["uninstall"]:
-            container.mount(Static("• No changes", classes="info-display"))
-    
-    def _calculate_changes(self, applications) -> dict:
-        """Calculate what needs to be installed/uninstalled."""
-        changes = {"install": [], "uninstall": []}
-        
-        for app in applications:
-            is_selected = self.app_selection_state.get(app.name, False)
-            
+
             if app.installed and not is_selected:
-                changes["uninstall"].append(app.name)
+                # Installed and will be uninstalled
+                status = "- To Uninstall"
+            elif app.installed and is_selected:
+                # Installed and staying installed (default state)
+                status = "✓ Installed"
             elif not app.installed and is_selected:
-                changes["install"].append(app.name)
-        
-        return changes
-    
-    def _navigate_app_items(self, direction: str) -> None:
-        """Navigate through app items in the app install section."""
-        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
-            return
+                # Not installed but marked for installation
+                status = "+ To Install"
+            else:
+                # Not installed and staying that way (default state)
+                status = "○ Available"
 
-        max_index = len(self.app_install_cache) - 1
+            # Create the display text with name and description on same line
+            app_text = f"{arrow}{status} - {app.name}"
+            if app.description:
+                app_text += f" - {app.description}"
 
-        if direction == "down" and self.app_focused_index < max_index:
-            self.app_focused_index += 1
-        elif direction == "up" and self.app_focused_index > 0:
-            self.app_focused_index -= 1
+            container.mount(Static(app_text, id=f"app-item-{i}-{unique_suffix}", classes="pm-item-text"))
 
-        # Only update focus indicators instead of full panel refresh
-        self._update_app_focus_indicators()
-        self._scroll_to_current_app(direction)
+        container.mount(Static("", classes="bottom-spacer"))
 
     def _update_app_focus_indicators(self) -> None:
         """Update arrow indicators for app items without full refresh."""
@@ -1034,15 +984,26 @@ class MainMenuScreen(Screen):
                     # Arrow indicator for current selection
                     arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
 
-                    # Checkbox state
+                    # Determine status based on current state and selection
                     is_selected = self.app_selection_state.get(app.name, False)
-                    checkbox = "[X]" if is_selected else "[ ]"
 
-                    # Status indicator
-                    status = " (Installed)" if app.installed else ""
+                    if app.installed and not is_selected:
+                        # Installed and will be uninstalled
+                        status = "- To Uninstall"
+                    elif app.installed and is_selected:
+                        # Installed and staying installed (default state)
+                        status = "✓ Installed"
+                    elif not app.installed and is_selected:
+                        # Not installed but marked for installation
+                        status = "+ To Install"
+                    else:
+                        # Not installed and staying that way (default state)
+                        status = "○ Available"
 
                     # Create the display text
-                    app_text = f"{arrow}{checkbox} {app.name}{status}"
+                    app_text = f"{arrow}{status} - {app.name}"
+                    if app.description:
+                        app_text += f" - {app.description}"
 
                     # Update the widget text
                     item_widget.update(app_text)
@@ -1052,40 +1013,53 @@ class MainMenuScreen(Screen):
         except:
             # If we can't update indicators, fall back to full refresh
             self.update_settings_panel()
-    
+
+    def _navigate_app_items(self, direction: str) -> None:
+        """Navigate through app items in the app install section."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+
+        max_index = len(self.app_install_cache) - 1
+
+        if direction == "down" and self.app_focused_index < max_index:
+            self.app_focused_index += 1
+        elif direction == "up" and self.app_focused_index > 0:
+            self.app_focused_index -= 1
+
+        # Only update focus indicators instead of full panel refresh
+        self._update_app_focus_indicators()
+        self._scroll_to_current_app(direction)
+
     def _scroll_to_current_app(self, direction: str = None) -> None:
         """Scroll to ensure current app selection is visible."""
         try:
             scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
-            
+
             # Try to find the current app item by its Static widget ID
             if hasattr(self, '_app_unique_suffix'):
                 current_item_id = f"app-item-{self.app_focused_index}-{self._app_unique_suffix}"
                 current_item = self.query_one(f"#{current_item_id}", Static)
-                
+
                 # Use scroll_to_widget if available (preferred method)
                 if hasattr(scrollable_container, 'scroll_to_widget'):
                     scrollable_container.scroll_to_widget(current_item, animate=True, speed=60, center=True)
                     return
-            
+
         except Exception:
             pass
-        
+
         # Fallback: manual scrolling calculation
         try:
             scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
-            
+
             # Calculate the position of the current app item
-            # Each app item consists of: app line + description line = ~2 lines
-            # Plus header (3 lines) and rules
             header_height = 3  # "Available Applications:" + Rule
-            app_item_height = 2  # App line + description
-            current_position = header_height + (self.app_focused_index * app_item_height)
-            
+            current_position = header_height + self.app_focused_index
+
             # Get container dimensions
             container_height = scrollable_container.size.height
             current_scroll = scrollable_container.scroll_y
-            
+
             # Scroll if current item is not visible
             if current_position < current_scroll:
                 # Item is above visible area - scroll up
@@ -1093,7 +1067,7 @@ class MainMenuScreen(Screen):
             elif current_position >= current_scroll + container_height - 2:
                 # Item is below visible area - scroll down
                 scrollable_container.scroll_y = current_position - container_height + 3
-                    
+
         except Exception:
             # Final fallback: simple scroll by direction
             if direction:
@@ -1105,7 +1079,7 @@ class MainMenuScreen(Screen):
                         scrollable_container.scroll_up(animate=True)
                 except:
                     pass
-    
+
     def _toggle_current_app(self) -> None:
         """Toggle the selection state of the currently focused app."""
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
@@ -1114,57 +1088,49 @@ class MainMenuScreen(Screen):
         if 0 <= self.app_focused_index < len(self.app_install_cache):
             app = self.app_install_cache[self.app_focused_index]
             # Toggle the selection state
-            current_state = self.app_selection_state.get(app.name, False)
+            current_state = self.app_selection_state.get(app.name, app.installed)
             self.app_selection_state[app.name] = not current_state
 
-            # Only update focus indicators and pending changes instead of full refresh
+            # Only update focus indicators instead of full refresh
             self._update_app_focus_indicators()
-            self._update_pending_changes_display()
+            # Update help text when selection changes
+            self._update_help_text()
 
-    def _update_pending_changes_display(self) -> None:
-        """Update pending changes display without full refresh."""
-        # For now, use a lightweight approach - just update the apply button state
-        if not hasattr(self, '_app_unique_suffix'):
-            return
+    def _calculate_app_changes(self) -> dict:
+        """Calculate what app changes need to be applied."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return {"install": [], "uninstall": []}
 
-        try:
-            # Try to update the apply button
-            changes = self._calculate_changes(self.app_install_cache)
-            button_id = f"apply-app-changes-{self._app_unique_suffix}"
+        changes = {"install": [], "uninstall": []}
 
-            # Try to find the apply button and update its state
-            try:
-                apply_button = self.query_one(f"#{button_id}", Button)
-                if changes["install"] or changes["uninstall"]:
-                    apply_button.label = "Apply Changes (A)"
-                    apply_button.disabled = False
-                else:
-                    apply_button.label = "No Changes to Apply"
-                    apply_button.disabled = True
-            except:
-                # If we can't find the button, it might be in a different state
-                pass
-        except:
-            # If updating individual elements fails, this is okay -
-            # the changes will be visible when the user tries to apply
-            pass
-    
+        for app in self.app_install_cache:
+            is_selected = self.app_selection_state.get(app.name, app.installed)
+
+            if app.installed and not is_selected:
+                # Installed but unmarked - uninstall
+                changes["uninstall"].append(app.name)
+            elif not app.installed and is_selected:
+                # Not installed but marked - install
+                changes["install"].append(app.name)
+
+        return changes
+
     def action_apply_app_changes(self) -> None:
         """Apply the selected app installation changes."""
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
-        
-        changes = self._calculate_changes(self.app_install_cache)
-        
+
+        changes = self._calculate_app_changes()
+
         if not changes["install"] and not changes["uninstall"]:
             self._show_message("No changes to apply")
             return
-        
+
         # Prepare actions list
         actions = []
         for app in self.app_install_cache:
-            is_selected = self.app_selection_state.get(app.name, False)
-            
+            is_selected = self.app_selection_state.get(app.name, app.installed)
+
             if app.installed and not is_selected:
                 actions.append({
                     "action": "uninstall",
@@ -1175,11 +1141,11 @@ class MainMenuScreen(Screen):
                     "action": "install",
                     "application": app
                 })
-        
+
         if actions:
             # Show confirmation modal
             from .app_install_confirmation_modal import AppInstallConfirmationModal
-            
+
             def on_confirmation(confirmed: bool):
                 if confirmed:
                     # Show progress modal
@@ -1189,11 +1155,13 @@ class MainMenuScreen(Screen):
                     self.app_install_cache = None
                     self.app_install_loading = False
                     self.update_settings_panel()
-            
+
             modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
             # Clear panel focus before showing modal
             self._clear_panel_focus()
             self.app.push_screen(modal)
+    
+    # Navigation and interaction methods for right panel content
     
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
         """Build Homebrew settings panel."""
@@ -1316,22 +1284,22 @@ class MainMenuScreen(Screen):
     def handle_segment_selection(self, event: Button.Pressed) -> None:
         """Handle segment button selection."""
         button_id = event.button.id
-        
+
         if button_id and button_id.startswith("segment-"):
             segment_id = button_id.replace("segment-", "")
-            
+
             # Update segment selection and switch to right panel
             self.selected_segment = segment_id
             self.update_settings_panel()
-            
+
             # Update button styles to show selection - always show arrow when segment button is pressed
             self._update_segment_buttons(segment_id, show_arrow=True)
             # Update panel title
             self._update_panel_title(segment_id)
-            
+
             # When a segment button is pressed (Enter key), switch to right panel
             self.action_nav_right()
-            
+
         elif button_id == "open-pm-config":
             # Clear panel focus before showing modal
             self._clear_panel_focus()
@@ -1341,7 +1309,11 @@ class MainMenuScreen(Screen):
                 # Handle installation actions if needed
                 pass
             self.app.push_screen(PackageManagerInstallModal(on_install_actions_selected, self.config_manager))
-    
+
+        elif button_id and button_id.startswith("apply-app-changes-"):
+            # Apply app changes (legacy support)
+            self.action_apply_app_changes()
+
     def _open_source_selection_modal(self) -> None:
         """Open modal for source selection."""
         if not hasattr(self, '_primary_pm') or not self._primary_pm:
@@ -1449,16 +1421,71 @@ class MainMenuScreen(Screen):
         try:
             left_panel = self.query_one("#left-panel", Vertical)
             right_panel = self.query_one("#right-panel", Vertical)
-            
+
             if is_left_focused:
                 left_panel.add_class("panel-focused")
                 right_panel.remove_class("panel-focused")
+                # Update state tracking
+                self.current_panel_focus = "left"
             else:
                 left_panel.remove_class("panel-focused")
                 right_panel.add_class("panel-focused")
+                # Update state tracking
+                self.current_panel_focus = "right"
+
+            # Update help text when panel focus changes
+            self._update_help_text(is_left_focused)
         except:
             pass
     
+    def action_select_segment(self) -> None:
+        """Handle S key shortcut for Settings - works from any panel."""
+        # S key always goes to Settings segment regardless of panel focus
+        self.selected_segment = "settings"
+        self.update_settings_panel()
+        self._update_segment_buttons("settings", show_arrow=True)
+        self._update_panel_title("settings")
+
+        # If focus is in left panel, switch to right panel after selection
+        if self._is_focus_in_left_panel():
+            self.action_nav_right()
+
+    def on_key(self, event) -> bool:
+        """Handle key events, including 1-6 shortcuts and two-level Esc exit."""
+        # Handle Esc key with two-level exit behavior
+        if event.key == "escape":
+            if self.current_panel_focus == "right":
+                # From right panel, go back to left panel
+                self.action_nav_left()
+                return True
+            else:
+                # From left panel, quit application
+                self.app.exit()
+                return True
+
+        # Handle 1-6 shortcuts only when focus is in left panel
+        if event.key in ["1", "2", "3", "4", "5", "6"] and self._is_focus_in_left_panel():
+            try:
+                segment_index = int(event.key) - 1
+                if 0 <= segment_index < len(self.SEGMENTS):
+                    selected_segment = self.SEGMENTS[segment_index]
+
+                    # Update the selected segment
+                    self.selected_segment = selected_segment["id"]
+                    self.update_settings_panel()
+                    self._update_segment_buttons(selected_segment["id"], show_arrow=False)
+                    self._update_panel_title(selected_segment["id"])
+
+                    # Switch focus to right panel
+                    self.action_nav_right()
+
+                    return True  # Consume the event
+            except (ValueError, IndexError):
+                pass
+
+        # Let the parent handle other keys
+        return False
+
     # Legacy action methods for backward compatibility
     def action_homebrew(self) -> None:
         """Show Homebrew settings."""
@@ -1591,7 +1618,7 @@ class MainMenuScreen(Screen):
     def action_nav_left(self) -> None:
         """Navigate left (h key) - switch to left panel."""
         # H key switches to left panel
-        
+
         # Clear right panel arrows if we're in package manager section
         if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
             self._clear_pm_focus_indicators()
@@ -1678,7 +1705,7 @@ class MainMenuScreen(Screen):
             right_container = self.query_one("#settings-scroll", ScrollableContainer)
             right_container.focus()
             self._update_panel_focus(is_left_focused=False)
-            
+
             # If switching to package manager section, initialize focus and clear left arrows
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                 # Always set initial focus when switching to right panel
@@ -1687,9 +1714,7 @@ class MainMenuScreen(Screen):
                 self._update_pm_focus_indicators(clear_left_arrows=True)
             elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
                 # Initialize app focus when switching to right panel
-                if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
-                    self.app_focused_index = 0
-                    self._app_focus_initialized = True
+                self.app_focused_index = 0
                 # Update focus indicators
                 self._update_app_focus_indicators()
                 # Clear left arrows
@@ -1705,16 +1730,33 @@ class MainMenuScreen(Screen):
         """Check if current focus is in the left panel."""
         focused = self.focused
         if not focused:
+            # If no focus, we can't determine - return False to be safe (don't quit)
             return False
-            
+
         # Walk up the widget tree to determine which panel contains the focused widget
         current = focused
         while current is not None:
+            # Explicitly check for left panel
             if current.id == "left-panel":
                 return True
-            elif current.id == "right-panel" or current.id == "settings-scroll":
+            # Explicitly check for right panel or its children
+            elif current.id in ["right-panel", "settings-scroll", "settings-content"]:
                 return False
+            # Also check for segment buttons specifically (they are in left panel)
+            elif hasattr(current, 'id') and current.id and current.id.startswith('segment-'):
+                return True
             current = current.parent
+
+        # If we reached the top without finding a panel, check widget ID patterns
+        if hasattr(focused, 'id') and focused.id:
+            # If it's a segment button, it's definitely in the left panel
+            if focused.id.startswith('segment-'):
+                return True
+            # If it's the settings scroll or content, it's in the right panel
+            if focused.id in ['settings-scroll', 'settings-content', 'right-panel']:
+                return False
+
+        # Default to False (right panel) to be safe - don't accidentally quit
         return False
     
     def _navigate_segments_down(self) -> None:
@@ -1793,8 +1835,10 @@ class MainMenuScreen(Screen):
         
         # Check if we're in app install section
         if self.selected_segment == "app_install":
-            self._toggle_current_app()
-            return
+            # Toggle current app selection when Enter is pressed in the right panel
+            if not is_in_left:
+                self._toggle_current_app()
+                return
         
         if focused and hasattr(focused, 'press'):
             # For Button widgets, directly press them
@@ -1885,4 +1929,44 @@ class MainMenuScreen(Screen):
             self.set_timer(3.0, lambda: title_widget.update("🖥️ Linux System Initializer"))
         except Exception:
             # Silently fail if title widget is not found
+            pass
+
+    def _update_help_text(self, is_left_focused: bool = None) -> None:
+        """Update the main menu help text based on current segment and panel focus."""
+        try:
+            help_widget = self.query_one("#help-box Label", Label)
+
+            # Check which panel has focus - use provided parameter or detect
+            if is_left_focused is None:
+                is_left_focused = self._is_focus_in_left_panel()
+
+            if is_left_focused:
+                # Left panel focused - show navigation help (consistent across all pages)
+                help_text = "Esc=Back/Quit | Q=Quit | S=Settings | TAB/H/L=Switch Focus | J/K=Up/Down | Enter=Enter Right Panel | 1-6=Quick Select"
+            else:
+                # Right panel focused - show page-specific functionality
+                if self.selected_segment == "system_info":
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
+                elif self.selected_segment == "package_manager":
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter=Select | Q=Quit"
+                elif self.selected_segment == "app_install":
+                    # Show app-specific help with apply changes info when needed
+                    changes = self._calculate_app_changes()
+                    if changes["install"] or changes["uninstall"]:
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter=Toggle | A=Apply Changes | Q=Quit"
+                    else:
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter=Toggle | Q=Quit"
+                elif self.selected_segment == "homebrew":
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
+                elif self.selected_segment == "user_management":
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
+                elif self.selected_segment == "settings":
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
+                else:
+                    # Default right panel help
+                    help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
+
+            help_widget.update(help_text)
+        except:
+            # Silently fail if help widget not found
             pass
