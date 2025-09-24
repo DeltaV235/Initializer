@@ -1006,7 +1006,7 @@ class MainMenuScreen(Screen):
         # Store unique suffix for scrolling reference
         self._app_unique_suffix = unique_suffix
 
-        # Display each application with interactive selection
+        # Display each application with interactive selection using two-column layout
         for i, app in enumerate(applications):
             # Arrow indicator for current selection - only show when right panel has focus
             is_right_focused = (self.current_panel_focus == "right")
@@ -1017,23 +1017,35 @@ class MainMenuScreen(Screen):
 
             if app.installed and not is_selected:
                 # Installed and will be uninstalled
-                status = "- To Uninstall"
+                status_text = "- To Uninstall"
             elif app.installed and is_selected:
                 # Installed and staying installed (default state)
-                status = "✓ Installed"
+                status_text = "✓ Installed"
             elif not app.installed and is_selected:
                 # Not installed but marked for installation
-                status = "+ To Install"
+                status_text = "+ To Install"
             else:
                 # Not installed and staying that way (default state)
-                status = "○ Available"
+                status_text = "○ Available"
 
-            # Create the display text with name and description on same line
-            app_text = f"{arrow}{status} - {app.name}"
+            # Create container for horizontal layout
+            from textual.containers import Horizontal
+            app_container = Horizontal(classes="app-item-container", id=f"app-container-{i}-{unique_suffix}")
+
+            # Status column with fixed width (includes arrow)
+            status_display = f"{arrow}{status_text}"
+            status_widget = Static(status_display, classes="app-item-status")
+
+            # Content column with app name and description
+            content_text = app.name
             if app.description:
-                app_text += f" - {app.description}"
+                content_text += f" - {app.description}"
+            content_widget = Static(content_text, classes="app-item-content")
 
-            container.mount(Static(app_text, id=f"app-item-{i}-{unique_suffix}", classes="pm-item-text"))
+            # Mount container first, then add children
+            container.mount(app_container)
+            app_container.mount(status_widget)
+            app_container.mount(content_widget)
 
         container.mount(Static("", classes="bottom-spacer"))
 
@@ -1045,44 +1057,48 @@ class MainMenuScreen(Screen):
         if not hasattr(self, '_app_unique_suffix'):
             return
 
-        # Update all app items
+        # Update all app items - now they use container structure
         try:
             for i, app in enumerate(self.app_install_cache):
-                item_id = f"app-item-{i}-{self._app_unique_suffix}"
+                container_id = f"app-container-{i}-{self._app_unique_suffix}"
                 try:
-                    item_widget = self.query_one(f"#{item_id}", Static)
+                    from textual.containers import Horizontal
+                    container_widget = self.query_one(f"#{container_id}", Horizontal)
 
-                    # Arrow indicator for current selection - only show when right panel has focus
-                    is_right_focused = (self.current_panel_focus == "right")
-                    arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
+                    # Get the status widget (first child)
+                    status_widgets = container_widget.query(".app-item-status")
+                    if status_widgets:
+                        status_widget = status_widgets.first()
 
-                    # Determine status based on current state and selection
-                    is_selected = self.app_selection_state.get(app.name, False)
+                        # Arrow indicator for current selection - only show when right panel has focus
+                        is_right_focused = (self.current_panel_focus == "right")
+                        arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
 
-                    if app.installed and not is_selected:
-                        # Installed and will be uninstalled
-                        status = "- To Uninstall"
-                    elif app.installed and is_selected:
-                        # Installed and staying installed (default state)
-                        status = "✓ Installed"
-                    elif not app.installed and is_selected:
-                        # Not installed but marked for installation
-                        status = "+ To Install"
-                    else:
-                        # Not installed and staying that way (default state)
-                        status = "○ Available"
+                        # Determine status based on current state and selection
+                        is_selected = self.app_selection_state.get(app.name, False)
 
-                    # Create the display text
-                    app_text = f"{arrow}{status} - {app.name}"
-                    if app.description:
-                        app_text += f" - {app.description}"
+                        if app.installed and not is_selected:
+                            # Installed and will be uninstalled
+                            status_text = "- To Uninstall"
+                        elif app.installed and is_selected:
+                            # Installed and staying installed (default state)
+                            status_text = "✓ Installed"
+                        elif not app.installed and is_selected:
+                            # Not installed but marked for installation
+                            status_text = "+ To Install"
+                        else:
+                            # Not installed and staying that way (default state)
+                            status_text = "○ Available"
 
-                    # Update the widget text
-                    item_widget.update(app_text)
-                except:
-                    # If we can't find the specific item, skip it
-                    pass
-        except:
+                        # Update status display with arrow and status
+                        status_display = f"{arrow}{status_text}"
+                        status_widget.update(status_display)
+
+                except Exception:
+                    # If we can't find the container, skip this item
+                    continue
+
+        except Exception:
             # If we can't update indicators, fall back to full refresh
             self.update_settings_panel()
 
@@ -1107,14 +1123,15 @@ class MainMenuScreen(Screen):
         try:
             scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
 
-            # Try to find the current app item by its Static widget ID
+            # Try to find the current app container by its ID
             if hasattr(self, '_app_unique_suffix'):
-                current_item_id = f"app-item-{self.app_focused_index}-{self._app_unique_suffix}"
-                current_item = self.query_one(f"#{current_item_id}", Static)
+                current_container_id = f"app-container-{self.app_focused_index}-{self._app_unique_suffix}"
+                from textual.containers import Horizontal
+                current_container = self.query_one(f"#{current_container_id}", Horizontal)
 
                 # Use scroll_to_widget if available (preferred method)
                 if hasattr(scrollable_container, 'scroll_to_widget'):
-                    scrollable_container.scroll_to_widget(current_item, animate=True, speed=60, center=True)
+                    scrollable_container.scroll_to_widget(current_container, animate=True, speed=60, center=True)
                     return
 
         except Exception:
