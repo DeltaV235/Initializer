@@ -28,8 +28,9 @@ modules:
   initializer.modules.package_manager: INFO
   initializer.modules.app_installer: INFO
 
-  # UI 组件 (减少噪音)
+  # UI 组件 (main_menu 启用调试)
   initializer.ui.screens: WARNING
+  initializer.ui.main_menu: DEBUG
   initializer.ui.components: WARNING
 
   # 工具模块
@@ -47,7 +48,8 @@ debug_overrides:
   level: DEBUG
   console_level: DEBUG
   modules:
-    initializer.ui.screens: INFO
+    initializer.ui.screens: DEBUG
+    initializer.ui.main_menu: DEBUG
     initializer.ui.components: INFO
     initializer.utils: DEBUG
 

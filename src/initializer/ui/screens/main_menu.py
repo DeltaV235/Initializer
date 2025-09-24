@@ -14,6 +14,10 @@ from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
 from ...modules.package_manager import PackageManagerDetector
 from ...modules.app_installer import AppInstaller
+from ...utils.logger import get_ui_logger
+
+# Initialize logger for this screen
+logger = get_ui_logger("main_menu")
 
 
 class MainMenuScreen(Screen):
@@ -35,7 +39,7 @@ class MainMenuScreen(Screen):
     selected_segment = reactive("system_info")
 
     # Track which panel currently has focus for reliable Esc key behavior
-    current_panel_focus = reactive("left")  # "left" or "right"
+    current_panel_focus = reactive("unset")  # "left", "right", or "unset" initially
     
     # Cache and loading states for each segment
     system_info_cache = reactive(None)
@@ -82,13 +86,27 @@ class MainMenuScreen(Screen):
     def watch_selected_segment(self, old_value: str, new_value: str) -> None:
         """React to segment selection changes."""
         if old_value != new_value:
+            logger.debug(f"Segment changed from '{old_value}' to '{new_value}'")
             self.update_settings_panel()
-            # Only show arrow if we're in left panel focus
-            is_left_focused = self._is_focus_in_left_panel()
+            # Only show arrow if current panel focus is explicitly "left"
+            is_left_focused = (self.current_panel_focus == "left")
+            logger.debug(f"Current panel focus: '{self.current_panel_focus}', showing arrow: {is_left_focused}")
             self._update_segment_buttons(new_value, show_arrow=is_left_focused)
             self._update_panel_title(new_value)
             # Update help text when segment changes
             self._update_help_text()
+
+    def watch_current_panel_focus(self, old_value: str, new_value: str) -> None:
+        """React to panel focus changes and update arrows accordingly."""
+        logger.debug(f"watch_current_panel_focus triggered: '{old_value}' → '{new_value}'")
+        if old_value != new_value:
+            logger.debug(f"Panel focus changed from '{old_value}' to '{new_value}'")
+            # Update arrow display based on new panel focus
+            is_left_focused = (new_value == "left")
+            logger.debug(f"Updating segment buttons for '{self.selected_segment}' with arrow: {is_left_focused}")
+            self._update_segment_buttons(self.selected_segment, show_arrow=is_left_focused)
+        else:
+            logger.debug("Panel focus value same, no update needed")
         
     def compose(self) -> ComposeResult:
         """Compose the configurator interface."""
@@ -128,26 +146,36 @@ class MainMenuScreen(Screen):
     
     def on_mount(self) -> None:
         """Initialize when screen is mounted."""
+        logger.info("MainMenuScreen mounting...")
+        logger.debug(f"Initial segment: '{self.selected_segment}', initial panel focus: '{self.current_panel_focus}'")
+
         # Set initial segment content
         self.update_settings_panel()
-        # Initialize button states - show arrow since we start with left panel focused
-        self._update_segment_buttons(self.selected_segment, show_arrow=True)
-        # Initialize panel title
-        self._update_panel_title(self.selected_segment)
         # Set initial focus to the selected segment button
         try:
             initial_button = self.query_one(f"#segment-{self.selected_segment}", Button)
             initial_button.focus()
             # Highlight the left panel as initially focused
             self._update_panel_focus(is_left_focused=True)
-        except:
+            logger.debug("Initial focus set to left panel")
+        except Exception as e:
+            logger.error(f"Failed to set initial focus: {e}")
             pass
+
+        # Initialize button states after panel focus is set
+        # Arrow display will be handled by watch_current_panel_focus when _update_panel_focus is called
+        logger.debug("Initialization completed, arrow state should be managed by watch_current_panel_focus")
+
+        # Initialize panel title
+        self._update_panel_title(self.selected_segment)
 
         # Schedule immediate content update after mount to ensure it's visible
         self.call_after_refresh(self._initial_content_load)
 
         # Initialize help text after everything is set up
         self.call_after_refresh(self._update_help_text)
+
+        logger.info("MainMenuScreen mounted successfully")
     
     def _initial_content_load(self) -> None:
         """Load initial content for the default selected segment."""
@@ -540,13 +568,15 @@ class MainMenuScreen(Screen):
             # Update package manager item using unique ID
             pm_item = self.query_one(f"#pm-manager-item-{self._pm_unique_suffix}", Static)
             if hasattr(self, '_primary_pm') and self._primary_pm:
-                if self._pm_focused_item == "manager":
+                # Only show arrow if current panel focus is "right" and this item is focused
+                is_right_focused = (self.current_panel_focus == "right")
+                if self._pm_focused_item == "manager" and is_right_focused:
                     pm_item.update(f"[#7dd3fc]▶[/#7dd3fc] {self._primary_pm.name.upper()}")
                 else:
                     pm_item.update(f"  {self._primary_pm.name.upper()}")
         except:
             pass
-            
+
         try:
             # Update source item using unique ID
             source_item = self.query_one(f"#pm-source-item-{self._pm_unique_suffix}", Static)
@@ -554,7 +584,9 @@ class MainMenuScreen(Screen):
                 source = self._primary_pm.current_source or "Not configured"
                 if len(source) > 60:
                     source = source[:57] + "..."
-                if self._pm_focused_item == "source":
+                # Only show arrow if current panel focus is "right" and this item is focused
+                is_right_focused = (self.current_panel_focus == "right")
+                if self._pm_focused_item == "source" and is_right_focused:
                     source_item.update(f"[#7dd3fc]▶[/#7dd3fc] {source}")
                 else:
                     source_item.update(f"  {source}")
@@ -582,6 +614,44 @@ class MainMenuScreen(Screen):
                 if len(source) > 60:
                     source = source[:57] + "..."
                 source_item.update(f"  {source}")
+        except:
+            pass
+
+    def _clear_app_focus_indicators(self) -> None:
+        """Clear all arrow indicators in app install section."""
+        if not hasattr(self, '_app_unique_suffix'):
+            return
+
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+
+        # Clear all app item arrows
+        try:
+            for i, app in enumerate(self.app_install_cache):
+                item_id = f"app-item-{i}-{self._app_unique_suffix}"
+                try:
+                    item_widget = self.query_one(f"#{item_id}", Static)
+
+                    # Determine status based on current state and selection
+                    is_selected = self.app_selection_state.get(app.name, False)
+
+                    if app.installed and not is_selected:
+                        status = "- To Uninstall"
+                    elif app.installed and is_selected:
+                        status = "✓ Installed"
+                    elif not app.installed and is_selected:
+                        status = "+ To Install"
+                    else:
+                        status = "○ Available"
+
+                    # Update without arrow (always use spaces)
+                    app_text = f"  {status} - {app.name}"
+                    if app.description:
+                        app_text += f" - {app.description}"
+
+                    item_widget.update(app_text)
+                except:
+                    pass
         except:
             pass
     
@@ -938,8 +1008,9 @@ class MainMenuScreen(Screen):
 
         # Display each application with interactive selection
         for i, app in enumerate(applications):
-            # Arrow indicator for current selection
-            arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
+            # Arrow indicator for current selection - only show when right panel has focus
+            is_right_focused = (self.current_panel_focus == "right")
+            arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
 
             # Determine status based on current state and selection
             is_selected = self.app_selection_state.get(app.name, False)
@@ -981,8 +1052,9 @@ class MainMenuScreen(Screen):
                 try:
                     item_widget = self.query_one(f"#{item_id}", Static)
 
-                    # Arrow indicator for current selection
-                    arrow = "[#7dd3fc]▶[/#7dd3fc] " if i == self.app_focused_index else "  "
+                    # Arrow indicator for current selection - only show when right panel has focus
+                    is_right_focused = (self.current_panel_focus == "right")
+                    arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
 
                     # Determine status based on current state and selection
                     is_selected = self.app_selection_state.get(app.name, False)
@@ -1292,8 +1364,9 @@ class MainMenuScreen(Screen):
             self.selected_segment = segment_id
             self.update_settings_panel()
 
-            # Update button styles to show selection - always show arrow when segment button is pressed
-            self._update_segment_buttons(segment_id, show_arrow=True)
+            # When a segment button is pressed (Enter key), switch to right panel
+            # So don't show arrow since we're moving focus to right panel
+            self._update_segment_buttons(segment_id, show_arrow=False)
             # Update panel title
             self._update_panel_title(segment_id)
 
@@ -1367,6 +1440,7 @@ class MainMenuScreen(Screen):
     
     def _update_segment_buttons(self, selected_id: str, show_arrow: bool = True) -> None:
         """Update segment button styles to show selection."""
+        logger.debug(f"Updating segment buttons: selected_id='{selected_id}', show_arrow={show_arrow}")
         for segment in self.SEGMENTS:
             try:
                 button = self.query_one(f"#segment-{segment['id']}", Button)
@@ -1375,14 +1449,18 @@ class MainMenuScreen(Screen):
                     # Use arrow in the reserved space (first 2 characters)
                     button.label = f"[#7dd3fc]▶[/#7dd3fc] {segment_number}. {segment['name']}"
                     button.add_class("selected")
+                    logger.debug(f"  → {segment['name']}: ARROW SHOWN")
                 else:
                     # Keep the reserved space with spaces
                     button.label = f"  {segment_number}. {segment['name']}"
                     if segment['id'] == selected_id:
                         button.add_class("selected")
+                        logger.debug(f"  → {segment['name']}: SELECTED (no arrow)")
                     else:
                         button.remove_class("selected")
-            except:
+                        logger.debug(f"  → {segment['name']}: normal")
+            except Exception as e:
+                logger.warning(f"Failed to update button for segment '{segment['id']}': {e}")
                 pass
     
     def _update_panel_title(self, selected_id: str) -> None:
@@ -1418,6 +1496,7 @@ class MainMenuScreen(Screen):
 
     def _update_panel_focus(self, is_left_focused: bool) -> None:
         """Update panel focus styles based on which panel has focus."""
+        logger.debug(f"Updating panel focus: is_left_focused={is_left_focused}")
         try:
             left_panel = self.query_one("#left-panel", Vertical)
             right_panel = self.query_one("#right-panel", Vertical)
@@ -1426,16 +1505,21 @@ class MainMenuScreen(Screen):
                 left_panel.add_class("panel-focused")
                 right_panel.remove_class("panel-focused")
                 # Update state tracking
+                old_focus = self.current_panel_focus
                 self.current_panel_focus = "left"
+                logger.debug(f"Panel focus updated: {old_focus} → left")
             else:
                 left_panel.remove_class("panel-focused")
                 right_panel.add_class("panel-focused")
                 # Update state tracking
+                old_focus = self.current_panel_focus
                 self.current_panel_focus = "right"
+                logger.debug(f"Panel focus updated: {old_focus} → right")
 
             # Update help text when panel focus changes
             self._update_help_text(is_left_focused)
-        except:
+        except Exception as e:
+            logger.error(f"Failed to update panel focus: {e}")
             pass
     
     def action_select_segment(self) -> None:
@@ -1443,12 +1527,15 @@ class MainMenuScreen(Screen):
         # S key always goes to Settings segment regardless of panel focus
         self.selected_segment = "settings"
         self.update_settings_panel()
-        self._update_segment_buttons("settings", show_arrow=True)
-        self._update_panel_title("settings")
-
-        # If focus is in left panel, switch to right panel after selection
+        # If focus is in left panel, switch to right panel and don't show arrow
         if self._is_focus_in_left_panel():
+            self._update_segment_buttons("settings", show_arrow=False)
+            self._update_panel_title("settings")
             self.action_nav_right()
+        else:
+            # If already in right panel, just update normally
+            self._update_segment_buttons("settings", show_arrow=False)
+            self._update_panel_title("settings")
 
     def on_key(self, event) -> bool:
         """Handle key events, including 1-6 shortcuts and two-level Esc exit."""
@@ -1473,6 +1560,7 @@ class MainMenuScreen(Screen):
                     # Update the selected segment
                     self.selected_segment = selected_segment["id"]
                     self.update_settings_panel()
+                    # Don't show arrow since we're switching to right panel
                     self._update_segment_buttons(selected_segment["id"], show_arrow=False)
                     self._update_panel_title(selected_segment["id"])
 
@@ -1491,35 +1579,35 @@ class MainMenuScreen(Screen):
         """Show Homebrew settings."""
         self.selected_segment = "homebrew"
         self.update_settings_panel()
-        self._update_segment_buttons("homebrew", show_arrow=True)
+        # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("homebrew")
-        
+
     def action_package_manager(self) -> None:
         """Show package manager settings."""
-        self.selected_segment = "package_manager" 
+        self.selected_segment = "package_manager"
         self.update_settings_panel()
-        self._update_segment_buttons("package_manager", show_arrow=True)
+        # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("package_manager")
-        
+
     def action_user_management(self) -> None:
         """Show user management settings."""
         self.selected_segment = "user_management"
         self.update_settings_panel()
-        self._update_segment_buttons("user_management", show_arrow=True)
+        # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("user_management")
-        
+
     def action_settings(self) -> None:
         """Show application settings."""
         self.selected_segment = "settings"
         self.update_settings_panel()
-        self._update_segment_buttons("settings", show_arrow=True)
+        # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("settings")
-        
+
     def action_help(self) -> None:
         """Show help content."""
         self.selected_segment = "help"
         self.update_settings_panel()
-        self._update_segment_buttons("help", show_arrow=True)
+        # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("help")
     
     def action_quit(self) -> None:
@@ -1528,11 +1616,13 @@ class MainMenuScreen(Screen):
     
     def action_switch_panel(self) -> None:
         """Switch focus between left and right panels using Tab key."""
+        logger.debug("action_switch_panel called")
         # Get the currently focused widget
         focused = self.focused
-        
+
         # If nothing is focused, focus the first segment button
         if not focused:
+            logger.debug("No widget focused, focusing first segment button")
             try:
                 first_button = self.query_one(f"#segment-{self.SEGMENTS[0]['id']}", Button)
                 first_button.focus()
@@ -1578,12 +1668,10 @@ class MainMenuScreen(Screen):
                         self._app_focus_initialized = True
                     # Update focus indicators
                     self._update_app_focus_indicators()
-                    # Clear left arrows
-                    self._update_segment_buttons(self.selected_segment, show_arrow=False)
+                    # Panel focus change will be handled by watch_current_panel_focus
                 else:
-                    # Clear left panel arrows for other sections
-                    self._update_segment_buttons(self.selected_segment, show_arrow=False)
-                    
+                    # Panel focus change will be handled by watch_current_panel_focus
+                    pass
             except:
                 # If right panel doesn't have focusable elements, stay in left
                 pass
@@ -1592,13 +1680,16 @@ class MainMenuScreen(Screen):
             # First, clear right panel arrows if we're in package manager section
             if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
                 self._clear_pm_focus_indicators()
-            
+
+            # Clear right panel arrows if we're in app install section
+            if self.selected_segment == "app_install":
+                self._clear_app_focus_indicators()
+
             try:
                 selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
                 selected_button.focus()
                 self._update_panel_focus(is_left_focused=True)
-                # Show left panel arrows
-                self._update_segment_buttons(self.selected_segment, show_arrow=True)
+                # Arrow will be updated by watch_current_panel_focus
             except:
                 # Try to focus the first available segment button
                 for segment in self.SEGMENTS:
@@ -1606,7 +1697,7 @@ class MainMenuScreen(Screen):
                         button = self.query_one(f"#segment-{segment['id']}", Button)
                         button.focus()
                         self._update_panel_focus(is_left_focused=True)
-                        self._update_segment_buttons(segment['id'], show_arrow=True)
+                        # Arrow will be updated by watch_current_panel_focus
                         break
                     except:
                         continue
@@ -1622,14 +1713,17 @@ class MainMenuScreen(Screen):
         # Clear right panel arrows if we're in package manager section
         if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
             self._clear_pm_focus_indicators()
-        
+
+        # Clear right panel arrows if we're in app install section
+        if self.selected_segment == "app_install":
+            self._clear_app_focus_indicators()
+
         try:
             # Find and focus the selected segment button in left panel
             selected_button = self.query_one(f"#segment-{self.selected_segment}", Button)
             selected_button.focus()
             self._update_panel_focus(is_left_focused=True)
-            # Show left panel arrows
-            self._update_segment_buttons(self.selected_segment, show_arrow=True)
+            # Arrow will be updated by watch_current_panel_focus
         except:
             # Try to focus the first available segment button
             for segment in self.SEGMENTS:
@@ -1637,7 +1731,7 @@ class MainMenuScreen(Screen):
                     button = self.query_one(f"#segment-{segment['id']}", Button)
                     button.focus()
                     self._update_panel_focus(is_left_focused=True)
-                    self._update_segment_buttons(segment['id'], show_arrow=True)
+                    # Arrow will be updated by watch_current_panel_focus
                     break
                 except:
                     continue
@@ -1717,12 +1811,9 @@ class MainMenuScreen(Screen):
                 self.app_focused_index = 0
                 # Update focus indicators
                 self._update_app_focus_indicators()
-                # Clear left arrows
-                self._update_segment_buttons(self.selected_segment, show_arrow=False)
             else:
-                # Clear left panel arrows for other sections
-                self._update_segment_buttons(self.selected_segment, show_arrow=False)
-            
+                # Panel focus change will be handled by watch_current_panel_focus
+                pass
         except Exception:
             pass
     
