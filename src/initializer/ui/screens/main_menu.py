@@ -636,13 +636,13 @@ class MainMenuScreen(Screen):
                     is_selected = self.app_selection_state.get(app.name, False)
 
                     if app.installed and not is_selected:
-                        status = "- To Uninstall"
+                        status = "[red]- To Uninstall[/red]"
                     elif app.installed and is_selected:
-                        status = "✓ Installed"
+                        status = "[green]✓ Installed[/green]"
                     elif not app.installed and is_selected:
-                        status = "+ To Install"
+                        status = "[yellow]+ To Install[/yellow]"
                     else:
-                        status = "○ Available"
+                        status = "[bright_black]○ Available[/bright_black]"
 
                     # Update without arrow (always use spaces)
                     app_text = f"  {status} - {app.name}"
@@ -1016,17 +1016,17 @@ class MainMenuScreen(Screen):
             is_selected = self.app_selection_state.get(app.name, False)
 
             if app.installed and not is_selected:
-                # Installed and will be uninstalled
-                status_text = "- To Uninstall"
+                # Installed and will be uninstalled - red color for removal
+                status_text = "[red]- To Uninstall[/red]"
             elif app.installed and is_selected:
-                # Installed and staying installed (default state)
-                status_text = "✓ Installed"
+                # Installed and staying installed (default state) - green for installed
+                status_text = "[green]✓ Installed[/green]"
             elif not app.installed and is_selected:
-                # Not installed but marked for installation
-                status_text = "+ To Install"
+                # Not installed but marked for installation - yellow for pending install
+                status_text = "[yellow]+ To Install[/yellow]"
             else:
-                # Not installed and staying that way (default state)
-                status_text = "○ Available"
+                # Not installed and staying that way (default state) - bright_black/dim white for neutral available
+                status_text = "[bright_black]○ Available[/bright_black]"
 
             # Create container for horizontal layout
             from textual.containers import Horizontal
@@ -1078,17 +1078,17 @@ class MainMenuScreen(Screen):
                         is_selected = self.app_selection_state.get(app.name, False)
 
                         if app.installed and not is_selected:
-                            # Installed and will be uninstalled
-                            status_text = "- To Uninstall"
+                            # Installed and will be uninstalled - red color for removal
+                            status_text = "[red]- To Uninstall[/red]"
                         elif app.installed and is_selected:
-                            # Installed and staying installed (default state)
-                            status_text = "✓ Installed"
+                            # Installed and staying installed (default state) - green for installed
+                            status_text = "[green]✓ Installed[/green]"
                         elif not app.installed and is_selected:
-                            # Not installed but marked for installation
-                            status_text = "+ To Install"
+                            # Not installed but marked for installation - yellow for pending install
+                            status_text = "[yellow]+ To Install[/yellow]"
                         else:
-                            # Not installed and staying that way (default state)
-                            status_text = "○ Available"
+                            # Not installed and staying that way (default state) - bright_black for neutral available
+                            status_text = "[bright_black]○ Available[/bright_black]"
 
                         # Update status display with arrow and status
                         status_display = f"{arrow}{status_text}"
