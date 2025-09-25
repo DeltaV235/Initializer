@@ -2,24 +2,12 @@
 
 import time
 import asyncio
-from typing import List, Dict, Tuple, Any
-from dataclasses import dataclass
+from typing import List, Dict, Tuple, Any, Union
 from ..utils.logger import get_module_logger
 from .quick_verification_checker import QuickVerificationChecker
 from .batch_package_checker import BatchPackageChecker
-
-
-@dataclass
-class Application:
-    """Represents an application that can be checked."""
-    name: str
-    package: str
-    description: str = ""
-    installed: bool = False
-
-    def get_package_list(self) -> List[str]:
-        """Get list of packages from the package string."""
-        return self.package.split()
+from .application import Application
+from .software_models import ApplicationSuite, SoftwareItem
 
 
 class TwoLayerPackageChecker:
@@ -206,3 +194,82 @@ class TwoLayerPackageChecker:
                 else:
                     self.quick_checker.common_paths[pm_type] = paths
             self.logger.info(f"Added custom paths for {len(custom_paths)} package managers")
+
+    async def check_software_items(self, software_items: List[Union[ApplicationSuite, Application]]) -> Dict[str, bool]:
+        """Check installation status for mixed software items (suites and standalone applications).
+
+        Args:
+            software_items: List of software items (mix of ApplicationSuite and Application objects)
+
+        Returns:
+            Dictionary mapping software item names to installation status
+        """
+        self.logger.info(f"Starting software items check for {len(software_items)} items")
+        start_time = time.time()
+
+        # Collect all applications that need to be checked
+        all_applications = []
+        item_to_applications = {}  # Map item name to its applications
+
+        for item in software_items:
+            if isinstance(item, ApplicationSuite):
+                # For suites, collect all components
+                item_to_applications[item.name] = item.components
+                all_applications.extend(item.components)
+            else:
+                # For standalone applications
+                item_to_applications[item.name] = [item]
+                all_applications.append(item)
+
+        self.logger.debug(f"Expanded {len(software_items)} software items to {len(all_applications)} applications")
+
+        # Use the existing two-layer checking logic
+        app_results = await self.check_applications(all_applications)
+
+        # Map results back to software items
+        item_results = {}
+
+        for item in software_items:
+            if isinstance(item, ApplicationSuite):
+                # For suites, update component status and determine suite status
+                for component in item.components:
+                    component.installed = app_results.get(component.name, False)
+
+                # Suite is considered installed if any component is installed
+                # This matches the UI display logic for partial/full installation
+                suite_installed = any(component.installed for component in item.components)
+                item_results[item.name] = suite_installed
+
+                # Log suite status for debugging
+                installed_count = sum(1 for c in item.components if c.installed)
+                total_count = len(item.components)
+                self.logger.debug(f"Suite '{item.name}': {installed_count}/{total_count} components installed")
+
+            else:
+                # For standalone applications
+                item.installed = app_results.get(item.name, False)
+                item_results[item.name] = item.installed
+
+        duration = time.time() - start_time
+        self.logger.info(f"Software items check completed in {duration:.3f}s")
+
+        return item_results
+
+    def get_all_applications_from_items(self, software_items: List[Union[ApplicationSuite, Application]]) -> List[Application]:
+        """Extract all applications from mixed software items (expand suite components).
+
+        Args:
+            software_items: List of software items
+
+        Returns:
+            Flat list of all applications
+        """
+        all_applications = []
+
+        for item in software_items:
+            if isinstance(item, ApplicationSuite):
+                all_applications.extend(item.components)
+            else:
+                all_applications.append(item)
+
+        return all_applications

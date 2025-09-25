@@ -6,21 +6,8 @@ import shutil
 import time
 from typing import List, Dict, Optional, Tuple, Any
 from pathlib import Path
-from dataclasses import dataclass
 from ..utils.logger import get_module_logger
-
-
-@dataclass
-class Application:
-    """Represents an application that can be checked."""
-    name: str
-    package: str
-    description: str = ""
-    installed: bool = False
-
-    def get_package_list(self) -> List[str]:
-        """Get list of packages from the package string."""
-        return self.package.split()
+from .application import Application
 
 
 class BatchPackageChecker:

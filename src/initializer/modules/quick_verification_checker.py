@@ -4,21 +4,8 @@ import shutil
 import os
 from typing import List, Dict, Tuple, Optional, Set
 from pathlib import Path
-from dataclasses import dataclass
 from ..utils.logger import get_module_logger
-
-
-@dataclass
-class Application:
-    """Represents an application that can be quickly verified."""
-    name: str
-    package: str
-    description: str = ""
-    installed: bool = False
-
-    def get_package_list(self) -> List[str]:
-        """Get list of packages from the package string."""
-        return self.package.split()
+from .application import Application
 
 
 class QuickVerificationChecker:
@@ -158,25 +145,65 @@ class QuickVerificationChecker:
     def _quick_verify_single_app(self, app: Application) -> Optional[bool]:
         """Quickly verify a single application.
 
-        Strategy: L2 layer focuses on definitive "NOT INSTALLED" detection only.
-        We avoid false positives by being conservative about "INSTALLED" determinations.
+        Strategy:
+        - Return True if we can confirm the app is installed (via executables)
+        - Return False if we're confident it's not installed (fake packages)
+        - Return None if uncertain (needs L3 system check)
 
         Args:
             app: Application to verify
 
         Returns:
-            False if definitely not installed, None if uncertain (needs L3 check)
+            True if definitely installed, False if definitely not installed, None if uncertain
         """
+        # First check if this is definitely a fake/test package
         packages = app.get_package_list()
-
-        # Check if this looks like a clearly non-existent package
         for package in packages:
             if self._is_definitely_nonexistent(package):
                 return False
 
-        # For all other cases, defer to L3 system check for accuracy
-        # This prevents false positives while still catching obvious non-existent packages
+        # Check if we can find executables for this application
+        executables = self._get_executables_for_app(app)
+
+        for executable in executables:
+            if self._check_executable_in_path(executable):
+                self.logger.debug(f"Found executable {executable} for {app.name}")
+                return True
+
+        # Check other indicators (paths, files) for positive confirmation
+        for package in packages:
+            if self._check_package_indicators(package):
+                self.logger.debug(f"Found package indicators for {app.name}")
+                return True
+
+        # If we can't find positive indicators, defer to L3 system check
         return None
+
+    def _get_executables_for_app(self, app: Application) -> List[str]:
+        """Get list of executable names to check for an application.
+
+        Args:
+            app: Application instance with executables configuration
+
+        Returns:
+            List of executable names to check
+        """
+        # Priority 1: Use configured executables from config file
+        if app.executables:
+            return app.executables
+
+        # Priority 2: Use hardcoded special rules (for backward compatibility)
+        packages = app.get_package_list()
+        executables = []
+
+        for package in packages:
+            if package in self.special_detection_rules:
+                executables.extend(self.special_detection_rules[package])
+            else:
+                # Priority 3: Use package name as executable name
+                executables.append(package)
+
+        return executables
 
     def _is_definitely_nonexistent(self, package: str) -> bool:
         """Check if a package is definitely non-existent based on name patterns.
@@ -229,21 +256,15 @@ class QuickVerificationChecker:
         if self._check_executable_in_path(package):
             return True
 
-        # Method 2: Check special detection rules for this package
-        if package in self.special_detection_rules:
-            for alt_name in self.special_detection_rules[package]:
-                if self._check_executable_in_path(alt_name):
-                    return True
-
-        # Method 3: Check common installation paths
+        # Method 2: Check common installation paths
         if self._check_common_paths(package):
             return True
 
-        # Method 4: Check package-specific paths and files
+        # Method 3: Check package-specific paths and files
         if self._check_package_specific_files(package):
             return True
 
-        # Method 5: For some packages, absence of key files indicates not installed
+        # Method 4: For some packages, absence of key files indicates not installed
         if self._check_definitive_absence(package):
             return False
 
