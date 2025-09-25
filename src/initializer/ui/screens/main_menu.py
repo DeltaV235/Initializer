@@ -2077,30 +2077,38 @@ class MainMenuScreen(Screen):
     def action_nav_right(self) -> None:
         """Navigate right (l key) - switch to right panel."""
         # L key switches to right panel
+
+        # Check if we're already in the right panel to avoid unnecessary reinitialization
+        current_focus_is_left = self._is_focus_in_left_panel()
+
         try:
             right_container = self.query_one("#settings-scroll", ScrollableContainer)
             right_container.focus()
             self._update_panel_focus(is_left_focused=False)
 
-            # If switching to package manager section, initialize focus and clear left arrows
-            if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
-                # Always set initial focus when switching to right panel
-                self._pm_focused_item = "manager"
-                # Clear left arrows and show right arrows
-                self._update_pm_focus_indicators(clear_left_arrows=True)
-                # Panel focus change will be handled by watch_current_panel_focus
-            elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
-                # Initialize app focus when switching to right panel
-                if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
-                    self.app_focused_index = 0
-                    self._ensure_valid_focus_index()  # Ensure valid focus
-                    self._app_focus_initialized = True
-                # Update focus indicators
-                self._update_app_focus_indicators()
-                # Panel focus change will be handled by watch_current_panel_focus
-            else:
-                # Panel focus change will be handled by watch_current_panel_focus
-                pass
+            # Only initialize focus and clear arrows when actually switching FROM left TO right
+            if current_focus_is_left:
+                # If switching to package manager section, initialize focus and clear left arrows
+                if self.selected_segment == "package_manager" and hasattr(self, '_primary_pm') and self._primary_pm:
+                    # Set initial focus when switching to right panel
+                    self._pm_focused_item = "manager"
+                    # Clear left arrows and show right arrows
+                    self._update_pm_focus_indicators(clear_left_arrows=True)
+                    # Panel focus change will be handled by watch_current_panel_focus
+                elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
+                    # Initialize app focus when switching to right panel
+                    if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
+                        self.app_focused_index = 0
+                        self._ensure_valid_focus_index()  # Ensure valid focus
+                        self._app_focus_initialized = True
+                    # Update focus indicators
+                    self._update_app_focus_indicators()
+                    # Panel focus change will be handled by watch_current_panel_focus
+                else:
+                    # Panel focus change will be handled by watch_current_panel_focus
+                    pass
+            # If already in right panel, just update focus without reinitializing arrows
+
         except Exception:
             pass
     
