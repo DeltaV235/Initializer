@@ -1604,9 +1604,9 @@ class MainMenuScreen(Screen):
         if button_id and button_id.startswith("segment-"):
             segment_id = button_id.replace("segment-", "")
 
-            # Update segment selection and switch to right panel
+            # Update segment selection - this will trigger watch_selected_segment
+            # which automatically calls update_settings_panel(), so we don't need to call it here
             self.selected_segment = segment_id
-            self.update_settings_panel()
 
             # When a segment button is pressed (Enter key), switch to right panel
             # So don't show arrow since we're moving focus to right panel
@@ -1770,7 +1770,7 @@ class MainMenuScreen(Screen):
         """Handle S key shortcut for Settings - works from any panel."""
         # S key always goes to Settings segment regardless of panel focus
         self.selected_segment = "settings"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # If focus is in left panel, switch to right panel and don't show arrow
         if self._is_focus_in_left_panel():
             self._update_segment_buttons("settings", show_arrow=False)
@@ -1815,9 +1815,9 @@ class MainMenuScreen(Screen):
                 if 0 <= segment_index < len(self.SEGMENTS):
                     selected_segment = self.SEGMENTS[segment_index]
 
-                    # Update the selected segment
+                    # Update the selected segment - this will trigger watch_selected_segment
                     self.selected_segment = selected_segment["id"]
-                    self.update_settings_panel()
+                    # Don't call update_settings_panel() here - it's handled by watch_selected_segment
                     # Don't show arrow since we're switching to right panel
                     self._update_segment_buttons(selected_segment["id"], show_arrow=False)
                     self._update_panel_title(selected_segment["id"])
@@ -1859,35 +1859,35 @@ class MainMenuScreen(Screen):
     def action_homebrew(self) -> None:
         """Show Homebrew settings."""
         self.selected_segment = "homebrew"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("homebrew")
 
     def action_package_manager(self) -> None:
         """Show package manager settings."""
         self.selected_segment = "package_manager"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("package_manager")
 
     def action_user_management(self) -> None:
         """Show user management settings."""
         self.selected_segment = "user_management"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("user_management")
 
     def action_settings(self) -> None:
         """Show application settings."""
         self.selected_segment = "settings"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("settings")
 
     def action_help(self) -> None:
         """Show help content."""
         self.selected_segment = "help"
-        self.update_settings_panel()
+        # Panel update will be handled by watch_selected_segment
         # Arrow display will be handled by watch_current_panel_focus
         self._update_panel_title("help")
     
@@ -2088,12 +2088,16 @@ class MainMenuScreen(Screen):
                 self._pm_focused_item = "manager"
                 # Clear left arrows and show right arrows
                 self._update_pm_focus_indicators(clear_left_arrows=True)
+                # Panel focus change will be handled by watch_current_panel_focus
             elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
                 # Initialize app focus when switching to right panel
-                self.app_focused_index = 0
-                self._ensure_valid_focus_index()  # Ensure valid focus
+                if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
+                    self.app_focused_index = 0
+                    self._ensure_valid_focus_index()  # Ensure valid focus
+                    self._app_focus_initialized = True
                 # Update focus indicators
                 self._update_app_focus_indicators()
+                # Panel focus change will be handled by watch_current_panel_focus
             else:
                 # Panel focus change will be handled by watch_current_panel_focus
                 pass
