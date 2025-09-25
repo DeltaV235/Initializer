@@ -1590,6 +1590,13 @@ class MainMenuScreen(Screen):
                 self.app.exit()
                 return True
 
+        # Handle space key for app install section
+        if event.key == "space" and self.selected_segment == "app_install":
+            # Only handle space key when in right panel (app list)
+            if not self._is_focus_in_left_panel():
+                self._toggle_current_app()
+                return True  # Consume the event
+
         # Handle 1-6 shortcuts only when focus is in left panel
         if event.key in ["1", "2", "3", "4", "5", "6"] and self._is_focus_in_left_panel():
             try:
@@ -2084,9 +2091,9 @@ class MainMenuScreen(Screen):
                     # Show app-specific help with apply changes info when needed
                     changes = self._calculate_app_changes()
                     if changes["install"] or changes["uninstall"]:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter=Toggle | A=Apply Changes | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter/Space=Toggle | A=Apply Changes | Q=Quit"
                     else:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter=Toggle | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter/Space=Toggle | Q=Quit"
                 elif self.selected_segment == "homebrew":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "user_management":
