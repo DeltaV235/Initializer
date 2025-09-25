@@ -2,9 +2,9 @@
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
+from textual.containers import Container, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label
+from textual.widgets import Static, Rule, Label
 from textual.events import Key
 from typing import Callable, List, Dict
 
@@ -13,84 +13,57 @@ class AppInstallConfirmationModal(ModalScreen):
     """Modal screen for confirming application installation/uninstallation."""
     
     BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        ("enter", "confirm", "Confirm"),
-        ("y", "confirm", "Confirm"),
-        ("n", "cancel", "Cancel"),
+        ("escape", "cancel_operation", "Cancel"),
+        ("enter", "confirm_change", "Confirm"),
+        ("y", "confirm_change", "Yes"),
+        ("n", "cancel_operation", "No"),
+        ("j", "scroll_down", "Scroll Down"),
+        ("k", "scroll_up", "Scroll Up"),
+        ("down", "scroll_down", "Scroll Down"),
+        ("up", "scroll_up", "Scroll Up"),
+        ("pagedown", "scroll_page_down", "Page Down"),
+        ("pageup", "scroll_page_up", "Page Up"),
     ]
     
-    # CSS styles for the modal
+    # CSS styles for the modal - only custom styles not covered by global styles
     CSS = """
     AppInstallConfirmationModal {
         align: center middle;
     }
-    
-    #modal-container {
-        width: 80%;
-        height: auto;
-        max-height: 80%;
-        background: $surface;
-        border: solid $warning;
-        padding: 1;
-        layout: vertical;
-    }
-    
-    #modal-title {
-        text-style: bold;
-        color: $warning;
-        margin: 0 0 1 0;
-    }
-    
-    #modal-content {
-        height: auto;
-        max-height: 20;
-        overflow-y: auto;
-        padding: 0 1;
-        margin: 0 0 1 0;
-    }
-    
+
     .action-header {
         text-style: bold;
         color: $text;
         margin: 1 0 0 0;
+        height: auto;
+        min-height: 1;
     }
-    
+
     .action-item {
         margin: 0 0 0 2;
         color: $text;
+        height: auto;
+        min-height: 1;
+        background: $surface;
     }
-    
+
     .command-display {
         margin: 0 0 0 2;
         padding: 1;
         background: $boost;
         border: round #7dd3fc;
         color: $text;
+        height: auto;
+        min-height: 1;
     }
-    
+
     .warning-text {
-        color: $warning;
+        color: #f59e0b;
         text-style: bold;
         margin: 1 0;
-    }
-    
-    #button-container {
-        layout: horizontal;
-        align: center middle;
-        height: 3;
-        margin: 1 0 0 0;
-    }
-    
-    .help-text {
-        text-align: center;
-        color: $text-muted;
-        height: 1;
+        height: auto;
         min-height: 1;
-        max-height: 1;
-        margin: 0 0 0 0;
-        padding: 0 0 0 0;
         background: $surface;
-        text-style: none;
     }
     """
     
@@ -115,23 +88,31 @@ class AppInstallConfirmationModal(ModalScreen):
     
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
-        """Handle key events using @on decorator."""
-        if event.key == "y" or event.key == "enter":
-            self.action_confirm()
+        """Handle key events using @on decorator for reliable event processing."""
+        if event.key == "enter":
+            self.action_confirm_change()
             event.prevent_default()
             event.stop()
-        elif event.key == "n" or event.key == "escape":
-            self.action_cancel()
+        elif event.key == "escape":
+            self.action_cancel_operation()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "y":
+            self.action_confirm_change()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "n":
+            self.action_cancel_operation()
             event.prevent_default()
             event.stop()
     
     def compose(self) -> ComposeResult:
         """Compose the modal interface."""
-        with Container(id="modal-container"):
-            yield Static("⚠️ 确认应用安装/卸载", id="modal-title")
+        with Container(classes="modal-container-xs"):
+            yield Static("⚠️ 确认应用安装/卸载", id="confirmation-title")
             yield Rule()
-            
-            with ScrollableContainer(id="modal-content"):
+
+            with ScrollableContainer(id="confirmation-content"):
                 # Group actions by type
                 install_actions = [a for a in self.actions if a["action"] == "install"]
                 uninstall_actions = [a for a in self.actions if a["action"] == "uninstall"]
@@ -185,28 +166,49 @@ class AppInstallConfirmationModal(ModalScreen):
                 yield Label(f"总计: {len(install_actions)} 个安装, {len(uninstall_actions)} 个卸载", 
                           classes="section-header")
             
-            yield Rule()
-            
-            # Buttons
-            with Horizontal(id="button-container"):
-                yield Button("✅ 确认 (Y)", id="confirm", variant="primary")
-                yield Static("  ")  # Spacer
-                yield Button("❌ 取消 (N)", id="cancel", variant="default")
-            
-            yield Label("按 Y 确认，N 取消", classes="help-text")
-    
-    @on(Button.Pressed, "#confirm")
-    def action_confirm(self) -> None:
+
+            # Fixed action help at the bottom - mimic mirror confirmation modal style exactly
+            with Container(id="help-box"):
+                yield Label("J/K=Up/Down | Enter=Confirm | Esc=Cancel", classes="help-text")
+
+    def action_confirm_change(self) -> None:
         """Confirm the installation/uninstallation."""
         self.callback(True)
         self.dismiss()
-    
-    @on(Button.Pressed, "#cancel")
-    def action_cancel(self) -> None:
+
+    def action_cancel_operation(self) -> None:
         """Cancel the operation."""
         self.callback(False)
         self.dismiss()
-    
-    def action_dismiss(self) -> None:
-        """Dismiss the modal (same as cancel)."""
-        self.action_cancel()
+
+    def action_scroll_down(self) -> None:
+        """Scroll content down."""
+        try:
+            content = self.query_one("#confirmation-content", ScrollableContainer)
+            content.scroll_down()
+        except:
+            pass
+
+    def action_scroll_up(self) -> None:
+        """Scroll content up."""
+        try:
+            content = self.query_one("#confirmation-content", ScrollableContainer)
+            content.scroll_up()
+        except:
+            pass
+
+    def action_scroll_page_down(self) -> None:
+        """Scroll content page down."""
+        try:
+            content = self.query_one("#confirmation-content", ScrollableContainer)
+            content.scroll_page_down()
+        except:
+            pass
+
+    def action_scroll_page_up(self) -> None:
+        """Scroll content page up."""
+        try:
+            content = self.query_one("#confirmation-content", ScrollableContainer)
+            content.scroll_page_up()
+        except:
+            pass

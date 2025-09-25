@@ -1419,64 +1419,118 @@ class MainMenuScreen(Screen):
 
         changes = {"install": [], "uninstall": []}
 
-        for app in self.app_install_cache:
-            is_selected = self.app_selection_state.get(app.name, app.installed)
+        # Use the same logic as display items to iterate through all apps/components
+        for item in self.app_install_cache:
+            # Handle standalone applications and application suites
+            if not isinstance(item, ApplicationSuite):
+                # Standalone application
+                is_selected = self.app_selection_state.get(item.name, item.installed)
 
-            if app.installed and not is_selected:
-                # Installed but unmarked - uninstall
-                changes["uninstall"].append(app.name)
-            elif not app.installed and is_selected:
-                # Not installed but marked - install
-                changes["install"].append(app.name)
+                if item.installed and not is_selected:
+                    # Installed but unmarked - uninstall
+                    changes["uninstall"].append(item.name)
+                elif not item.installed and is_selected:
+                    # Not installed but marked - install
+                    changes["install"].append(item.name)
+            else:
+                # Application suite - check its components
+                for component in item.components:
+                    is_selected = self.app_selection_state.get(component.name, component.installed)
+
+                    if component.installed and not is_selected:
+                        # Installed but unmarked - uninstall
+                        changes["uninstall"].append(component.name)
+                    elif not component.installed and is_selected:
+                        # Not installed but marked - install
+                        changes["install"].append(component.name)
 
         return changes
 
     def action_apply_app_changes(self) -> None:
         """Apply the selected app installation changes."""
+        logger.debug("action_apply_app_changes called")
+
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            logger.debug("No app install cache or cache is dict, returning")
             return
 
         changes = self._calculate_app_changes()
+        logger.debug(f"Changes calculated: {changes}")
 
         if not changes["install"] and not changes["uninstall"]:
+            logger.debug("No changes to apply, showing message")
             self._show_message("No changes to apply")
             return
 
         # Prepare actions list
         actions = []
-        for app in self.app_install_cache:
-            is_selected = self.app_selection_state.get(app.name, app.installed)
+        for item in self.app_install_cache:
+            # Handle standalone applications and application suites
+            if not isinstance(item, ApplicationSuite):
+                # Standalone application
+                is_selected = self.app_selection_state.get(item.name, item.installed)
 
-            if app.installed and not is_selected:
-                actions.append({
-                    "action": "uninstall",
-                    "application": app
-                })
-            elif not app.installed and is_selected:
-                actions.append({
-                    "action": "install",
-                    "application": app
-                })
+                if item.installed and not is_selected:
+                    actions.append({
+                        "action": "uninstall",
+                        "application": item
+                    })
+                elif not item.installed and is_selected:
+                    actions.append({
+                        "action": "install",
+                        "application": item
+                    })
+            else:
+                # Application suite - check its components
+                for component in item.components:
+                    is_selected = self.app_selection_state.get(component.name, component.installed)
+
+                    if component.installed and not is_selected:
+                        actions.append({
+                            "action": "uninstall",
+                            "application": component
+                        })
+                    elif not component.installed and is_selected:
+                        actions.append({
+                            "action": "install",
+                            "application": component
+                        })
 
         if actions:
+            logger.debug(f"Showing confirmation modal for {len(actions)} actions")
             # Show confirmation modal
             from .app_install_confirmation_modal import AppInstallConfirmationModal
 
             def on_confirmation(confirmed: bool):
+                logger.debug(f"Confirmation modal result: {confirmed}")
                 if confirmed:
+                    logger.debug("User confirmed, showing progress modal")
                     # Show progress modal
                     from .app_install_progress_modal import AppInstallProgressModal
-                    self.app.push_screen(AppInstallProgressModal(actions, self.app_installer))
-                    # Refresh the app list after installation
-                    self.app_install_cache = None
-                    self.app_install_loading = False
-                    self.update_settings_panel()
+                    try:
+                        self.app.push_screen(AppInstallProgressModal(actions, self.app_installer))
+                        # Refresh the app list after installation
+                        self.app_install_cache = None
+                        self.app_install_loading = False
+                        self.update_settings_panel()
+                        logger.debug("Progress modal pushed successfully")
+                    except Exception as e:
+                        logger.error(f"Error pushing progress modal: {e}", exc_info=True)
+                else:
+                    logger.debug("User cancelled installation")
 
-            modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
-            # Clear panel focus before showing modal
-            self._clear_panel_focus()
-            self.app.push_screen(modal)
-    
+            try:
+                modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
+                # Clear panel focus before showing modal
+                self._clear_panel_focus()
+                logger.debug("Pushing confirmation modal")
+                self.app.push_screen(modal)
+                logger.debug("Confirmation modal pushed successfully")
+            except Exception as e:
+                logger.error(f"Error creating or pushing confirmation modal: {e}", exc_info=True)
+        else:
+            logger.debug("No actions to perform")
+
     # Navigation and interaction methods for right panel content
     
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
@@ -2365,12 +2419,15 @@ class MainMenuScreen(Screen):
 
     def _update_help_text(self, is_left_focused: bool = None) -> None:
         """Update the main menu help text based on current segment and panel focus."""
+        logger.debug(f"_update_help_text called: segment={self.selected_segment}, left_focused={is_left_focused}")
         try:
             help_widget = self.query_one("#help-box Label", Label)
 
             # Check which panel has focus - use provided parameter or detect
             if is_left_focused is None:
                 is_left_focused = self._is_focus_in_left_panel()
+
+            logger.debug(f"Help text update: segment={self.selected_segment}, is_left_focused={is_left_focused}")
 
             if is_left_focused:
                 # Left panel focused - show navigation help (consistent across all pages)
@@ -2384,6 +2441,7 @@ class MainMenuScreen(Screen):
                 elif self.selected_segment == "app_install":
                     # Show app-specific help with apply changes info when needed
                     changes = self._calculate_app_changes()
+                    logger.debug(f"App changes calculated: install={len(changes['install'])}, uninstall={len(changes['uninstall'])}")
                     if changes["install"] or changes["uninstall"]:
                         help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter/Space=Toggle | A=Apply Changes | Q=Quit"
                     else:
@@ -2398,7 +2456,9 @@ class MainMenuScreen(Screen):
                     # Default right panel help
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
 
+            logger.debug(f"Setting help text: {help_text}")
             help_widget.update(help_text)
-        except:
-            # Silently fail if help widget not found
+        except Exception as e:
+            # Log the error instead of silently failing
+            logger.error(f"Failed to update help text: {e}")
             pass
