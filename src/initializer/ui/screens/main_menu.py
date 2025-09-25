@@ -14,6 +14,7 @@ from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
 from ...modules.package_manager import PackageManagerDetector
 from ...modules.app_installer import AppInstaller
+from ...modules.software_models import ApplicationSuite, Application
 from ...utils.logger import get_ui_logger
 
 # Initialize logger for this screen
@@ -29,6 +30,7 @@ class MainMenuScreen(Screen):
         ("enter", "select_item", "Select"),
         ("tab", "switch_panel", "Switch Panel"),
         ("a", "apply_app_changes", "Apply Changes"),
+        ("r", "refresh_current_page", "Refresh"),
         # Vim-like navigation
         ("h", "nav_left", "Left"),
         ("j", "nav_down", "Down"),
@@ -82,6 +84,9 @@ class MainMenuScreen(Screen):
         self.modules_config = config_manager.get_modules_config()
         self.system_info_module = SystemInfoModule(config_manager)
         self.app_installer = AppInstaller(config_manager)
+
+        # Initialize app install specific attributes
+        self.app_expanded_suites = set()  # Track which suites are expanded
     
     def watch_selected_segment(self, old_value: str, new_value: str) -> None:
         """React to segment selection changes."""
@@ -971,22 +976,23 @@ class MainMenuScreen(Screen):
     async def _load_app_install_info(self) -> None:
         """Load App installation information in background thread."""
         try:
-            # Get all applications with their installation status
-            applications = self.app_installer.get_all_applications()
-            
+            # Get all software items (suites and standalone) with their installation status
+            software_items = self.app_installer.get_all_software_items()
+
             # Initialize selection state based on current installation status
             selection_state = {}
-            for app in applications:
+            expanded_suites = set()
+
+            # Collect all applications for selection state
+            all_applications = self.app_installer._get_all_applications_flat()
+            for app in all_applications:
                 selection_state[app.name] = app.installed
-            
+
             # Update cache and loading state on main thread using call_from_thread
             def update_ui():
-                self.app_install_cache = applications
-                # Initialize selection state based on current installation status
-                selection_state = {}
-                for app in applications:
-                    selection_state[app.name] = app.installed
+                self.app_install_cache = software_items
                 self.app_selection_state = selection_state
+                self.app_expanded_suites = expanded_suites  # Track expanded suites
                 self.app_install_loading = False
                 self.app_focused_index = 0
 
@@ -1012,11 +1018,11 @@ class MainMenuScreen(Screen):
             
             self.app.call_from_thread(update_error)
     
-    def _display_app_install_list(self, container: ScrollableContainer, applications) -> None:
-        """Display App installation list in the container."""
+    def _display_app_install_list(self, container: ScrollableContainer, software_items) -> None:
+        """Display hierarchical software items list in the container."""
         # Handle error case
-        if isinstance(applications, dict) and "error" in applications:
-            container.mount(Label(f"Error loading App info: {applications['error']}", classes="info-display"))
+        if isinstance(software_items, dict) and "error" in software_items:
+            container.mount(Label(f"Error loading App info: {software_items['error']}", classes="info-display"))
             return
 
         container.mount(Label("Available Applications:", classes="section-header"))
@@ -1025,44 +1031,92 @@ class MainMenuScreen(Screen):
         # Generate unique suffix to avoid ID conflicts
         import time
         unique_suffix = str(int(time.time() * 1000))[-6:]
-
-        # Store unique suffix for scrolling reference
         self._app_unique_suffix = unique_suffix
 
-        # Display each application with interactive selection using two-column layout
-        for i, app in enumerate(applications):
+        # Build display list based on expansion state
+        display_items = []
+        for item in software_items:
+            display_items.append(("suite_or_app", item, 0))  # (type, item, indent_level)
+
+            # If it's an expanded suite, add its components
+            if isinstance(item, ApplicationSuite) and item.name in self.app_expanded_suites:
+                for component in item.components:
+                    display_items.append(("component", component, 1))
+
+        # Display each item with proper indentation and styling
+        for i, (item_type, item, indent_level) in enumerate(display_items):
             # Arrow indicator for current selection - only show when right panel has focus
             is_right_focused = (self.current_panel_focus == "right")
             arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
 
-            # Determine status based on current state and selection
-            is_selected = self.app_selection_state.get(app.name, False)
+            # Calculate indentation
+            indent = "  " * indent_level
 
-            if app.installed and not is_selected:
-                # Installed and will be uninstalled - red color for removal
-                status_text = "[red]- To Uninstall[/red]"
-            elif app.installed and is_selected:
-                # Installed and staying installed (default state) - green for installed
-                status_text = "[green]✓ Installed[/green]"
-            elif not app.installed and is_selected:
-                # Not installed but marked for installation - yellow for pending install
-                status_text = "[yellow]+ To Install[/yellow]"
+            if item_type == "suite_or_app" and isinstance(item, ApplicationSuite):
+                # Suite item
+                expansion_icon = "▼" if item.name in self.app_expanded_suites else "▶"
+                suite_name = f"{expansion_icon} {item.name}"
+
+                # Get suite status
+                installed_count = sum(1 for c in item.components if c.installed)
+                total_count = len(item.components)
+
+                if installed_count == 0:
+                    status_text = f"[bright_black]○ {installed_count}/{total_count}[/bright_black]"
+                elif installed_count == total_count:
+                    status_text = f"[green]● {installed_count}/{total_count}[/green]"
+                else:
+                    status_text = f"[yellow]◐ {installed_count}/{total_count}[/yellow]"
+
+                status_display = f"{arrow}{indent}{status_text}"
+                content_text = f"{suite_name}"
+                if item.description:
+                    content_text += f" - {item.description}"
+
+            elif item_type == "component":
+                # Component item (with tree lines)
+                tree_prefix = "├─ " if item != display_items[-1][1] else "└─ "
+
+                is_selected = self.app_selection_state.get(item.name, False)
+                if item.installed and not is_selected:
+                    status_text = "[red]- To Uninstall[/red]"
+                elif item.installed and is_selected:
+                    status_text = "[green]✓ Installed[/green]"
+                elif not item.installed and is_selected:
+                    status_text = "[yellow]+ To Install[/yellow]"
+                else:
+                    status_text = "[bright_black]○ Available[/bright_black]"
+
+                status_display = f"{arrow}{indent}{status_text}"
+                content_text = f"{tree_prefix}{item.name}"
+                if item.description:
+                    content_text += f" - {item.description}"
+
             else:
-                # Not installed and staying that way (default state) - bright_black/dim white for neutral available
-                status_text = "[bright_black]○ Available[/bright_black]"
+                # Standalone application
+                is_selected = self.app_selection_state.get(item.name, False)
+                if item.installed and not is_selected:
+                    status_text = "[red]- To Uninstall[/red]"
+                elif item.installed and is_selected:
+                    status_text = "[green]✓ Installed[/green]"
+                elif not item.installed and is_selected:
+                    status_text = "[yellow]+ To Install[/yellow]"
+                else:
+                    status_text = "[bright_black]○ Available[/bright_black]"
+
+                status_display = f"{arrow}{indent}{status_text}"
+                content_text = item.name
+                if item.description:
+                    content_text += f" - {item.description}"
 
             # Create container for horizontal layout
             from textual.containers import Horizontal
             app_container = Horizontal(classes="app-item-container", id=f"app-container-{i}-{unique_suffix}")
 
             # Status column with fixed width (includes arrow)
-            status_display = f"{arrow}{status_text}"
             status_widget = Static(status_display, classes="app-item-status")
 
             # Content column with app name and description
-            content_text = app.name
-            if app.description:
-                content_text += f" - {app.description}"
             content_widget = Static(content_text, classes="app-item-content")
 
             # Mount container first, then add children
@@ -1197,16 +1251,58 @@ class MainMenuScreen(Screen):
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
 
-        if 0 <= self.app_focused_index < len(self.app_install_cache):
-            app = self.app_install_cache[self.app_focused_index]
-            # Toggle the selection state
-            current_state = self.app_selection_state.get(app.name, app.installed)
-            self.app_selection_state[app.name] = not current_state
+        # Build display list based on current expansion state
+        display_items = self._build_display_items()
 
-            # Only update focus indicators instead of full refresh
-            self._update_app_focus_indicators()
-            # Update help text when selection changes
-            self._update_help_text()
+        if 0 <= self.app_focused_index < len(display_items):
+            item_type, item, indent_level = display_items[self.app_focused_index]
+
+            # Only toggle selection for actual applications/components, not suite headers
+            if item_type in ["suite_or_app", "component"] and not isinstance(item, ApplicationSuite):
+                current_state = self.app_selection_state.get(item.name, item.installed)
+                self.app_selection_state[item.name] = not current_state
+
+                # Only update focus indicators instead of full refresh
+                self._update_app_focus_indicators()
+                # Update help text when selection changes
+                self._update_help_text()
+
+    def _handle_app_enter_key(self) -> None:
+        """Handle Enter key press for suite expansion/collapse and app selection."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            return
+
+        # Build display list based on current expansion state
+        display_items = self._build_display_items()
+
+        if 0 <= self.app_focused_index < len(display_items):
+            item_type, item, indent_level = display_items[self.app_focused_index]
+
+            if item_type == "suite_or_app" and isinstance(item, ApplicationSuite):
+                # Toggle suite expansion
+                if item.name in self.app_expanded_suites:
+                    self.app_expanded_suites.remove(item.name)
+                else:
+                    self.app_expanded_suites.add(item.name)
+
+                # Refresh the display to show/hide components
+                self.update_settings_panel()
+            else:
+                # For non-suite items, treat Enter like Space (toggle selection)
+                self._toggle_current_app()
+
+    def _build_display_items(self):
+        """Build the current display items list based on expansion state."""
+        display_items = []
+        for item in self.app_install_cache:
+            display_items.append(("suite_or_app", item, 0))
+
+            # If it's an expanded suite, add its components
+            if isinstance(item, ApplicationSuite) and item.name in self.app_expanded_suites:
+                for component in item.components:
+                    display_items.append(("component", component, 1))
+
+        return display_items
 
     def _calculate_app_changes(self) -> dict:
         """Calculate what app changes need to be applied."""
@@ -1597,6 +1693,13 @@ class MainMenuScreen(Screen):
                 self._toggle_current_app()
                 return True  # Consume the event
 
+        # Handle enter key for app install section
+        if event.key == "enter" and self.selected_segment == "app_install":
+            # Only handle enter key when in right panel (app list)
+            if not self._is_focus_in_left_panel():
+                self._handle_app_enter_key()
+                return True  # Consume the event
+
         # Handle 1-6 shortcuts only when focus is in left panel
         if event.key in ["1", "2", "3", "4", "5", "6"] and self._is_focus_in_left_panel():
             try:
@@ -1620,6 +1723,29 @@ class MainMenuScreen(Screen):
 
         # Let the parent handle other keys
         return False
+
+    def action_refresh_current_page(self) -> None:
+        """Refresh the current page by clearing its cache."""
+        try:
+            if self.selected_segment == "app_install":
+                self.refresh_app_install_page()
+            elif self.selected_segment == "package_manager":
+                self.refresh_package_manager_page()
+            elif self.selected_segment == "system_info":
+                self.system_info_cache = None
+                self.system_info_loading = False
+                if self.selected_segment == "system_info":
+                    self.update_settings_panel()
+            else:
+                # For other segments, clear their respective caches
+                if hasattr(self, f"{self.selected_segment}_cache"):
+                    setattr(self, f"{self.selected_segment}_cache", None)
+                    setattr(self, f"{self.selected_segment}_loading", False)
+                    self.update_settings_panel()
+
+            logger.info(f"Refreshed {self.selected_segment} page cache")
+        except Exception as e:
+            logger.error(f"Failed to refresh {self.selected_segment} page: {str(e)}")
 
     # Legacy action methods for backward compatibility
     def action_homebrew(self) -> None:
@@ -2053,7 +2179,53 @@ class MainMenuScreen(Screen):
         except Exception as e:
             # Silently fail to avoid disrupting the UI
             pass
-    
+
+    def refresh_app_install_page(self) -> None:
+        """Public method to refresh application install page to update status."""
+        try:
+            # Only save focus if we're currently in app install segment
+            saved_focused_index = None
+            should_restore_focus = self.selected_segment == "app_install"
+
+            if should_restore_focus:
+                saved_focused_index = self.app_focused_index
+
+            # Clear app install cache to force reload and status refresh
+            self.app_install_cache = None
+            self.app_install_loading = False
+
+            # If currently viewing app install segment, refresh it
+            if self.selected_segment == "app_install":
+                # Force rebuild the panel content
+                self.update_settings_panel()
+                # Refresh the UI
+                self.refresh()
+
+                # Restore focus if we saved it and user is still on app install page
+                if should_restore_focus and saved_focused_index is not None:
+                    # Use call_after_refresh to ensure focus restoration happens after UI update
+                    def restore_focus():
+                        # Double-check user is still on app install page
+                        if self.selected_segment == "app_install" and self.app_install_cache:
+                            self.app_focused_index = min(saved_focused_index, len(self.app_install_cache) - 1)
+
+                            # Set right panel focus to ensure arrows show properly
+                            try:
+                                right_container = self.query_one("#settings-scroll", ScrollableContainer)
+                                right_container.focus()
+                                self._update_panel_focus(is_left_focused=False)
+                            except Exception:
+                                pass
+
+                            # Update focus indicators to show the restored focus
+                            self._update_app_focus_indicators()
+
+                    self.call_after_refresh(restore_focus)
+
+        except Exception as e:
+            # Silently fail to avoid disrupting the UI
+            logger.error(f"Failed to refresh app install page: {str(e)}")
+
     def _show_message(self, message: str, error: bool = False) -> None:
         """Show a message to the user by updating the title."""
         try:
