@@ -6,65 +6,104 @@ metadata:
   package_manager: apt
   description: "Applications configured for APT (Advanced Package Tool) package manager"
   last_updated: "2025-09-24"
-  version: "1.0.0"
+  version: "2.0.0"
 
-# 应用程序列表
+# 应用程序配置 - 按显示顺序排列
 applications:
-  # 开发工具类
+  # 混合列表：套件和独立应用可以自由排列
+  # 配置顺序即为UI显示顺序
+
+  - name: Python Development Suite
+    type: suite
+    description: Complete Python development environment with interpreter, package manager, and dev tools
+    category: development
+    components:
+      - name: Python3 Core
+        package: python3
+        executables: [python3, python3.11, python3.12]
+        description: Python 3 interpreter and runtime
+
+      - name: Pip Package Manager
+        package: python3-pip
+        executables: [pip3, pip]
+        description: Python package installer and manager
+
+      - name: Virtual Environment
+        package: python3-venv
+        executables: [pyvenv]
+        description: Python virtual environment creator
+
+      - name: Development Headers
+        package: python3-dev
+        executables: []
+        description: Development headers and libraries for compiling Python extensions
+    post_install: pip3 install --upgrade pip setuptools wheel
+    tags: [python, development, pip]
+    recommended: true
+
   - name: Docker
+    type: standalone
     description: Container runtime and orchestration
     category: development
     package: docker.io docker-compose
+    executables: [docker, docker-compose]
     post_install: usermod -aG docker $USER && systemctl enable docker
     tags: [container, devops, docker]
     recommended: true
 
   - name: Node.js
+    type: standalone
     description: JavaScript runtime and package manager
     category: development
     package: nodejs npm
+    executables: [node, nodejs, npm]
     post_install: npm install -g yarn
     tags: [javascript, nodejs, runtime, npm]
     recommended: true
 
-  - name: Python Dev
-    description: Python development tools
-    category: development
-    package: python3-pip python3-venv python3-dev
-    post_install: pip3 install --upgrade pip setuptools wheel
-    tags: [python, development, pip]
+  - name: Network Tools Suite
+    type: suite
+    description: Essential networking utilities and diagnostic tools
+    category: system
+    components:
+      - name: cURL
+        package: curl
+        executables: [curl]
+        description: Command line tool for transferring data with URLs
+
+      - name: Wget
+        package: wget
+        executables: [wget]
+        description: Network downloader for retrieving files via HTTP/HTTPS/FTP
+    tags: [network, utilities, diagnostic]
     recommended: true
 
   - name: Git
+    type: standalone
     description: Version control system and tools
     category: development
     package: git
+    executables: [git]
     post_install: null
     tags: [git, vcs, version-control]
     recommended: true
 
-  # 系统工具类
-  - name: Network Tools(curl, wget)
-    description: Network utilities and diagnostic tools
-    category: system
-    package: curl wget
-    post_install: null
-    tags: [network, utilities, diagnostic]
-    recommended: true
-
-  - name: System Monitor(htop)
+  - name: System Monitor
+    type: standalone
     description: System monitoring and disk usage tools
     category: system
     package: htop
+    executables: [htop]
     post_install: null
     tags: [monitoring, system]
     recommended: true
 
-  # 编辑器类
   - name: Neovim
-    description: Terminal-based text editors
+    type: standalone
+    description: Hyperextensible terminal-based text editor
     category: editor
     package: neovim
+    executables: [nvim]
     post_install: null
     tags: [editor, terminal, vim]
     recommended: true
@@ -89,34 +128,37 @@ categories:
 
   database:
     name: "数据库工具"
-    description: "Database clients and management tools"
-    icon: "🗃️"
+    description: "Database management and tools"
+    icon: "🗄️"
 
-# APT 特定配置
-apt_config:
-  # 更新命令
-  update_command: "sudo apt-get update"
+  web:
+    name: "Web服务"
+    description: "Web servers and related tools"
+    icon: "🌐"
 
-  # 安装命令模板
-  install_command: "sudo apt-get install -y"
+  media:
+    name: "多媒体"
+    description: "Media processing and playback tools"
+    icon: "🎵"
 
-  # 卸载命令模板
-  remove_command: "sudo apt-get remove -y"
+  network:
+    name: "网络工具"
+    description: "Network utilities and administration"
+    icon: "🔗"
 
-  # 清理命令
-  cleanup_command: "sudo apt-get autoremove -y && sudo apt-get autoclean"
+  security:
+    name: "安全工具"
+    description: "Security and encryption tools"
+    icon: "🔒"
 
-  # 软件源更新频率（小时）
-  update_interval_hours: 24
-
-  # 是否自动确认安装
-  auto_yes: true
-
-  # 是否显示详细输出
-  verbose: false
-
-  # 推荐包处理
-  install_recommends: true
-
-  # 建议包处理
-  install_suggests: false
+# Package management specific settings
+package_manager_config:
+  apt:
+    auto_yes: true
+    install_recommends: false
+    install_suggests: false
+    batch_supported: true
+    check_cmd: ["dpkg-query", "-W", "-f", "${Package}\t${Status}\n"]
+    install_cmd: ["apt", "install", "-y"]
+    installed_pattern: "install ok installed"
+    timeout: 120
