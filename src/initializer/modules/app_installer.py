@@ -2,11 +2,14 @@
 
 import subprocess
 import shutil
+import asyncio
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from pathlib import Path
 from ..utils.log_manager import InstallationLogManager, LogLevel
 from ..utils.logger import get_module_logger
+from .batch_package_checker import BatchPackageChecker
+from .two_layer_checker import TwoLayerPackageChecker
 
 
 @dataclass
@@ -37,15 +40,21 @@ class AppInstaller:
         modules_config = config_manager.load_config("modules")
         self.app_config = modules_config.get('modules', {}).get('app_install', {})
 
+        # Initialize loggers first
+        self.log_manager = InstallationLogManager(config_manager.config_dir)
+        self.logger = get_module_logger("app_installer")
+
         # 先检测包管理器
         self.package_manager = self._detect_package_manager()
 
+        # Initialize two-layer package checker for efficient status checking
+        self.two_layer_checker = TwoLayerPackageChecker(self.package_manager or "unknown")
+
+        # Keep batch checker for backward compatibility and fallback
+        self.batch_checker = BatchPackageChecker(self.package_manager or "unknown")
+
         # 然后加载应用列表
         self.applications = self._load_applications()
-
-        # Initialize loggers
-        self.log_manager = InstallationLogManager(config_manager.config_dir)
-        self.logger = get_module_logger("app_installer")
     
     def _load_applications(self) -> List[Application]:
         """Load applications from package manager specific configuration file."""
@@ -161,110 +170,6 @@ class AppInstaller:
                 return pm_name
 
         return None
-
-    def save_installation_status(self, app_name: str, installed: bool) -> bool:
-        """Save installation status to configuration file.
-
-        Args:
-            app_name: Name of the application
-            installed: Installation status
-
-        Returns:
-            True if saved successfully, False otherwise
-        """
-        try:
-            # Load current configuration
-            config_data = self.config_manager.load_config("modules")
-
-            # Ensure installation_status section exists
-            if "installation_status" not in config_data:
-                config_data["installation_status"] = {}
-
-            # Update status with timestamp
-            from datetime import datetime
-            config_data["installation_status"][app_name] = {
-                "installed": installed,
-                "timestamp": datetime.now().isoformat(),
-                "package_manager": self.package_manager
-            }
-
-            # Save back to file
-            import yaml
-            config_path = self.config_manager.config_dir / "modules.yaml"
-            with open(config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True, indent=2)
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to save installation state: {str(e)}")
-            return False
-
-    def load_installation_status(self, app_name: str) -> Optional[bool]:
-        """Load installation status from configuration file.
-
-        Args:
-            app_name: Name of the application
-
-        Returns:
-            Installation status if found, None if not recorded
-        """
-        try:
-            config_data = self.config_manager.load_config("modules")
-            installation_status = config_data.get("installation_status", {})
-
-            if app_name in installation_status:
-                return installation_status[app_name].get("installed", None)
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Failed to load installation state: {str(e)}")
-            return None
-
-    def get_all_installation_status(self) -> Dict[str, Dict]:
-        """Get all installation status records.
-
-        Returns:
-            Dictionary of app names to their status records
-        """
-        try:
-            config_data = self.config_manager.load_config("modules")
-            return config_data.get("installation_status", {})
-        except Exception:
-            return {}
-
-    def clear_installation_status(self, app_name: str = None) -> bool:
-        """Clear installation status records.
-
-        Args:
-            app_name: Specific app to clear, or None to clear all
-
-        Returns:
-            True if cleared successfully, False otherwise
-        """
-        try:
-            config_data = self.config_manager.load_config("modules")
-
-            if "installation_status" in config_data:
-                if app_name:
-                    # Clear specific app
-                    config_data["installation_status"].pop(app_name, None)
-                else:
-                    # Clear all
-                    config_data["installation_status"] = {}
-
-                # Save back to file
-                import yaml
-                config_path = self.config_manager.config_dir / "modules.yaml"
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True, indent=2)
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to cleanup installation state: {str(e)}")
-            return False
 
     def analyze_error_and_suggest_solution(self, error_output: str, command: str, app_name: str) -> str:
         """Analyze error output and provide user-friendly solutions.
@@ -795,18 +700,101 @@ class AppInstaller:
                 # 默认使用 formula 安装
                 return f"brew install {packages}"
 
+        # 获取配置参数
+        config = self._get_package_manager_config()
+        auto_yes = config.get("auto_yes", True)
+        install_recommends = config.get("install_recommends", True)
+        install_suggests = config.get("install_suggests", False)
+
+        # 构建 APT 命令参数
+        if self.package_manager in ["apt", "apt-get"]:
+            cmd_parts = ["sudo apt-get update && sudo apt-get install"]
+
+            # 添加自动确认参数
+            if auto_yes:
+                cmd_parts.append("-y")
+
+            # 添加推荐包参数
+            if not install_recommends:
+                cmd_parts.append("--no-install-recommends")
+
+            # 添加建议包参数
+            if install_suggests:
+                cmd_parts.append("--install-suggests")
+            elif not install_suggests:
+                cmd_parts.append("--no-install-suggests")
+
+            cmd_parts.append(packages)
+            return " ".join(cmd_parts)
+
         # 其他包管理器保持原有逻辑
         install_commands = {
-            "apt": f"sudo apt-get update && sudo apt-get install -y {packages}",
-            "apt-get": f"sudo apt-get update && sudo apt-get install -y {packages}",
-            "yum": f"sudo yum install -y {packages}",
-            "dnf": f"sudo dnf install -y {packages}",
-            "pacman": f"sudo pacman -S --noconfirm {packages}",
-            "zypper": f"sudo zypper install -y {packages}",
-            "apk": f"sudo apk add {packages}"
+            "yum": f"sudo yum install {'-y' if auto_yes else ''} {packages}",
+            "dnf": f"sudo dnf install {'-y' if auto_yes else ''} {packages}",
+            "pacman": f"sudo pacman -S {'--noconfirm' if auto_yes else ''} {packages}",
+            "zypper": f"sudo zypper install {'-y' if auto_yes else ''} {packages}",
+            "apk": f"sudo apk add {packages}"  # apk 没有交互式确认
         }
 
         return install_commands.get(self.package_manager)
+
+    def _get_package_manager_config(self) -> Dict[str, Any]:
+        """Get package manager specific configuration parameters.
+
+        Returns:
+            Dictionary containing package manager configuration settings
+        """
+        try:
+            # Try to load package manager specific config first
+            config_file_map = {
+                "apt": "applications_apt.yaml",
+                "apt-get": "applications_apt.yaml",
+                "brew": "applications_homebrew.yaml",
+                "yum": "applications_yum.yaml",
+                "dnf": "applications_dnf.yaml",
+                "pacman": "applications_pacman.yaml",
+                "zypper": "applications_zypper.yaml",
+                "apk": "applications_apk.yaml"
+            }
+
+            config_file = config_file_map.get(self.package_manager)
+            if config_file:
+                config_path = self.config_manager.config_dir / config_file
+                if config_path.exists():
+                    import yaml
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config_data = yaml.safe_load(f)
+
+                    # Return the package manager configuration section
+                    if self.package_manager in ["apt", "apt-get"]:
+                        return config_data.get('apt_config', {})
+                    elif self.package_manager == "brew":
+                        return config_data.get('brew_config', {})
+                    else:
+                        # For other package managers, use pm_config or default to apt_config structure
+                        return config_data.get(f'{self.package_manager}_config',
+                                             config_data.get('apt_config', {}))
+
+            # Fallback to general app_install config
+            return self.app_config.get('apt_config', {})
+
+        except Exception as e:
+            self.logger.warning(f"Failed to load package manager config: {str(e)}")
+            # Return sensible defaults
+            return {
+                "auto_yes": True,
+                "install_recommends": True,
+                "install_suggests": False
+            }
+
+    def _get_apt_config(self) -> Dict[str, Any]:
+        """Get APT-specific configuration parameters (legacy method).
+
+        Returns:
+            Dictionary containing APT configuration settings
+        """
+        # Use the new generic method for backwards compatibility
+        return self._get_package_manager_config()
 
     def _get_app_type_from_config(self, app_name: str) -> str:
         """Get application type from configuration file for Homebrew.
@@ -858,15 +846,19 @@ class AppInstaller:
             # 不论是 formula 还是 cask 都用相同的命令
             return f"brew uninstall {packages}"
 
-        # 其他包管理器保持原有逻辑
+        # 获取配置参数 (所有包管理器都需要)
+        config = self._get_package_manager_config()
+        auto_yes = config.get("auto_yes", True)
+
+        # 其他包管理器，根据 auto_yes 配置添加确认参数
         uninstall_commands = {
-            "apt": f"sudo apt-get remove -y {packages}",
-            "apt-get": f"sudo apt-get remove -y {packages}",
-            "yum": f"sudo yum remove -y {packages}",
-            "dnf": f"sudo dnf remove -y {packages}",
-            "pacman": f"sudo pacman -R --noconfirm {packages}",
-            "zypper": f"sudo zypper remove -y {packages}",
-            "apk": f"sudo apk del {packages}"
+            "apt": f"sudo apt-get remove {'-y' if auto_yes else ''} {packages}",
+            "apt-get": f"sudo apt-get remove {'-y' if auto_yes else ''} {packages}",
+            "yum": f"sudo yum remove {'-y' if auto_yes else ''} {packages}",
+            "dnf": f"sudo dnf remove {'-y' if auto_yes else ''} {packages}",
+            "pacman": f"sudo pacman -R {'--noconfirm' if auto_yes else ''} {packages}",
+            "zypper": f"sudo zypper remove {'-y' if auto_yes else ''} {packages}",
+            "apk": f"sudo apk del {packages}"  # apk 没有交互式确认
         }
 
         return uninstall_commands.get(self.package_manager)
@@ -883,24 +875,97 @@ class AppInstaller:
         return app.post_install
     
     def refresh_all_status(self) -> None:
-        """Refresh the installation status of all applications.
+        """Refresh the installation status of all applications using two-layer checking.
 
-        Uses persisted status when available, falls back to system check.
+        Uses L2 (quick verification) + L3 (batch system check) for optimal performance.
         """
-        for app in self.applications:
-            # First check persisted status
-            persisted_status = self.load_installation_status(app.name)
+        self.logger.info("Starting two-layer status refresh for all applications")
 
-            if persisted_status is not None:
-                # Use persisted status
-                app.installed = persisted_status
+        try:
+            # Use asyncio to run the two-layer check
+            import asyncio
+
+            # Create event loop if one doesn't exist
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            # Run two-layer check
+            if loop.is_running():
+                # If we're already in an async context, create a task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        lambda: loop.run_until_complete(self.two_layer_checker.check_applications(self.applications))
+                    )
+                    status_results = future.result()
             else:
-                # Fall back to system check
-                system_status = self.check_application_status(app)
-                app.installed = system_status
+                # Run the two-layer check in the event loop
+                status_results = loop.run_until_complete(self.two_layer_checker.check_applications(self.applications))
 
-                # Save the system check result for future use
-                self.save_installation_status(app.name, system_status)
+            # Update application status based on two-layer check results
+            for app in self.applications:
+                app.installed = status_results.get(app.name, False)
+
+            installed_count = sum(1 for app in self.applications if app.installed)
+            self.logger.info(f"Two-layer status refresh completed: {installed_count}/{len(self.applications)} applications installed")
+
+            # Log performance stats
+            perf_stats = self.two_layer_checker.get_performance_stats()
+            self.logger.info(f"Performance: L2 hit rate {perf_stats['l2_hit_rate_percent']}%, "
+                           f"avg {perf_stats['average_time_per_check']}s per app")
+
+        except Exception as e:
+            self.logger.error(f"Two-layer status refresh failed: {str(e)}")
+            # Fallback to batch-only checking
+            self.logger.info("Falling back to batch-only status checks")
+            self._fallback_batch_refresh()
+
+    def _fallback_batch_refresh(self) -> None:
+        """Fallback method using batch checking only."""
+        try:
+            import asyncio
+
+            # Create event loop if one doesn't exist
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            # Run batch check as fallback
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        lambda: loop.run_until_complete(self.batch_checker.batch_check_applications(self.applications))
+                    )
+                    status_results = future.result()
+            else:
+                status_results = loop.run_until_complete(self.batch_checker.batch_check_applications(self.applications))
+
+            # Update application status
+            for app in self.applications:
+                app.installed = status_results.get(app.name, False)
+
+            installed_count = sum(1 for app in self.applications if app.installed)
+            self.logger.info(f"Batch fallback completed: {installed_count}/{len(self.applications)} applications installed")
+
+        except Exception as e:
+            self.logger.error(f"Batch fallback also failed: {str(e)}")
+            # Final fallback to individual checks
+            self._fallback_individual_refresh()
+
+    def _fallback_individual_refresh(self) -> None:
+        """Fallback method using individual status checks."""
+        for app in self.applications:
+            try:
+                app.installed = self.check_application_status(app)
+            except Exception as e:
+                self.logger.warning(f"Individual status check failed for {app.name}: {str(e)}")
+                app.installed = False
     
     def get_all_applications(self) -> List[Application]:
         """Get all configured applications with their current status.
