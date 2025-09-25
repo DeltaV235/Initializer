@@ -644,9 +644,12 @@ class MainMenuScreen(Screen):
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
 
-        # Clear all app item arrows - use container structure like _update_app_focus_indicators
+        # Build display items to match the current display structure
+        display_items = self._build_display_items()
+
+        # Clear all display items - use container structure matching the display logic
         try:
-            for i, app in enumerate(self.app_install_cache):
+            for i, (item_type, item, indent_level) in enumerate(display_items):
                 container_id = f"app-container-{i}-{self._app_unique_suffix}"
                 try:
                     from textual.containers import Horizontal
@@ -657,24 +660,55 @@ class MainMenuScreen(Screen):
                     if status_widgets:
                         status_widget = status_widgets.first()
 
-                        # Determine status based on current state and selection
-                        is_selected = self.app_selection_state.get(app.name, False)
+                        # Always clear arrow (use spaces instead)
+                        arrow = "  "
 
-                        if app.installed and not is_selected:
-                            # Installed and will be uninstalled - red color for removal
-                            status_text = "[red]- To Uninstall[/red]"
-                        elif app.installed and is_selected:
-                            # Installed and staying installed (default state) - green for installed
-                            status_text = "[green]✓ Installed[/green]"
-                        elif not app.installed and is_selected:
-                            # Not installed but marked for installation - yellow for pending install
-                            status_text = "[yellow]+ To Install[/yellow]"
+                        # Calculate indentation
+                        indent = "  " * indent_level
+
+                        if item_type == "suite_or_app" and hasattr(item, 'components'):
+                            # Suite item - get suite status
+                            installed_count = sum(1 for c in item.components if c.installed)
+                            total_count = len(item.components)
+
+                            if installed_count == 0:
+                                status_text = f"[bright_black]○ {installed_count}/{total_count}[/bright_black]"
+                            elif installed_count == total_count:
+                                status_text = f"[green]● {installed_count}/{total_count}[/green]"
+                            else:
+                                status_text = f"[yellow]◐ {installed_count}/{total_count}[/yellow]"
+
+                            status_display = f"{arrow}{indent}{status_text}"
+
+                        elif item_type == "component":
+                            # Component item
+                            is_selected = self.app_selection_state.get(item.name, False)
+                            if item.installed and not is_selected:
+                                status_text = "[red]- To Uninstall[/red]"
+                            elif item.installed and is_selected:
+                                status_text = "[green]✓ Installed[/green]"
+                            elif not item.installed and is_selected:
+                                status_text = "[yellow]+ To Install[/yellow]"
+                            else:
+                                status_text = "[bright_black]○ Available[/bright_black]"
+
+                            status_display = f"{arrow}{indent}{status_text}"
+
                         else:
-                            # Not installed and staying that way (default state) - bright_black for neutral available
-                            status_text = "[bright_black]○ Available[/bright_black]"
+                            # Standalone application
+                            is_selected = self.app_selection_state.get(item.name, False)
+                            if item.installed and not is_selected:
+                                status_text = "[red]- To Uninstall[/red]"
+                            elif item.installed and is_selected:
+                                status_text = "[green]✓ Installed[/green]"
+                            elif not item.installed and is_selected:
+                                status_text = "[yellow]+ To Install[/yellow]"
+                            else:
+                                status_text = "[bright_black]○ Available[/bright_black]"
 
-                        # Update without arrow (always use spaces)
-                        status_display = f"  {status_text}"
+                            status_display = f"{arrow}{indent}{status_text}"
+
+                        # Update status widget
                         status_widget.update(status_display)
 
                 except Exception:
@@ -1076,7 +1110,28 @@ class MainMenuScreen(Screen):
 
             elif item_type == "component":
                 # Component item (with tree lines)
-                tree_prefix = "├─ " if item != display_items[-1][1] else "└─ "
+                # Find the parent suite to determine if this is the last component
+                tree_prefix = "├─ "  # Default to middle component
+
+                # Find all components in the current suite by looking backwards for the suite header
+                suite_start_index = -1
+                for j in range(i - 1, -1, -1):
+                    if display_items[j][0] == "suite_or_app":
+                        suite_start_index = j
+                        break
+
+                if suite_start_index >= 0:
+                    # Count components in this suite
+                    suite_components = []
+                    for k in range(suite_start_index + 1, len(display_items)):
+                        if display_items[k][0] == "component":
+                            suite_components.append(k)
+                        elif display_items[k][0] == "suite_or_app":
+                            break
+
+                    # Check if this is the last component in the suite
+                    if suite_components and i == suite_components[-1]:
+                        tree_prefix = "└─ "
 
                 is_selected = self.app_selection_state.get(item.name, False)
                 if item.installed and not is_selected:
