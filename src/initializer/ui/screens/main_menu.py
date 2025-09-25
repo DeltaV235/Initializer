@@ -995,6 +995,7 @@ class MainMenuScreen(Screen):
                 self.app_expanded_suites = expanded_suites  # Track expanded suites
                 self.app_install_loading = False
                 self.app_focused_index = 0
+                self._ensure_valid_focus_index()  # Ensure valid focus after data load
 
                 # Refresh the panel if we're still on app_install segment
                 if self.selected_segment == "app_install":
@@ -1134,9 +1135,12 @@ class MainMenuScreen(Screen):
         if not hasattr(self, '_app_unique_suffix'):
             return
 
-        # Update all app items - now they use container structure
+        # Build display items to match the current display structure
+        display_items = self._build_display_items()
+
+        # Update all display items - now they use container structure
         try:
-            for i, app in enumerate(self.app_install_cache):
+            for i, (item_type, item, indent_level) in enumerate(display_items):
                 container_id = f"app-container-{i}-{self._app_unique_suffix}"
                 try:
                     from textual.containers import Horizontal
@@ -1151,24 +1155,52 @@ class MainMenuScreen(Screen):
                         is_right_focused = (self.current_panel_focus == "right")
                         arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == self.app_focused_index and is_right_focused) else "  "
 
-                        # Determine status based on current state and selection
-                        is_selected = self.app_selection_state.get(app.name, False)
+                        # Calculate indentation
+                        indent = "  " * indent_level
 
-                        if app.installed and not is_selected:
-                            # Installed and will be uninstalled - red color for removal
-                            status_text = "[red]- To Uninstall[/red]"
-                        elif app.installed and is_selected:
-                            # Installed and staying installed (default state) - green for installed
-                            status_text = "[green]✓ Installed[/green]"
-                        elif not app.installed and is_selected:
-                            # Not installed but marked for installation - yellow for pending install
-                            status_text = "[yellow]+ To Install[/yellow]"
+                        if item_type == "suite_or_app" and hasattr(item, 'components'):
+                            # Suite item - get suite status
+                            installed_count = sum(1 for c in item.components if c.installed)
+                            total_count = len(item.components)
+
+                            if installed_count == 0:
+                                status_text = f"[bright_black]○ {installed_count}/{total_count}[/bright_black]"
+                            elif installed_count == total_count:
+                                status_text = f"[green]● {installed_count}/{total_count}[/green]"
+                            else:
+                                status_text = f"[yellow]◐ {installed_count}/{total_count}[/yellow]"
+
+                            status_display = f"{arrow}{indent}{status_text}"
+
+                        elif item_type == "component":
+                            # Component item
+                            is_selected = self.app_selection_state.get(item.name, False)
+                            if item.installed and not is_selected:
+                                status_text = "[red]- To Uninstall[/red]"
+                            elif item.installed and is_selected:
+                                status_text = "[green]✓ Installed[/green]"
+                            elif not item.installed and is_selected:
+                                status_text = "[yellow]+ To Install[/yellow]"
+                            else:
+                                status_text = "[bright_black]○ Available[/bright_black]"
+
+                            status_display = f"{arrow}{indent}{status_text}"
+
                         else:
-                            # Not installed and staying that way (default state) - bright_black for neutral available
-                            status_text = "[bright_black]○ Available[/bright_black]"
+                            # Standalone application
+                            is_selected = self.app_selection_state.get(item.name, False)
+                            if item.installed and not is_selected:
+                                status_text = "[red]- To Uninstall[/red]"
+                            elif item.installed and is_selected:
+                                status_text = "[green]✓ Installed[/green]"
+                            elif not item.installed and is_selected:
+                                status_text = "[yellow]+ To Install[/yellow]"
+                            else:
+                                status_text = "[bright_black]○ Available[/bright_black]"
 
-                        # Update status display with arrow and status
-                        status_display = f"{arrow}{status_text}"
+                            status_display = f"{arrow}{indent}{status_text}"
+
+                        # Update status widget
                         status_widget.update(status_display)
 
                 except Exception:
@@ -1184,7 +1216,9 @@ class MainMenuScreen(Screen):
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             return
 
-        max_index = len(self.app_install_cache) - 1
+        # Build display items to get correct max index
+        display_items = self._build_display_items()
+        max_index = len(display_items) - 1
 
         if direction == "down" and self.app_focused_index < max_index:
             self.app_focused_index += 1
@@ -1285,6 +1319,9 @@ class MainMenuScreen(Screen):
                 else:
                     self.app_expanded_suites.add(item.name)
 
+                # Ensure focus index is still valid after expansion state change
+                self._ensure_valid_focus_index()
+
                 # Refresh the display to show/hide components
                 self.update_settings_panel()
             else:
@@ -1303,6 +1340,22 @@ class MainMenuScreen(Screen):
                     display_items.append(("component", component, 1))
 
         return display_items
+
+    def _ensure_valid_focus_index(self):
+        """Ensure app_focused_index is within valid bounds."""
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            self.app_focused_index = 0
+            return
+
+        display_items = self._build_display_items()
+        max_index = len(display_items) - 1
+
+        if max_index < 0:
+            self.app_focused_index = 0
+        elif self.app_focused_index > max_index:
+            self.app_focused_index = max_index
+        elif self.app_focused_index < 0:
+            self.app_focused_index = 0
 
     def _calculate_app_changes(self) -> dict:
         """Calculate what app changes need to be applied."""
@@ -1838,6 +1891,7 @@ class MainMenuScreen(Screen):
                     # Initialize app focus when switching to right panel
                     if not hasattr(self, '_app_focus_initialized') or not self._app_focus_initialized:
                         self.app_focused_index = 0
+                        self._ensure_valid_focus_index()  # Ensure valid focus
                         self._app_focus_initialized = True
                     # Update focus indicators
                     self._update_app_focus_indicators()
@@ -1982,6 +2036,7 @@ class MainMenuScreen(Screen):
             elif self.selected_segment == "app_install" and self.app_install_cache and not isinstance(self.app_install_cache, dict):
                 # Initialize app focus when switching to right panel
                 self.app_focused_index = 0
+                self._ensure_valid_focus_index()  # Ensure valid focus
                 # Update focus indicators
                 self._update_app_focus_indicators()
             else:
