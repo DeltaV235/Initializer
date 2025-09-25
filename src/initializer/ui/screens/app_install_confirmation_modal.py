@@ -108,7 +108,7 @@ class AppInstallConfirmationModal(ModalScreen):
     
     def compose(self) -> ComposeResult:
         """Compose the modal interface."""
-        with Container(classes="modal-container-xs"):
+        with Container(classes="modal-container-lg"):
             yield Static("⚠️ 确认应用安装/卸载", id="confirmation-title")
             yield Rule()
 
