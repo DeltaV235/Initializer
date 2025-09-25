@@ -3,27 +3,14 @@
 import subprocess
 import shutil
 import asyncio
-from typing import List, Dict, Optional, Tuple, Any
-from dataclasses import dataclass
+import concurrent.futures
+from typing import List, Dict, Optional, Tuple, Any, Union
 from pathlib import Path
 from ..utils.log_manager import InstallationLogManager, LogLevel
 from ..utils.logger import get_module_logger
 from .batch_package_checker import BatchPackageChecker
 from .two_layer_checker import TwoLayerPackageChecker
-
-
-@dataclass
-class Application:
-    """Represents an application that can be installed."""
-    name: str
-    package: str
-    description: str
-    post_install: Optional[str] = None
-    installed: bool = False
-    
-    def get_package_list(self) -> List[str]:
-        """Get list of packages from the package string."""
-        return self.package.split()
+from .software_models import Application, ApplicationSuite
 
 
 class AppInstaller:
@@ -53,8 +40,11 @@ class AppInstaller:
         # Keep batch checker for backward compatibility and fallback
         self.batch_checker = BatchPackageChecker(self.package_manager or "unknown")
 
-        # 然后加载应用列表
-        self.applications = self._load_applications()
+        # 加载软件项（套件和独立应用）
+        self.software_items: List[Union[ApplicationSuite, Application]] = self._load_software_items()
+
+        # 兼容性：提供applications属性访问所有应用（展开套件组件）
+        self.applications = self._get_all_applications_flat()
     
     def _load_applications(self) -> List[Application]:
         """Load applications from package manager specific configuration file."""
@@ -73,7 +63,8 @@ class AppInstaller:
                     name=app_data.get("name", ""),
                     package=app_data.get("package", ""),
                     description=app_data.get("description", ""),
-                    post_install=app_data.get("post_install")
+                    post_install=app_data.get("post_install"),
+                    executables=app_data.get("executables", [])
                 )
                 applications.append(app)
             return applications
@@ -97,7 +88,8 @@ class AppInstaller:
                         name=app_data.get("name", ""),
                         package=package_name,
                         description=app_data.get("description", ""),
-                        post_install=app_data.get("post_install")
+                        post_install=app_data.get("post_install"),
+                        executables=app_data.get("executables", [])
                     )
                     applications.append(app)
             else:
@@ -109,7 +101,8 @@ class AppInstaller:
                         name=app_data.get("name", ""),
                         package=app_data.get("package", ""),
                         description=app_data.get("description", ""),
-                        post_install=app_data.get("post_install")
+                        post_install=app_data.get("post_install"),
+                        executables=app_data.get("executables", [])
                     )
                     applications.append(app)
 
@@ -122,11 +115,158 @@ class AppInstaller:
                     name=app_data.get("name", ""),
                     package=app_data.get("package", ""),
                     description=app_data.get("description", ""),
-                    post_install=app_data.get("post_install")
+                    post_install=app_data.get("post_install"),
+                    executables=app_data.get("executables", [])
                 )
                 applications.append(app)
 
         return applications
+
+    def _load_software_items(self) -> List[Union[ApplicationSuite, Application]]:
+        """Load software items from unified configuration format.
+
+        Returns:
+            List of software items (mix of ApplicationSuite and Application objects) in config order
+        """
+        software_items = []
+
+        # 根据包管理器类型加载对应的配置文件
+        if self.package_manager == "apt" or self.package_manager == "apt-get":
+            config_file = "applications_apt.yaml"
+        elif self.package_manager == "brew":
+            config_file = "applications_homebrew.yaml"
+        else:
+            # 如果不是已知包管理器，回退到旧格式
+            self.logger.warning(f"Unknown package manager {self.package_manager}, using legacy format")
+            return self._load_applications_as_standalone()
+
+        try:
+            import yaml
+            config_path = self.config_manager.config_dir / config_file
+
+            if not config_path.exists():
+                self.logger.warning(f"Config file {config_file} not found, using legacy format")
+                return self._load_applications_as_standalone()
+
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = yaml.safe_load(f)
+
+            # 读取统一的 applications 列表
+            applications_list = config_data.get("applications", [])
+
+            if not applications_list:
+                self.logger.warning("No applications found in config, using legacy format")
+                return self._load_applications_as_standalone()
+
+            # 按配置顺序处理每个应用项
+            suite_count = 0
+            standalone_count = 0
+
+            for app_data in applications_list:
+                app_type = app_data.get("type", "standalone")
+
+                if app_type == "suite":
+                    # 创建套件
+                    suite = self._create_suite_from_config(app_data)
+                    software_items.append(suite)
+                    suite_count += 1
+                elif app_type == "standalone":
+                    # 创建独立应用
+                    app = self._create_application_from_config(app_data, app_type="standalone")
+                    software_items.append(app)
+                    standalone_count += 1
+                else:
+                    self.logger.warning(f"Unknown application type '{app_type}' for {app_data.get('name', 'unnamed')}")
+
+            self.logger.info(f"Loaded {len(software_items)} software items in config order "
+                           f"({suite_count} suites, {standalone_count} standalone)")
+
+            return software_items
+
+        except Exception as e:
+            self.logger.error(f"Failed to load software items from {config_file}: {str(e)}")
+            self.logger.warning("Falling back to legacy application loading")
+            return self._load_applications_as_standalone()
+
+    def _create_suite_from_config(self, suite_data: dict) -> ApplicationSuite:
+        """Create an ApplicationSuite from configuration data.
+
+        Args:
+            suite_data: Suite configuration data
+
+        Returns:
+            ApplicationSuite instance
+        """
+        components = []
+        for component_data in suite_data.get("components", []):
+            component = self._create_application_from_config(component_data, app_type="component")
+            components.append(component)
+
+        suite = ApplicationSuite(
+            name=suite_data.get("name", ""),
+            description=suite_data.get("description", ""),
+            category=suite_data.get("category", ""),
+            components=components
+        )
+
+        return suite
+
+    def _create_application_from_config(self, app_data: dict, app_type: str = "standalone") -> Application:
+        """Create an Application from configuration data.
+
+        Args:
+            app_data: Application configuration data
+            app_type: Type of application ('standalone' or 'component')
+
+        Returns:
+            Application instance
+        """
+        # 处理不同包管理器的包名字段
+        package_name = self._get_package_name_for_manager(app_data)
+
+        app = Application(
+            name=app_data.get("name", ""),
+            package=package_name,
+            executables=app_data.get("executables", []),
+            description=app_data.get("description", ""),
+            category=app_data.get("category", ""),
+            post_install=app_data.get("post_install", ""),
+            tags=app_data.get("tags", []),
+            recommended=app_data.get("recommended", False),
+            type=app_type
+        )
+
+        return app
+
+    def _load_applications_as_standalone(self) -> List[Application]:
+        """Load legacy applications as standalone items for backward compatibility.
+
+        Returns:
+            List of Application objects (all as standalone)
+        """
+        applications = self._load_applications()
+        # 确保所有应用都标记为 standalone 类型
+        for app in applications:
+            app.type = "standalone"
+        return applications
+
+    def _get_all_applications_flat(self) -> List[Application]:
+        """Get all applications in a flat list (expand suite components).
+
+        Returns:
+            Flat list of all applications (components + standalone)
+        """
+        all_applications = []
+
+        for item in self.software_items:
+            if isinstance(item, ApplicationSuite):
+                # 添加套件的所有组件
+                all_applications.extend(item.components)
+            else:
+                # 添加独立应用
+                all_applications.append(item)
+
+        return all_applications
 
     def _get_package_name_for_manager(self, app_data: dict) -> str:
         """Get package name based on package manager type.
@@ -875,42 +1015,63 @@ class AppInstaller:
         return app.post_install
     
     def refresh_all_status(self) -> None:
-        """Refresh the installation status of all applications using two-layer checking.
+        """Refresh the installation status of all software items using two-layer checking.
 
         Uses L2 (quick verification) + L3 (batch system check) for optimal performance.
+        Supports both suites and standalone applications.
         """
-        self.logger.info("Starting two-layer status refresh for all applications")
+        self.logger.info("Starting two-layer status refresh for all software items")
 
         try:
             # Use asyncio to run the two-layer check
             import asyncio
+            import concurrent.futures
 
-            # Create event loop if one doesn't exist
+            # Check if we're already in an async context
             try:
-                loop = asyncio.get_event_loop()
+                current_loop = asyncio.get_running_loop()
+                # We're in an async context, use thread to run the async function
+                self.logger.debug("Running in async context, using ThreadPoolExecutor")
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Create a new event loop in the thread
+                    def run_check():
+                        # Create new event loop for this thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            return new_loop.run_until_complete(
+                                self.two_layer_checker.check_software_items(self.software_items)
+                            )
+                        finally:
+                            new_loop.close()
+
+                    status_results = executor.submit(run_check).result()
+
             except RuntimeError:
+                # No event loop running, we can create one
+                self.logger.debug("No event loop running, creating new one")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-
-            # Run two-layer check
-            if loop.is_running():
-                # If we're already in an async context, create a task
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        lambda: loop.run_until_complete(self.two_layer_checker.check_applications(self.applications))
+                try:
+                    status_results = loop.run_until_complete(
+                        self.two_layer_checker.check_software_items(self.software_items)
                     )
-                    status_results = future.result()
-            else:
-                # Run the two-layer check in the event loop
-                status_results = loop.run_until_complete(self.two_layer_checker.check_applications(self.applications))
+                finally:
+                    loop.close()
 
-            # Update application status based on two-layer check results
-            for app in self.applications:
-                app.installed = status_results.get(app.name, False)
+            # Update self.applications for backward compatibility
+            # The software items are already updated by check_software_items
+            self.applications = self._get_all_applications_flat()
 
-            installed_count = sum(1 for app in self.applications if app.installed)
-            self.logger.info(f"Two-layer status refresh completed: {installed_count}/{len(self.applications)} applications installed")
+            # Log summary
+            suite_count = sum(1 for item in self.software_items if isinstance(item, ApplicationSuite))
+            standalone_count = sum(1 for item in self.software_items if isinstance(item, Application))
+            installed_apps = sum(1 for app in self.applications if app.installed)
+
+            self.logger.info(f"Status refresh completed: {len(self.software_items)} items "
+                           f"({suite_count} suites, {standalone_count} standalone), "
+                           f"{installed_apps}/{len(self.applications)} applications installed")
 
             # Log performance stats
             perf_stats = self.two_layer_checker.get_performance_stats()
@@ -927,24 +1088,40 @@ class AppInstaller:
         """Fallback method using batch checking only."""
         try:
             import asyncio
+            import concurrent.futures
 
-            # Create event loop if one doesn't exist
+            # Check if we're already in an async context
             try:
-                loop = asyncio.get_event_loop()
+                current_loop = asyncio.get_running_loop()
+                # We're in an async context, use thread to run the async function
+                self.logger.debug("Fallback: Running in async context, using ThreadPoolExecutor")
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Create a new event loop in the thread
+                    def run_batch_check():
+                        # Create new event loop for this thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            return new_loop.run_until_complete(
+                                self.batch_checker.batch_check_applications(self.applications)
+                            )
+                        finally:
+                            new_loop.close()
+
+                    status_results = executor.submit(run_batch_check).result()
+
             except RuntimeError:
+                # No event loop running, we can create one
+                self.logger.debug("Fallback: No event loop running, creating new one")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-
-            # Run batch check as fallback
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        lambda: loop.run_until_complete(self.batch_checker.batch_check_applications(self.applications))
+                try:
+                    status_results = loop.run_until_complete(
+                        self.batch_checker.batch_check_applications(self.applications)
                     )
-                    status_results = future.result()
-            else:
-                status_results = loop.run_until_complete(self.batch_checker.batch_check_applications(self.applications))
+                finally:
+                    loop.close()
 
             # Update application status
             for app in self.applications:
@@ -969,12 +1146,77 @@ class AppInstaller:
     
     def get_all_applications(self) -> List[Application]:
         """Get all configured applications with their current status.
-        
+
         Returns:
             List of Application objects with updated status
         """
         self.refresh_all_status()
         return self.applications
+
+    def get_all_software_items(self) -> List[Union[ApplicationSuite, Application]]:
+        """Get all configured software items (suites and standalone applications) with current status.
+
+        Returns:
+            List of software items (mix of ApplicationSuite and Application objects)
+        """
+        self.refresh_all_status()
+        return self.software_items
+
+    def get_software_items_for_display(self, expanded_suites: set = None) -> List[Union[ApplicationSuite, Application]]:
+        """Get software items formatted for UI display with expansion state.
+
+        Args:
+            expanded_suites: Set of suite names that should be expanded
+
+        Returns:
+            List of software items with expansion state applied
+        """
+        expanded_suites = expanded_suites or set()
+
+        # Update expansion state based on provided set
+        for item in self.software_items:
+            if isinstance(item, ApplicationSuite):
+                item.expanded = item.name in expanded_suites
+
+        # Refresh status
+        self.refresh_all_status()
+
+        return self.software_items
+
+    def toggle_suite_expansion(self, suite_name: str) -> bool:
+        """Toggle the expansion state of a suite.
+
+        Args:
+            suite_name: Name of the suite to toggle
+
+        Returns:
+            New expansion state (True if expanded, False if collapsed)
+        """
+        for item in self.software_items:
+            if isinstance(item, ApplicationSuite) and item.name == suite_name:
+                item.expanded = not item.expanded
+                self.logger.debug(f"Suite '{suite_name}' {'expanded' if item.expanded else 'collapsed'}")
+                return item.expanded
+
+        self.logger.warning(f"Suite '{suite_name}' not found")
+        return False
+
+    def get_flat_display_items(self) -> List[Union[ApplicationSuite, Application]]:
+        """Get flattened list of items for display (expanded suites show components).
+
+        Returns:
+            Flattened list where expanded suites are followed by their components
+        """
+        display_items = []
+
+        for item in self.software_items:
+            display_items.append(item)
+
+            # If it's an expanded suite, add its components
+            if isinstance(item, ApplicationSuite) and item.expanded:
+                display_items.extend(item.components)
+
+        return display_items
     
     def execute_command(self, command: str) -> Tuple[bool, str]:
         """Execute a shell command.
