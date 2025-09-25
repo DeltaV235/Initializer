@@ -35,64 +35,40 @@ applications:
     tags: [python, development, pip]
     recommended: true
 
-  - name: Git Tools
+  - name: Git
     description: Version control system and tools
     category: development
-    package: git git-lfs gitk
-    post_install: git lfs install
+    package: git
+    post_install: null
     tags: [git, vcs, version-control]
     recommended: true
 
-  - name: Build Tools
-    description: Essential compilation tools
-    category: development
-    package: build-essential cmake automake autoconf
-    post_install: null
-    tags: [build, compilation, development]
-    recommended: true
-
   # 系统工具类
-  - name: Network Tools
+  - name: Network Tools(curl, wget)
     description: Network utilities and diagnostic tools
     category: system
-    package: curl wget net-tools dnsutils
+    package: curl wget
     post_install: null
     tags: [network, utilities, diagnostic]
     recommended: true
 
-  - name: System Monitor
+  - name: System Monitor(htop)
     description: System monitoring and disk usage tools
     category: system
-    package: htop btop ncdu
+    package: htop
     post_install: null
-    tags: [monitoring, system, disk-usage]
-    recommended: true
-
-  - name: Archive Tools
-    description: File compression and archive utilities
-    category: system
-    package: zip unzip tar gzip bzip2 xz-utils
-    post_install: null
-    tags: [compression, archive, utilities]
+    tags: [monitoring, system]
     recommended: true
 
   # 编辑器类
-  - name: Text Editors
+  - name: Neovim
     description: Terminal-based text editors
     category: editor
-    package: vim neovim nano
+    package: neovim
     post_install: null
-    tags: [editor, terminal, vim, nano]
+    tags: [editor, terminal, vim]
     recommended: true
 
-  # 数据库工具类
-  - name: Database Clients
-    description: Database client tools
-    category: database
-    package: mysql-client postgresql-client redis-tools
-    post_install: null
-    tags: [database, client, mysql, postgresql, redis]
-    recommended: false
 
 # 分类定义
 categories:
