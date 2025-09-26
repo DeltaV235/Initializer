@@ -23,92 +23,134 @@ class AppInstallProgressModal(ModalScreen):
         ("l", "export_logs", "Export Logs"),
     ]
     
-    # CSS styles for the modal
+    # CSS 样式与 Package 模块保持一致
     CSS = """
     AppInstallProgressModal {
         align: center middle;
     }
-    
-    #modal-container {
-        width: 90%;
-        height: 80%;
-        background: $surface;
-        border: round #7dd3fc;
-        padding: 1;
-        layout: vertical;
-    }
-    
+
     #modal-title {
         text-style: bold;
+        color: $text;
         margin: 0 0 1 0;
+        text-align: center;
+        height: auto;
+        min-height: 1;
     }
-    
+
     #task-container {
         height: auto;
         max-height: 8;
         overflow-y: auto;
-        padding: 0 1;
+        padding: 1;
         margin: 0 0 1 0;
+        border: round $primary;
+        background: $surface;
     }
-    
+
     .task-item {
         layout: horizontal;
         height: 2;
         margin: 0 0 1 0;
+        background: $surface;
     }
-    
+
     .task-name {
         width: 30%;
         padding: 0 1 0 0;
+        color: $text;
     }
-    
+
     .task-status {
         width: 15%;
         padding: 0 1 0 0;
     }
-    
+
     .task-progress {
         width: 55%;
     }
-    
+
     #progress-container {
         height: 3;
         padding: 1;
         margin: 0 0 1 0;
+        border: round $primary;
+        background: $surface;
     }
-    
+
     #log-container {
         height: 1fr;
-        border: round #7dd3fc;
+        border: round $primary;
         padding: 1;
         margin: 0 0 1 0;
+        background: $surface;
     }
-    
+
     #log-output {
         height: 100%;
+        background: $surface;
     }
-    
+
     #button-container {
         layout: horizontal;
         align: center middle;
         height: 3;
-        margin: 1 0 0 0;
+        margin: 1 0 1 0;
+        background: $surface;
     }
-    
+
+    .section-divider {
+        height: 1;
+        color: #7dd3fc;
+        margin: 0;
+    }
+
+    .info-key {
+        color: $text;
+        text-style: bold;
+        margin: 0 0 1 0;
+        background: $surface;
+    }
+
     .status-pending {
         color: $text-muted;
     }
-    
+
     .status-running {
         color: $warning;
+        text-style: bold;
     }
-    
+
     .status-success {
         color: $success;
+        text-style: bold;
     }
-    
+
     .status-failed {
         color: $error;
+        text-style: bold;
+    }
+
+    .help-text {
+        text-align: center;
+        color: $text-muted;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
+    }
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
     }
     """
     
@@ -179,9 +221,9 @@ class AppInstallProgressModal(ModalScreen):
             print("DEBUG: Starting compose() method")
             print(f"DEBUG: Tasks count: {len(self.tasks)}")
 
-            with Container(id="modal-container"):
+            with Container(classes="modal-container-lg"):
                 yield Static("📦 应用安装进度", id="modal-title")
-                yield Rule()
+                yield Rule(classes="section-divider")
 
                 print("DEBUG: Basic elements created")
 
@@ -199,18 +241,20 @@ class AppInstallProgressModal(ModalScreen):
 
                 print("DEBUG: Task list completed")
 
-                # Main progress bar (for single task or overall progress)
+                # 主进度区域
                 print("DEBUG: Creating main progress container")
                 with Container(id="progress-container"):
                     if len(self.tasks) == 1:
-                        yield Label(f"任务: {self.tasks[0]['name']}")
+                        yield Label(f"任务: {self.tasks[0]['name']}", classes="info-key")
                     else:
-                        yield Label("总体进度")
+                        yield Label("总体进度", classes="info-key")
                     yield ProgressBar(id="main-progress", total=100)
 
                 print("DEBUG: Main progress container completed")
 
-                # Log output
+                yield Rule(classes="section-divider")
+
+                # 安装日志区域
                 print("DEBUG: Creating log output")
                 yield Label("📋 安装日志:", classes="info-key")
                 with Container(id="log-container"):
@@ -218,7 +262,7 @@ class AppInstallProgressModal(ModalScreen):
 
                 print("DEBUG: Log output created")
 
-                # Buttons
+                # 操作按钮区域
                 print("DEBUG: Creating buttons")
                 with Horizontal(id="button-container"):
                     yield Button("重试失败任务 (R)", id="retry-failed", variant="warning", disabled=True)
@@ -228,6 +272,10 @@ class AppInstallProgressModal(ModalScreen):
                     yield Button("关闭 (ESC)", id="close", variant="default", disabled=True)
 
                 print("DEBUG: All buttons created")
+
+            # 底部帮助区域 - 与 Package 模块保持一致
+            with Container(id="help-box"):
+                yield Label("ESC=关闭 | R=重试失败 | L=导出日志", classes="help-text")
 
             print("DEBUG: compose() method completed successfully")
         except Exception as e:

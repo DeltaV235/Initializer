@@ -41,8 +41,22 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
     }
 
     #password-input {
-        margin: 0 0 1 0;
+        margin: 0 0 2 0;
         width: 100%;
+        border: round $primary;
+        background: $surface;
+    }
+
+    .password-input-field {
+        border: round $primary;
+        background: $surface;
+        color: $text;
+        padding: 0 1;
+    }
+
+    .password-input-field:focus {
+        border: round $accent;
+        background: $surface;
     }
 
     #error-message {
@@ -63,25 +77,27 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
         background: $surface;
     }
 
-    #password-buttons {
-        layout: horizontal;
-        align: center middle;
-        height: 3;
-        margin: 1 0 0 0;
-    }
-
-    #password-buttons Button {
-        margin: 0 1;
-        min-width: 10;
-    }
 
     .help-text {
-        color: $text-muted;
-        margin: 1 0 0 0;
         text-align: center;
-        text-style: italic;
-        height: auto;
+        color: $text-muted;
+        height: 1;
         min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
+    }
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
     }
     """
 
@@ -123,7 +139,7 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
 
     def compose(self) -> ComposeResult:
         """构建Modal界面."""
-        with Container(classes="modal-container-sm"):
+        with Container(classes="modal-container-xs"):
             # 标题
             yield Static("🔒 管理员权限验证", id="password-modal-title")
 
@@ -147,20 +163,18 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
                     retry_text = f"⚠️ 最后一次尝试，失败后将取消操作"
                 yield Static(retry_text, id="retry-info")
 
-            # 密码输入框
+            # 密码输入框 - 使用更简洁的原生输入
             yield Input(
-                placeholder="请输入密码...",
-                password=True,  # 隐藏密码输入
-                id="password-input"
+                placeholder="请输入系统密码...",
+                password=True,
+                id="password-input",
+                classes="password-input-field"
             )
 
-            # 按钮区域
-            with Horizontal(id="password-buttons"):
-                yield Button("确认", variant="primary", id="confirm-btn")
-                yield Button("取消", variant="default", id="cancel-btn")
 
-            # 帮助文本
-            yield Static("Enter=确认 | Esc=取消", classes="help-text")
+            # 底部帮助区域 - 与 Package 模块保持一致
+            with Container(id="help-box"):
+                yield Label("Enter=确认 | Esc=取消", classes="help-text")
 
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
@@ -174,15 +188,6 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
             event.prevent_default()
             event.stop()
 
-    @on(Button.Pressed, "#confirm-btn")
-    def on_confirm_pressed(self) -> None:
-        """确认按钮按下."""
-        self.action_confirm_password()
-
-    @on(Button.Pressed, "#cancel-btn")
-    def on_cancel_pressed(self) -> None:
-        """取消按钮按下."""
-        self.action_cancel_modal()
 
     @on(Input.Submitted, "#password-input")
     def on_password_submitted(self) -> None:
@@ -273,25 +278,27 @@ class SudoRetryModal(ModalScreen[bool]):
         min-height: 3;
     }
 
-    #retry-buttons {
-        layout: horizontal;
-        align: center middle;
-        height: 3;
-        margin: 1 0 0 0;
-    }
-
-    #retry-buttons Button {
-        margin: 0 1;
-        min-width: 10;
-    }
 
     .help-text {
-        color: $text-muted;
-        margin: 1 0 0 0;
         text-align: center;
-        text-style: italic;
-        height: auto;
+        color: $text-muted;
+        height: 1;
         min-height: 1;
+        max-height: 1;
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+        background: $surface;
+        text-style: none;
+    }
+
+    #help-box {
+        dock: bottom;
+        width: 100%;
+        height: 3;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
     }
     """
 
@@ -336,19 +343,14 @@ class SudoRetryModal(ModalScreen[bool]):
 
             yield Static(message, id="retry-modal-message")
 
-            # 按钮区域
-            with Horizontal(id="retry-buttons"):
-                if remaining > 0:
-                    yield Button("重试", variant="warning", id="retry-btn")
-                    yield Button("取消", variant="default", id="cancel-btn")
-                else:
-                    yield Button("确定", variant="primary", id="ok-btn")
 
-            # 帮助文本
-            if remaining > 0:
-                yield Static("Enter/Y=重试 | Esc/N=取消", classes="help-text")
-            else:
-                yield Static("Enter=确定", classes="help-text")
+            # 底部帮助区域 - 与 Package 模块保持一致
+            remaining = self.max_retries - self.retry_count
+            with Container(id="help-box"):
+                if remaining > 0:
+                    yield Label("Enter/Y=重试 | Esc/N=取消", classes="help-text")
+                else:
+                    yield Label("Enter=确定", classes="help-text")
 
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
@@ -371,20 +373,6 @@ class SudoRetryModal(ModalScreen[bool]):
             event.prevent_default()
             event.stop()
 
-    @on(Button.Pressed, "#retry-btn")
-    def on_retry_pressed(self) -> None:
-        """重试按钮按下."""
-        self.action_confirm_retry()
-
-    @on(Button.Pressed, "#cancel-btn")
-    def on_cancel_pressed(self) -> None:
-        """取消按钮按下."""
-        self.action_cancel_retry()
-
-    @on(Button.Pressed, "#ok-btn")
-    def on_ok_pressed(self) -> None:
-        """确定按钮按下（达到最大重试次数时）."""
-        self.action_cancel_retry()
 
     def action_confirm_retry(self) -> None:
         """确认重试."""
