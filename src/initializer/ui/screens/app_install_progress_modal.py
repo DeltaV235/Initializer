@@ -7,10 +7,11 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Static, Rule, Label, ProgressBar, RichLog
 from textual.reactive import reactive
 from textual.events import Key
-from typing import List, Dict
+from typing import List, Dict, Optional
 import asyncio
 from datetime import datetime
 from ...utils.log_manager import LogLevel
+from ...modules.sudo_manager import SudoManager
 
 
 class AppInstallProgressModal(ModalScreen):
@@ -116,23 +117,40 @@ class AppInstallProgressModal(ModalScreen):
     all_completed = reactive(False)
     has_failed_tasks = reactive(False)
     
-    def __init__(self, actions: List[Dict], app_installer):
-        super().__init__()
-        self.actions = actions
-        self.app_installer = app_installer
-        
-        # Task tracking
-        self.tasks = []
-        for action in actions:
-            app = action["application"]
-            task_name = f"{'安装' if action['action'] == 'install' else '卸载'} {app.name}"
-            self.tasks.append({
-                "name": task_name,
-                "action": action,
-                "status": "pending",  # pending, running, success, failed
-                "progress": 0,
-                "message": "",
-            })
+    def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None):
+        try:
+            super().__init__()
+            print(f"DEBUG: AppInstallProgressModal __init__ called with {len(actions)} actions")
+            print(f"DEBUG: sudo_manager provided: {sudo_manager is not None}")
+            print(f"DEBUG: app_installer: {app_installer}")
+
+            self.actions = actions
+            self.app_installer = app_installer
+            self.sudo_manager = sudo_manager  # 可选的sudo管理器
+
+            print("DEBUG: Basic attributes set successfully")
+
+            # Task tracking
+            self.tasks = []
+            for i, action in enumerate(actions):
+                print(f"DEBUG: Processing action {i}: {action}")
+                app = action["application"]
+                task_name = f"{'安装' if action['action'] == 'install' else '卸载'} {app.name}"
+                self.tasks.append({
+                    "name": task_name,
+                    "action": action,
+                    "status": "pending",  # pending, running, success, failed
+                    "progress": 0,
+                    "message": "",
+                })
+                print(f"DEBUG: Task {i} added: {task_name}")
+
+            print(f"DEBUG: AppInstallProgressModal __init__ completed successfully with {len(self.tasks)} tasks")
+        except Exception as e:
+            print(f"CRITICAL ERROR in AppInstallProgressModal __init__: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def on_mount(self) -> None:
         """Initialize the screen and start processing."""
@@ -157,39 +175,66 @@ class AppInstallProgressModal(ModalScreen):
     
     def compose(self) -> ComposeResult:
         """Compose the modal interface."""
-        with Container(id="modal-container"):
-            yield Static("📦 应用安装进度", id="modal-title")
-            yield Rule()
-            
-            # Task list (for multiple tasks)
-            if len(self.tasks) > 1:
-                with ScrollableContainer(id="task-container"):
-                    for i, task in enumerate(self.tasks):
-                        with Horizontal(classes="task-item"):
-                            yield Static(task["name"], id=f"task-name-{i}", classes="task-name")
-                            yield Static("⏳ 等待中", id=f"task-status-{i}", classes="task-status status-pending")
-                            yield ProgressBar(id=f"task-progress-{i}", classes="task-progress", total=100)
-            
-            # Main progress bar (for single task or overall progress)
-            with Container(id="progress-container"):
-                if len(self.tasks) == 1:
-                    yield Label(f"任务: {self.tasks[0]['name']}")
-                else:
-                    yield Label("总体进度")
-                yield ProgressBar(id="main-progress", total=100)
-            
-            # Log output
-            yield Label("📋 安装日志:", classes="info-key")
-            with Container(id="log-container"):
-                yield RichLog(id="log-output", highlight=True, markup=True, wrap=True)
-            
-            # Buttons
-            with Horizontal(id="button-container"):
-                yield Button("重试失败任务 (R)", id="retry-failed", variant="warning", disabled=True)
-                yield Static("  ")  # Spacer
-                yield Button("导出日志 (L)", id="export-logs", variant="success", disabled=True)
-                yield Static("  ")  # Spacer
-                yield Button("关闭 (ESC)", id="close", variant="default", disabled=True)
+        try:
+            print("DEBUG: Starting compose() method")
+            print(f"DEBUG: Tasks count: {len(self.tasks)}")
+
+            with Container(id="modal-container"):
+                yield Static("📦 应用安装进度", id="modal-title")
+                yield Rule()
+
+                print("DEBUG: Basic elements created")
+
+                # Task list (for multiple tasks)
+                if len(self.tasks) > 1:
+                    print("DEBUG: Creating task list for multiple tasks")
+                    with ScrollableContainer(id="task-container"):
+                        for i, task in enumerate(self.tasks):
+                            print(f"DEBUG: Creating UI for task {i}: {task['name']}")
+                            with Horizontal(classes="task-item"):
+                                yield Static(task["name"], id=f"task-name-{i}", classes="task-name")
+                                yield Static("⏳ 等待中", id=f"task-status-{i}", classes="task-status status-pending")
+                                yield ProgressBar(id=f"task-progress-{i}", classes="task-progress", total=100)
+                            print(f"DEBUG: Task {i} UI created successfully")
+
+                print("DEBUG: Task list completed")
+
+                # Main progress bar (for single task or overall progress)
+                print("DEBUG: Creating main progress container")
+                with Container(id="progress-container"):
+                    if len(self.tasks) == 1:
+                        yield Label(f"任务: {self.tasks[0]['name']}")
+                    else:
+                        yield Label("总体进度")
+                    yield ProgressBar(id="main-progress", total=100)
+
+                print("DEBUG: Main progress container completed")
+
+                # Log output
+                print("DEBUG: Creating log output")
+                yield Label("📋 安装日志:", classes="info-key")
+                with Container(id="log-container"):
+                    yield RichLog(id="log-output", highlight=True, markup=True, wrap=True)
+
+                print("DEBUG: Log output created")
+
+                # Buttons
+                print("DEBUG: Creating buttons")
+                with Horizontal(id="button-container"):
+                    yield Button("重试失败任务 (R)", id="retry-failed", variant="warning", disabled=True)
+                    yield Static("  ")  # Spacer
+                    yield Button("导出日志 (L)", id="export-logs", variant="success", disabled=True)
+                    yield Static("  ")  # Spacer
+                    yield Button("关闭 (ESC)", id="close", variant="default", disabled=True)
+
+                print("DEBUG: All buttons created")
+
+            print("DEBUG: compose() method completed successfully")
+        except Exception as e:
+            print(f"CRITICAL ERROR in compose(): {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     @work(exclusive=True, thread=True)
     async def _start_processing(self) -> None:
@@ -223,34 +268,47 @@ class AppInstallProgressModal(ModalScreen):
 
         # Initial permission check for sudo commands
         has_sudo_commands = any(
-            "sudo" in self.app_installer.get_install_command(task["action"]["application"]) or
-            "sudo" in (self.app_installer.get_uninstall_command(task["action"]["application"]) or "")
-            for task in self.tasks
+            self._command_needs_sudo(task) for task in self.tasks
         )
 
         if has_sudo_commands:
             timestamp = datetime.now().strftime("%H:%M:%S")
             log_widget.write(f"[{timestamp}] 检查 sudo 权限...")
 
-            # Check if sudo is available
-            if not self.app_installer.check_sudo_available():
-                log_widget.write("[red]❌ 检测到需要 sudo 权限，但 sudo 不可用或用户无权限[/red]")
-                log_widget.write("[yellow]请确保:[/yellow]")
-                log_widget.write("[yellow]1. 系统已安装 sudo[/yellow]")
-                log_widget.write("[yellow]2. 当前用户已加入 sudo 组[/yellow]")
-                log_widget.write("[yellow]3. 已通过 sudo 认证缓存（可尝试手动运行 'sudo -v'）[/yellow]")
+            if self.sudo_manager and self.sudo_manager.is_verified():
+                log_widget.write("[green]✅ sudo 权限已验证，使用缓存权限[/green]")
+            elif not self.sudo_manager:
+                # 没有sudo管理器，回退到原有检查方式
+                if not self.app_installer.check_sudo_available():
+                    log_widget.write("[red]❌ 检测到需要 sudo 权限，但 sudo 不可用或用户无权限[/red]")
+                    log_widget.write("[yellow]请确保:[/yellow]")
+                    log_widget.write("[yellow]1. 系统已安装 sudo[/yellow]")
+                    log_widget.write("[yellow]2. 当前用户已加入 sudo 组[/yellow]")
+                    log_widget.write("[yellow]3. 已通过 sudo 认证缓存（可尝试手动运行 'sudo -v'）[/yellow]")
 
+                    # Mark all tasks as failed
+                    for task in self.tasks:
+                        task["status"] = "failed"
+                        task["message"] = "sudo 权限不可用"
+                        self._update_task_display(self.tasks.index(task))
+
+                    self.all_completed = True
+                    self._enable_close_button()
+                    return
+                else:
+                    log_widget.write("[green]✅ sudo 权限验证通过[/green]")
+            else:
+                # 有sudo管理器但未验证，这种情况不应该发生
+                log_widget.write("[red]❌ sudo 权限管理器未正确初始化[/red]")
                 # Mark all tasks as failed
                 for task in self.tasks:
                     task["status"] = "failed"
-                    task["message"] = "sudo 权限不可用"
+                    task["message"] = "sudo 权限管理器未初始化"
                     self._update_task_display(self.tasks.index(task))
 
                 self.all_completed = True
                 self._enable_close_button()
                 return
-            else:
-                log_widget.write("[green]✅ sudo 权限验证通过[/green]")
 
         for i, task in enumerate(self.tasks):
             self.current_task_index = i
@@ -277,11 +335,11 @@ class AppInstallProgressModal(ModalScreen):
                     command = self.app_installer.get_install_command(app)
                     if command:
                         # Check if this specific command needs sudo
-                        if "sudo" in command:
+                        if self._command_needs_sudo_for_task(task):
                             log_widget.write(f"[yellow]⚠️ 需要管理员权限执行安装命令[/yellow]")
 
                         log_widget.write(f"[dim]执行命令: {command}[/dim]")
-                        
+
                         # Execute installation
                         initial_progress = 40
                         task["progress"] = initial_progress
@@ -294,7 +352,7 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 70)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_async(command, log_widget, update_install_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, log_widget, update_install_progress)
                         
                         if success:
                             task["progress"] = 70
@@ -310,7 +368,7 @@ class AppInstallProgressModal(ModalScreen):
                                     task["progress"] = min(task_progress, 100)
                                     self._update_progress(i, task["progress"])
 
-                                post_success, post_output = await self._execute_command_async(app.post_install, log_widget, update_postinstall_progress)
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget, update_postinstall_progress)
                                 if not post_success:
                                     log_widget.write(f"[yellow]⚠️ 安装后配置失败: {post_output}[/yellow]")
 
@@ -377,7 +435,7 @@ class AppInstallProgressModal(ModalScreen):
                     command = self.app_installer.get_uninstall_command(app)
                     if command:
                         # Check if this specific command needs sudo
-                        if "sudo" in command:
+                        if self._command_needs_sudo_for_task(task):
                             log_widget.write(f"[yellow]⚠️ 需要管理员权限执行卸载命令[/yellow]")
 
                         log_widget.write(f"[dim]执行命令: {command}[/dim]")
@@ -394,7 +452,7 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 100)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_async(command, log_widget, update_uninstall_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, log_widget, update_uninstall_progress)
 
                         if success:
                             task["status"] = "success"
@@ -499,6 +557,66 @@ class AppInstallProgressModal(ModalScreen):
         except Exception as e:
             log_widget.write(f"[yellow]⚠️ 日志会话结束失败: {e}[/yellow]")
     
+    def _command_needs_sudo(self, task: Dict) -> bool:
+        """检查任务是否需要sudo权限.
+
+        Args:
+            task: 任务字典
+
+        Returns:
+            True如果需要sudo权限，False否则
+        """
+        action = task["action"]
+        app = action["application"]
+
+        if action["action"] == "install":
+            command = self.app_installer.get_install_command(app)
+        else:  # uninstall
+            command = self.app_installer.get_uninstall_command(app)
+
+        return command and "sudo" in command
+
+    def _command_needs_sudo_for_task(self, task: Dict) -> bool:
+        """检查当前任务的命令是否需要sudo权限.
+
+        Args:
+            task: 任务字典
+
+        Returns:
+            True如果需要sudo权限，False否则
+        """
+        action = task["action"]
+        app = action["application"]
+
+        if action["action"] == "install":
+            command = self.app_installer.get_install_command(app)
+        else:  # uninstall
+            command = self.app_installer.get_uninstall_command(app)
+
+        return command and "sudo" in command
+
+    async def _execute_command_with_sudo_support(self, command: str, log_widget=None, progress_callback=None) -> tuple:
+        """使用sudo支持执行命令.
+
+        Args:
+            command: 要执行的命令
+            log_widget: RichLog组件用于显示日志
+            progress_callback: 进度回调函数
+
+        Returns:
+            (success, output) 元组
+        """
+        # 检查是否有sudo管理器且命令需要sudo
+        if self.sudo_manager and self.sudo_manager.is_sudo_required(command):
+            if not self.sudo_manager.is_verified():
+                return False, "sudo权限未验证"
+
+            # 使用sudo管理器执行命令
+            return await self.sudo_manager.execute_with_sudo_async(command)
+        else:
+            # 使用原有的执行方法
+            return await self._execute_command_async(command, log_widget, progress_callback)
+
     async def _execute_command_async(self, command: str, log_widget=None, progress_callback=None) -> tuple:
         """Execute a command asynchronously with real-time output streaming and progress tracking.
 
@@ -845,7 +963,7 @@ class AppInstallProgressModal(ModalScreen):
                     command = self.app_installer.get_install_command(app)
                     if command:
                         # Check if this specific command needs sudo
-                        if "sudo" in command:
+                        if self._command_needs_sudo_for_task(task):
                             log_widget.write(f"[yellow]⚠️ 需要管理员权限执行安装命令[/yellow]")
 
                         log_widget.write(f"[dim]执行命令: {command}[/dim]")
@@ -854,7 +972,7 @@ class AppInstallProgressModal(ModalScreen):
                         task["progress"] = 40
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_async(command, log_widget)
+                        success, output = await self._execute_command_with_sudo_support(command, log_widget)
 
                         if success:
                             task["progress"] = 70
@@ -863,7 +981,7 @@ class AppInstallProgressModal(ModalScreen):
                             # Execute post-install if any
                             if app.post_install:
                                 log_widget.write(f"[dim]执行安装后配置: {app.post_install}[/dim]")
-                                post_success, post_output = await self._execute_command_async(app.post_install, log_widget)
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget)
                                 if not post_success:
                                     log_widget.write(f"[yellow]⚠️ 安装后配置失败: {post_output}[/yellow]")
 
@@ -910,7 +1028,7 @@ class AppInstallProgressModal(ModalScreen):
                     command = self.app_installer.get_uninstall_command(app)
                     if command:
                         # Check if this specific command needs sudo
-                        if "sudo" in command:
+                        if self._command_needs_sudo_for_task(task):
                             log_widget.write(f"[yellow]⚠️ 需要管理员权限执行卸载命令[/yellow]")
 
                         log_widget.write(f"[dim]执行命令: {command}[/dim]")
@@ -919,7 +1037,7 @@ class AppInstallProgressModal(ModalScreen):
                         task["progress"] = 50
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_async(command, log_widget)
+                        success, output = await self._execute_command_with_sudo_support(command, log_widget)
 
                         if success:
                             task["status"] = "success"

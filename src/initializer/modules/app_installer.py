@@ -11,18 +11,21 @@ from ..utils.logger import get_module_logger
 from .batch_package_checker import BatchPackageChecker
 from .two_layer_checker import TwoLayerPackageChecker
 from .software_models import Application, ApplicationSuite
+from .sudo_manager import SudoManager
 
 
 class AppInstaller:
     """Manages installation and configuration of predefined applications."""
     
-    def __init__(self, config_manager):
+    def __init__(self, config_manager, sudo_manager: Optional[SudoManager] = None):
         """Initialize the application installer.
 
         Args:
             config_manager: Configuration manager instance
+            sudo_manager: Optional SudoManager for handling sudo operations
         """
         self.config_manager = config_manager
+        self.sudo_manager = sudo_manager  # 可选的sudo管理器
         # Load raw configuration directly
         modules_config = config_manager.load_config("modules")
         self.app_config = modules_config.get('modules', {}).get('app_install', {})
@@ -1266,6 +1269,107 @@ class AppInstaller:
                 return False, f"系统错误: {str(e)}"
         except Exception as e:
             return False, f"执行错误: {str(e)}"
+
+    def set_sudo_manager(self, sudo_manager: SudoManager) -> None:
+        """设置sudo管理器.
+
+        Args:
+            sudo_manager: SudoManager实例
+        """
+        self.sudo_manager = sudo_manager
+        self.logger.info("已设置sudo管理器")
+
+    def execute_command_with_sudo_support(self, command: str) -> Tuple[bool, str]:
+        """使用sudo支持执行命令（同步版本）.
+
+        Args:
+            command: 要执行的命令
+
+        Returns:
+            (成功状态, 输出信息或错误信息)
+        """
+        # 检查是否有sudo管理器且命令需要sudo
+        if self.sudo_manager and self.sudo_manager.is_sudo_required(command):
+            if not self.sudo_manager.is_verified():
+                return False, "sudo权限未验证，请先进行权限验证"
+
+            # 使用sudo管理器执行命令
+            return self.sudo_manager.execute_with_sudo(command)
+        else:
+            # 使用原有的执行方法
+            return self.execute_command(command)
+
+    def install_application_with_sudo_support(self, app: Application) -> Tuple[bool, str]:
+        """使用sudo支持安装应用程序.
+
+        Args:
+            app: 要安装的应用程序
+
+        Returns:
+            (成功状态, 消息)
+        """
+        self.logger.info(f"开始使用sudo支持安装应用程序: {app.name}")
+        self.logger.debug(f"应用程序包: {app.package}")
+
+        install_cmd = self.get_install_command(app)
+        if not install_cmd:
+            error_msg = "未检测到包管理器"
+            self.logger.error(error_msg)
+            return False, error_msg
+
+        self.logger.debug(f"使用安装命令: {install_cmd}")
+
+        # 使用sudo支持执行命令
+        success, output = self.execute_command_with_sudo_support(install_cmd)
+
+        if success:
+            self.logger.info(f"成功安装应用程序: {app.name}")
+
+            if app.post_install:
+                self.logger.info(f"执行安装后命令: {app.name}")
+                self.logger.debug(f"安装后命令: {app.post_install}")
+
+                # 执行安装后命令
+                post_success, post_output = self.execute_command_with_sudo_support(app.post_install)
+                if not post_success:
+                    self.logger.warning(f"{app.name} 安装后命令执行失败: {post_output}")
+                    return True, f"应用程序安装成功，但安装后配置失败: {post_output}"
+                else:
+                    self.logger.info(f"{app.name} 安装后命令执行成功")
+        else:
+            self.logger.error(f"应用程序 {app.name} 安装失败: {output}")
+
+        return success, output
+
+    def uninstall_application_with_sudo_support(self, app: Application) -> Tuple[bool, str]:
+        """使用sudo支持卸载应用程序.
+
+        Args:
+            app: 要卸载的应用程序
+
+        Returns:
+            (成功状态, 消息)
+        """
+        self.logger.info(f"开始使用sudo支持卸载应用程序: {app.name}")
+        self.logger.debug(f"应用程序包: {app.package}")
+
+        uninstall_cmd = self.get_uninstall_command(app)
+        if not uninstall_cmd:
+            error_msg = "未检测到包管理器"
+            self.logger.error(error_msg)
+            return False, error_msg
+
+        self.logger.debug(f"使用卸载命令: {uninstall_cmd}")
+
+        # 使用sudo支持执行命令
+        success, output = self.execute_command_with_sudo_support(uninstall_cmd)
+
+        if success:
+            self.logger.info(f"成功卸载应用程序: {app.name}")
+        else:
+            self.logger.error(f"应用程序 {app.name} 卸载失败: {output}")
+
+        return success, output
 
     def check_sudo_available(self) -> bool:
         """Check if sudo is available and user has permission to use it.

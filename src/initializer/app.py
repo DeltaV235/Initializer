@@ -15,6 +15,7 @@ from textual.binding import Binding
 
 from .config_manager import ConfigManager
 from .utils.logger import init_logging, get_app_logger
+from .modules.sudo_manager import SudoManager
 
 
 def cleanup_terminal_state():
@@ -126,6 +127,9 @@ class InitializerApp(App):
         # Update title
         self.title = self.app_config.name
         self.sub_title = f"v{self.app_config.version}"
+
+        # 初始化sudo管理器（全局实例，用于整个应用生命周期）
+        self.sudo_manager: Optional[SudoManager] = None
         
     def _apply_preset(self, preset_name: str) -> None:
         """Apply a configuration preset."""
@@ -136,7 +140,33 @@ class InitializerApp(App):
             self.logger.warning(f"Preset configuration not found: {preset_name}")
             if self.debug_mode:
                 self.console.print(f"[yellow]Preset not found: {preset_name}[/yellow]")
-        
+
+    def get_sudo_manager(self) -> Optional[SudoManager]:
+        """获取sudo管理器实例.
+
+        Returns:
+            SudoManager实例，如果未设置则返回None
+        """
+        return self.sudo_manager
+
+    def set_sudo_manager(self, sudo_manager: SudoManager) -> None:
+        """设置sudo管理器实例.
+
+        Args:
+            sudo_manager: SudoManager实例
+        """
+        self.sudo_manager = sudo_manager
+        self.logger.info("已设置应用级sudo管理器")
+
+    def _cleanup_sudo_manager(self) -> None:
+        """清理sudo管理器中的敏感数据."""
+        if self.sudo_manager:
+            try:
+                self.sudo_manager.clear_password()
+                self.logger.info("sudo管理器密码已清理")
+            except Exception as e:
+                self.logger.error(f"清理sudo管理器时出错: {e}")
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
@@ -160,6 +190,9 @@ class InitializerApp(App):
         
     def action_quit(self) -> None:
         """Quit the application with comprehensive terminal cleanup."""
+        # 首先清理sudo管理器中的敏感数据
+        self._cleanup_sudo_manager()
+        # 然后进行终端清理
         cleanup_terminal_state()
         self.exit()
         
@@ -194,6 +227,8 @@ class InitializerApp(App):
             restart_exec = sys.executable
 
         # Perform comprehensive terminal cleanup BEFORE any Textual operations
+        # 首先清理sudo管理器中的敏感数据
+        self._cleanup_sudo_manager()
         cleanup_terminal_state()
 
         # Force additional cleanup - this is critical

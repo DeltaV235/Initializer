@@ -1501,23 +1501,36 @@ class MainMenuScreen(Screen):
             # Show confirmation modal
             from .app_install_confirmation_modal import AppInstallConfirmationModal
 
-            def on_confirmation(confirmed: bool):
-                logger.debug(f"Confirmation modal result: {confirmed}")
+            def on_confirmation(confirmed: bool, sudo_manager=None):
+                logger.info(f"=== CALLBACK INVOKED - Confirmation result: {confirmed} ===")
+                logger.info(f"Sudo manager provided: {sudo_manager is not None}")
+                logger.info(f"App instance: {self.app}")
+                logger.info(f"Actions count: {len(actions)}")
+
                 if confirmed:
-                    logger.debug("User confirmed, showing progress modal")
+                    logger.info("=== User confirmed, creating progress modal ===")
                     # Show progress modal
                     from .app_install_progress_modal import AppInstallProgressModal
                     try:
-                        self.app.push_screen(AppInstallProgressModal(actions, self.app_installer))
+                        logger.info("About to create AppInstallProgressModal...")
+                        # 传递sudo_manager到progress modal
+                        progress_modal = AppInstallProgressModal(actions, self.app_installer, sudo_manager)
+                        logger.info("AppInstallProgressModal created successfully")
+
+                        logger.info("About to push progress modal to app...")
+                        self.app.push_screen(progress_modal)
+                        logger.info("Progress modal pushed successfully")
+
                         # Refresh the app list after installation
                         self.app_install_cache = None
                         self.app_install_loading = False
                         self.update_settings_panel()
-                        logger.debug("Progress modal pushed successfully")
+                        logger.info("UI refresh completed")
                     except Exception as e:
-                        logger.error(f"Error pushing progress modal: {e}", exc_info=True)
+                        logger.error(f"=== CRITICAL ERROR in callback: {e} ===", exc_info=True)
+                        raise  # 重新抛出异常以便调试
                 else:
-                    logger.debug("User cancelled installation")
+                    logger.info("=== User cancelled installation ===")
 
             try:
                 modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
