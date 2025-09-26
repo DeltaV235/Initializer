@@ -523,6 +523,39 @@ class AppInstallProgressModal(ModalScreen):
                 self._enable_close_button()
                 return
 
+        # Check if APT update is needed and execute it once for the session
+        if self.app_installer.needs_apt_update():
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._append_log(None, f"[{timestamp}] Checking if APT update is needed...")
+            self._append_log(None, "[blue]📦 APT update required for current session[/blue]")
+
+            apt_update_command = self.app_installer.get_apt_update_command()
+            if apt_update_command:
+                self._append_log(None, f"[dim]Executing: {apt_update_command}[/dim]")
+
+                try:
+                    # Execute APT update with progress feedback
+                    success, output = await self._execute_command_with_sudo_support(apt_update_command, "log_widget")
+
+                    if success:
+                        self.app_installer.mark_apt_update_executed()
+                        self._append_log(None, "[green]✅ APT update completed successfully[/green]")
+                        self._append_log(None, "[dim]  Package list updated for current session[/dim]")
+                    else:
+                        self._append_log(None, f"[yellow]⚠️ APT update failed: {output}[/yellow]")
+                        self._append_log(None, "[yellow]  Continuing with installation, but packages may be outdated[/yellow]")
+                        # Don't fail completely, just warn and continue
+
+                except Exception as e:
+                    self._append_log(None, f"[yellow]⚠️ APT update error: {str(e)}[/yellow]")
+                    self._append_log(None, "[yellow]  Continuing with installation[/yellow]")
+
+                self._append_log(None, "")  # Add blank line for readability
+        else:
+            if self.app_installer.package_manager in ["apt", "apt-get"]:
+                self._append_log(None, "[dim]📦 APT update already executed in current session, skipping[/dim]")
+                self._append_log(None, "")  # Add blank line for readability
+
         for i, task in enumerate(self.tasks):
             self.current_task_index = i
 
@@ -604,6 +637,9 @@ class AppInstallProgressModal(ModalScreen):
                                 self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
                                 self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+
+                            # Immediately refresh main menu app page after successful installation
+                            self._refresh_main_menu_app_page(f"{app.name} installed successfully")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -691,6 +727,9 @@ class AppInstallProgressModal(ModalScreen):
                                 self._append_log(None,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
                                 self._append_log(None,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
+
+                            # Immediately refresh main menu app page after successful uninstallation
+                            self._refresh_main_menu_app_page(f"{app.name} uninstalled successfully")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1422,6 +1461,9 @@ class AppInstallProgressModal(ModalScreen):
                                 self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
                                 self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+
+                            # Immediately refresh main menu app page after successful re-installation
+                            self._refresh_main_menu_app_page(f"{app.name} re-installed successfully")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1486,6 +1528,9 @@ class AppInstallProgressModal(ModalScreen):
                                 self._append_log(None,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
                                 self._append_log(None,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
+
+                            # Immediately refresh main menu app page after successful re-uninstallation
+                            self._refresh_main_menu_app_page(f"{app.name} re-uninstalled successfully")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1601,3 +1646,32 @@ class AppInstallProgressModal(ModalScreen):
         except Exception:
             # If container not available yet, ignore
             pass
+
+    def _refresh_main_menu_app_page(self, operation_message: str) -> None:
+        """刷新主菜单的应用安装页面以显示最新状态。
+
+        Args:
+            operation_message: 操作完成消息，用于日志记录
+        """
+        try:
+            if hasattr(self, '_main_menu_ref') and self._main_menu_ref:
+                self._append_log(None, f"[dim]  🔄 Refreshing main menu app page after operation[/dim]")
+
+                # 使用call_from_thread确保在主线程中执行UI更新
+                def safe_refresh():
+                    try:
+                        self._main_menu_ref.refresh_and_reset_app_page()
+                        # 记录成功日志应该通过主菜单的日志系统，避免线程问题
+                    except Exception as e:
+                        # 如果刷新失败，记录错误但不影响主流程
+                        print(f"Failed to refresh main menu: {str(e)}")
+
+                # 安全地调用主菜单刷新
+                self.app.call_from_thread(safe_refresh)
+
+                self._append_log(None, f"[dim]  ✅ Main menu refresh requested successfully[/dim]")
+            else:
+                self._append_log(None, f"[yellow]  ⚠️ No main menu reference available for refresh[/yellow]")
+        except Exception as e:
+            self._append_log(None, f"[yellow]  ⚠️ Failed to refresh main menu: {str(e)}[/yellow]")
+            # 记录错误但不重新抛出，确保不影响主流程

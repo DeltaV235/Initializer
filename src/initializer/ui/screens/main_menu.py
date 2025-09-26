@@ -1498,8 +1498,11 @@ class MainMenuScreen(Screen):
 
         if actions:
             logger.debug(f"Showing confirmation modal for {len(actions)} actions")
-            # Show confirmation modal
+            # Show confirmation modal with callback-based approach
             from .app_install_confirmation_modal import AppInstallConfirmationModal
+
+            # Store reference to confirmation modal for cascading close
+            confirmation_modal_ref = None
 
             def on_confirmation(confirmed: bool, sudo_manager=None):
                 logger.info(f"=== CALLBACK INVOKED - Confirmation result: {confirmed} ===")
@@ -1513,19 +1516,35 @@ class MainMenuScreen(Screen):
                     from .app_install_progress_modal import AppInstallProgressModal
                     try:
                         logger.info("About to create AppInstallProgressModal...")
-                        # 传递sudo_manager到progress modal
+                        # 传递sudo_manager和主菜单引用到progress modal
                         progress_modal = AppInstallProgressModal(actions, self.app_installer, sudo_manager)
+                        progress_modal._main_menu_ref = self  # 传递主菜单引用用于刷新
                         logger.info("AppInstallProgressModal created successfully")
+
+                        # Create a custom progress modal that knows about the confirmation modal
+                        progress_modal._confirmation_modal = confirmation_modal_ref
+
+                        # Override the dismiss method to also close confirmation modal
+                        original_dismiss = progress_modal.dismiss
+                        def cascading_dismiss(result=None):
+                            logger.info("Progress modal dismissing, will close confirmation modal too")
+                            original_dismiss(result)
+
+                            # Close confirmation modal after progress modal closes
+                            if confirmation_modal_ref:
+                                try:
+                                    logger.info("Closing confirmation modal in cascade")
+                                    confirmation_modal_ref.dismiss()
+                                except Exception as e:
+                                    logger.error(f"Error closing confirmation modal: {e}")
+
+                        progress_modal.dismiss = cascading_dismiss
 
                         logger.info("About to push progress modal to app...")
                         self.app.push_screen(progress_modal)
                         logger.info("Progress modal pushed successfully")
 
-                        # Refresh the app list after installation
-                        self.app_install_cache = None
-                        self.app_install_loading = False
-                        self.update_settings_panel()
-                        logger.info("UI refresh completed")
+                        logger.info("Progress modal setup completed - individual operations will refresh the page automatically")
                     except Exception as e:
                         logger.error(f"=== CRITICAL ERROR in callback: {e} ===", exc_info=True)
                         raise  # 重新抛出异常以便调试
@@ -1534,6 +1553,7 @@ class MainMenuScreen(Screen):
 
             try:
                 modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
+                confirmation_modal_ref = modal  # Store reference for cascading close
                 # Clear panel focus before showing modal
                 self._clear_panel_focus()
                 logger.debug("Pushing confirmation modal")
@@ -2414,6 +2434,62 @@ class MainMenuScreen(Screen):
         except Exception as e:
             # Silently fail to avoid disrupting the UI
             logger.error(f"Failed to refresh app install page: {str(e)}")
+
+    def reset_app_selection_state(self) -> None:
+        """重置应用选择状态到当前安装状态。"""
+        try:
+            logger.info("Resetting app selection state to current installation status")
+
+            # Reset selection state based on current installation status
+            if self.app_install_cache and not isinstance(self.app_install_cache, dict):
+                # Get all applications and reset their selection state
+                all_applications = self.app_installer._get_all_applications_flat()
+                for app in all_applications:
+                    # Reset to current installation status
+                    self.app_selection_state[app.name] = app.installed
+
+                logger.info(f"Reset selection state for {len(all_applications)} applications")
+            else:
+                logger.warning("Cannot reset app selection state: cache not available")
+        except Exception as e:
+            logger.error(f"Failed to reset app selection state: {str(e)}")
+
+    def refresh_and_reset_app_page(self) -> None:
+        """刷新应用安装页面并重置选择状态（用于安装完成后的清理）。"""
+        try:
+            logger.info("Refreshing app install page and resetting selection state")
+
+            # First refresh the page to get updated installation status
+            self.refresh_app_install_page()
+
+            # Then reset selection state to match current installation status
+            # Use call_after_refresh to ensure this happens after the page refresh
+            def reset_after_refresh():
+                try:
+                    self.reset_app_selection_state()
+                    # 只在当前仍在app_install段时才更新UI，避免冲突
+                    if self.selected_segment == "app_install":
+                        # 使用call_later确保在下一个事件循环中执行，避免冲突
+                        self.app.call_later(lambda: self._safe_ui_update_after_refresh())
+                    logger.info("App page refresh and selection reset completed")
+                except Exception as e:
+                    logger.error(f"Error in reset_after_refresh: {str(e)}")
+
+            self.call_after_refresh(reset_after_refresh)
+
+        except Exception as e:
+            logger.error(f"Failed to refresh and reset app page: {str(e)}")
+
+    def _safe_ui_update_after_refresh(self) -> None:
+        """安全地更新UI，避免冲突。"""
+        try:
+            # 只在仍在app_install段时才更新
+            if self.selected_segment == "app_install":
+                self.update_settings_panel()
+                # 不调用self.refresh()以避免冲突
+                logger.debug("Safe UI update completed after app refresh")
+        except Exception as e:
+            logger.error(f"Error in safe UI update: {str(e)}")
 
     def _show_message(self, message: str, error: bool = False) -> None:
         """Show a message to the user by updating the title."""

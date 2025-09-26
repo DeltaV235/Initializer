@@ -48,6 +48,9 @@ class AppInstaller:
 
         # 兼容性：提供applications属性访问所有应用（展开套件组件）
         self.applications = self._get_all_applications_flat()
+
+        # Session级别的apt update状态管理
+        self._apt_update_executed = False  # 标记当前session是否已执行过apt update
     
     def _load_applications(self) -> List[Application]:
         """Load applications from package manager specific configuration file."""
@@ -851,7 +854,7 @@ class AppInstaller:
 
         # 构建 APT 命令参数
         if self.package_manager in ["apt", "apt-get"]:
-            cmd_parts = ["sudo apt-get update && sudo apt-get install"]
+            cmd_parts = ["sudo apt-get install"]
 
             # 添加自动确认参数
             if auto_yes:
@@ -880,6 +883,38 @@ class AppInstaller:
         }
 
         return install_commands.get(self.package_manager)
+
+    def needs_apt_update(self) -> bool:
+        """检查是否需要执行apt update。
+
+        Returns:
+            True如果需要执行apt update，False如果已执行过或不需要
+        """
+        if self.package_manager not in ["apt", "apt-get"]:
+            return False
+
+        return not self._apt_update_executed
+
+    def get_apt_update_command(self) -> Optional[str]:
+        """获取apt update命令。
+
+        Returns:
+            apt update命令字符串，如果不需要则返回None
+        """
+        if not self.needs_apt_update():
+            return None
+
+        return "sudo apt-get update"
+
+    def mark_apt_update_executed(self) -> None:
+        """标记apt update已执行，避免重复执行。"""
+        self._apt_update_executed = True
+        self.logger.info("APT update marked as executed for current session")
+
+    def reset_apt_update_status(self) -> None:
+        """重置apt update状态，允许在新session中重新执行。"""
+        self._apt_update_executed = False
+        self.logger.info("APT update status reset for new session")
 
     def _get_package_manager_config(self) -> Dict[str, Any]:
         """Get package manager specific configuration parameters.
