@@ -415,18 +415,12 @@ class AppInstallProgressModal(ModalScreen):
     @work(exclusive=True, thread=True)
     async def _start_processing(self) -> None:
         """Process all installation/uninstallation tasks."""
-        # No longer query for a specific widget - use add_log_line directly
+        # Set up log UI callback to connect app installer logs to UI
+        self.app_installer.set_log_ui_callback(self.add_log_line_safe)
 
-        # Start logging session
+        # Start logging session (simplified)
         try:
-            # Gather basic system info for logging
-            system_info = {
-                "package_manager": self.app_installer.package_manager or "unknown",
-                "task_count": len(self.tasks),
-                "timestamp": datetime.now().isoformat()
-            }
-
-            session_id = self.app_installer.start_logging_session(system_info)
+            session_id = self.app_installer.start_logging_session()
             self.app_installer.set_total_applications(len(self.tasks))
 
             # Log session start

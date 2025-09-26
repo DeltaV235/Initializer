@@ -4,7 +4,7 @@ import subprocess
 import shutil
 import asyncio
 import concurrent.futures
-from typing import List, Dict, Optional, Tuple, Any, Union
+from typing import List, Dict, Optional, Tuple, Any, Union, Callable
 from pathlib import Path
 from ..utils.log_manager import InstallationLogManager, LogLevel
 from ..utils.logger import get_module_logger
@@ -30,8 +30,8 @@ class AppInstaller:
         modules_config = config_manager.load_config("modules")
         self.app_config = modules_config.get('modules', {}).get('app_install', {})
 
-        # Initialize loggers first
-        self.log_manager = InstallationLogManager(config_manager.config_dir)
+        # Initialize simplified log manager (UI callback will be set later)
+        self.log_manager = InstallationLogManager()
         self.logger = get_module_logger("app_installer")
 
         # 先检测包管理器
@@ -331,114 +331,114 @@ class AppInstaller:
         error_patterns = {
             # Network/Download issues
             "network is unreachable": {
-                "type": "网络问题",
-                "message": "网络连接不可达",
+                "type": "Network Issue",
+                "message": "Network unreachable",
                 "solutions": [
-                    "检查网络连接是否正常",
-                    "尝试更换软件源镜像",
-                    "检查防火墙设置"
+                    "Check network connection",
+                    "Try changing software source mirror",
+                    "Check firewall settings"
                 ]
             },
             "unable to fetch": {
-                "type": "下载问题",
-                "message": "无法下载软件包",
+                "type": "Download Issue",
+                "message": "Unable to download package",
                 "solutions": [
-                    "检查网络连接",
-                    "更新软件包列表 (apt update)",
-                    "更换软件源镜像"
+                    "Check network connection",
+                    "Update package list (apt update)",
+                    "Change software source mirror"
                 ]
             },
             "404 not found": {
-                "type": "软件包不存在",
-                "message": "软件包未找到",
+                "type": "Package Not Found",
+                "message": "Package not found",
                 "solutions": [
-                    "检查软件包名称是否正确",
-                    "更新软件包列表",
-                    "启用所需的软件仓库"
+                    "Verify package name is correct",
+                    "Update package list",
+                    "Enable required repositories"
                 ]
             },
 
             # Permission issues
             "permission denied": {
-                "type": "权限问题",
-                "message": "权限不足",
+                "type": "Permission Issue",
+                "message": "Insufficient permissions",
                 "solutions": [
-                    "使用 sudo 运行命令",
-                    "检查用户是否在 sudo 组中",
-                    "检查文件/目录权限"
+                    "Run command with sudo",
+                    "Check if user is in sudo group",
+                    "Check file/directory permissions"
                 ]
             },
             "operation not permitted": {
-                "type": "权限问题",
-                "message": "操作不被允许",
+                "type": "Permission Issue",
+                "message": "Operation not permitted",
                 "solutions": [
-                    "使用管理员权限",
-                    "检查 SELinux/AppArmor 设置",
-                    "确认文件系统不是只读"
+                    "Use administrator privileges",
+                    "Check SELinux/AppArmor settings",
+                    "Verify filesystem is not read-only"
                 ]
             },
 
             # Dependency issues
             "depends": {
-                "type": "依赖问题",
-                "message": "存在未满足的依赖关系",
+                "type": "Dependency Issue",
+                "message": "Unmet dependencies",
                 "solutions": [
-                    "安装缺失的依赖包",
-                    "运行 apt --fix-broken install",
-                    "清理软件包缓存并重试"
+                    "Install missing dependency packages",
+                    "Run apt --fix-broken install",
+                    "Clear package cache and retry"
                 ]
             },
             "broken packages": {
-                "type": "软件包损坏",
-                "message": "软件包状态异常",
+                "type": "Broken Package",
+                "message": "Package in broken state",
                 "solutions": [
-                    "运行 dpkg --configure -a",
-                    "使用 apt --fix-broken install",
-                    "清理并重新安装"
+                    "Run dpkg --configure -a",
+                    "Use apt --fix-broken install",
+                    "Clean and reinstall"
                 ]
             },
 
             # Disk space issues
             "no space left": {
-                "type": "磁盘空间",
-                "message": "磁盘空间不足",
+                "type": "Disk Space",
+                "message": "Insufficient disk space",
                 "solutions": [
-                    "清理系统垃圾文件",
-                    "删除不需要的软件包",
-                    "清理软件包缓存 (apt clean)"
+                    "Clean system temporary files",
+                    "Remove unnecessary packages",
+                    "Clear package cache (apt clean)"
                 ]
             },
 
             # Lock issues
             "could not get lock": {
-                "type": "包管理器锁定",
-                "message": "包管理器被其他进程占用",
+                "type": "Package Manager Locked",
+                "message": "Package manager in use by another process",
                 "solutions": [
-                    "等待其他包管理器进程完成",
-                    "终止占用的进程",
-                    "删除锁文件 (谨慎操作)"
+                    "Wait for other package manager processes to complete",
+                    "Terminate blocking process",
+                    "Remove lock file (use with caution)"
                 ]
             },
 
             # Repository issues
             "repository is not signed": {
-                "type": "仓库签名问题",
-                "message": "软件仓库未签名",
+                "type": "Repository Signature Issue",
+                "message": "Software repository not signed",
                 "solutions": [
-                    "导入 GPG 密钥",
-                    "使用 --allow-unauthenticated 参数",
-                    "验证仓库来源的安全性"
+                    "Import GPG key",
+                    "Use --allow-unauthenticated parameter",
+                    "Verify repository source security"
                 ]
             },
 
             # Service issues
             "systemd": {
-                "type": "系统服务问题",
-                "message": "系统服务配置出错",
+                "type": "System Service Issue",
+                "message": "System service configuration error",
                 "solutions": [
-                    "检查服务状态 (systemctl status)",
-                    "查看服务日志 (journalctl -u service)",
-                    "重新加载 systemd 配置"
+                    "Check service status (systemctl status)",
+                    "View service logs (journalctl -u service)",
+                    "Reload systemd configuration"
                 ]
             }
         }
@@ -449,32 +449,32 @@ class AppInstaller:
                 solution_text = "\n".join([f"  • {sol}" for sol in info["solutions"]])
                 return f"""❌ {info['type']}: {info['message']}
 
-📋 建议解决方案:
+📋 Suggested Solutions:
 {solution_text}
 
-🔍 原始错误: {error_output.strip()}"""
+🔍 Original Error: {error_output.strip()}"""
 
         # No specific pattern found, provide generic guidance
         if "sudo" in command and ("permission" in error_lower or "denied" in error_lower):
-            return f"""❌ 权限问题: 执行命令需要管理员权限
+            return f"""❌ Permission Issue: Command requires administrator privileges
 
-📋 建议解决方案:
-  • 确保当前用户在 sudo 组中
-  • 尝试手动运行: sudo -v 验证权限
-  • 检查 /etc/sudoers 配置
+📋 Suggested Solutions:
+  • Ensure current user is in sudo group
+  • Try running manually: sudo -v to verify permissions
+  • Check /etc/sudoers configuration
 
-🔍 原始错误: {error_output.strip()}"""
+🔍 Original Error: {error_output.strip()}"""
 
         # Generic error with basic guidance
-        return f"""❌ 安装失败: {app_name}
+        return f"""❌ Installation Failed: {app_name}
 
-📋 建议调试步骤:
-  • 检查网络连接是否正常
-  • 更新软件包列表: sudo apt update
-  • 检查磁盘空间是否充足
-  • 查看完整的错误信息寻找具体原因
+📋 Debugging Steps:
+  • Check network connection
+  • Update package list: sudo apt update
+  • Check available disk space
+  • Review full error message for specific cause
 
-🔍 原始错误: {error_output.strip()}"""
+🔍 Original Error: {error_output.strip()}"""
 
     def check_dependencies(self, app: Application) -> Dict[str, Any]:
         """Check dependencies for an application before installation.
@@ -486,7 +486,7 @@ class AppInstaller:
             Dictionary containing dependency information
         """
         if not self.package_manager:
-            return {"success": False, "error": "包管理器未检测到"}
+            return {"success": False, "error": "Package manager not detected"}
 
         packages = app.get_package_list()
         dependency_info = {
@@ -1326,18 +1326,18 @@ class AppInstaller:
             self.logger.info(f"成功安装应用程序: {app.name}")
 
             if app.post_install:
-                self.logger.info(f"执行安装后命令: {app.name}")
-                self.logger.debug(f"安装后命令: {app.post_install}")
+                self.logger.info(f"Executing post-install command: {app.name}")
+                self.logger.debug(f"Post-install command: {app.post_install}")
 
-                # 执行安装后命令
+                # Execute post-install command
                 post_success, post_output = self.execute_command_with_sudo_support(app.post_install)
                 if not post_success:
-                    self.logger.warning(f"{app.name} 安装后命令执行失败: {post_output}")
-                    return True, f"应用程序安装成功，但安装后配置失败: {post_output}"
+                    self.logger.warning(f"{app.name} post-install command failed: {post_output}")
+                    return True, f"Application installed successfully, but post-install configuration failed: {post_output}"
                 else:
-                    self.logger.info(f"{app.name} 安装后命令执行成功")
+                    self.logger.info(f"{app.name} post-install command executed successfully")
         else:
-            self.logger.error(f"应用程序 {app.name} 安装失败: {output}")
+            self.logger.error(f"Application {app.name} installation failed: {output}")
 
         return success, output
 
@@ -1474,11 +1474,8 @@ class AppInstaller:
 
     # Log Management Methods
 
-    def start_logging_session(self, system_info: Dict = None) -> str:
+    def start_logging_session(self) -> str:
         """Start a new installation logging session.
-
-        Args:
-            system_info: System information dictionary
 
         Returns:
             Session ID
@@ -1487,12 +1484,19 @@ class AppInstaller:
         self.logger.debug(f"Package manager: {self.package_manager or 'unknown'}")
 
         session_id = self.log_manager.start_session(
-            package_manager=self.package_manager or "unknown",
-            system_info=system_info
+            package_manager=self.package_manager or "unknown"
         )
 
         self.logger.info(f"Installation logging session started with ID: {session_id}")
         return session_id
+
+    def set_log_ui_callback(self, callback: Callable[[str, str], None]) -> None:
+        """Set the UI callback for displaying logs.
+
+        Args:
+            callback: Function that takes (message, log_type) and displays in UI
+        """
+        self.log_manager.set_ui_callback(callback)
 
     def end_logging_session(self) -> None:
         """End the current logging session."""
@@ -1538,61 +1542,12 @@ class AppInstaller:
         self.logger.info(f"Setting total applications count: {count}")
         self.log_manager.set_total_apps(count)
 
-    def export_installation_logs(self, session_id: str = None,
-                                format: str = "json", output_file: str = None) -> str:
-        """Export installation logs to a file.
-
-        Args:
-            session_id: Session ID to export (current session if None)
-            format: Export format ('json', 'yaml', 'txt', 'html')
-            output_file: Output file path (auto-generated if None)
-
-        Returns:
-            Path to exported file
-
-        Raises:
-            ValueError: If session not found or format not supported
-        """
-        return self.log_manager.export_logs(
-            session_id=session_id,
-            format=format,
-            output_file=output_file
-        )
-
-    def list_log_sessions(self) -> List[Dict]:
-        """List all available log sessions.
-
-        Returns:
-            List of session summary dictionaries containing:
-            - session_id: Session identifier
-            - start_time: Session start time
-            - end_time: Session end time (if completed)
-            - package_manager: Package manager used
-            - total_apps: Total applications processed
-            - successful_apps: Successfully processed applications
-            - failed_apps: Failed applications
-            - log_entries_count: Number of log entries
-        """
-        return self.log_manager.list_sessions()
-
-    def cleanup_old_logs(self, keep_days: int = 30) -> int:
-        """Clean up old log files.
-
-        Args:
-            keep_days: Number of days to keep logs (default: 30)
-
-        Returns:
-            Number of files deleted
-        """
-        return self.log_manager.cleanup_old_logs(keep_days)
-
-    def get_log_export_formats(self) -> List[str]:
-        """Get list of supported log export formats.
-
-        Returns:
-            List of supported format strings
-        """
-        return ["json", "yaml", "txt", "html"]
+    # Deprecated methods - removed for simplification
+    # Log export, cleanup and listing features removed as logs are now UI-only
+    # def export_installation_logs() - no longer needed
+    # def list_log_sessions() - no longer needed
+    # def cleanup_old_logs() - no longer needed
+    # def get_log_export_formats() - no longer needed
 
     def save_installation_status(self, app_name: str, installed: bool) -> bool:
         """Save installation status for an application.
