@@ -1319,11 +1319,30 @@ class AppInstaller:
 
         self.logger.debug(f"使用安装命令: {install_cmd}")
 
+        # Log the installation attempt
+        self.log_installation_event(
+            LogLevel.INFO,
+            f"Starting installation of {app.name}",
+            application=app.name,
+            action="install",
+            command=install_cmd
+        )
+
         # 使用sudo支持执行命令
         success, output = self.execute_command_with_sudo_support(install_cmd)
 
         if success:
             self.logger.info(f"成功安装应用程序: {app.name}")
+
+            # Log successful installation with command output
+            self.log_installation_event(
+                LogLevel.SUCCESS,
+                f"{app.name} installed successfully",
+                application=app.name,
+                action="install",
+                command=install_cmd,
+                output=output
+            )
 
             if app.post_install:
                 self.logger.info(f"Executing post-install command: {app.name}")
@@ -1333,11 +1352,42 @@ class AppInstaller:
                 post_success, post_output = self.execute_command_with_sudo_support(app.post_install)
                 if not post_success:
                     self.logger.warning(f"{app.name} post-install command failed: {post_output}")
+
+                    # Log post-install failure
+                    self.log_installation_event(
+                        LogLevel.WARNING,
+                        f"{app.name} post-install command failed",
+                        application=app.name,
+                        action="post_install",
+                        command=app.post_install,
+                        error=post_output
+                    )
+
                     return True, f"Application installed successfully, but post-install configuration failed: {post_output}"
                 else:
                     self.logger.info(f"{app.name} post-install command executed successfully")
+
+                    # Log successful post-install
+                    self.log_installation_event(
+                        LogLevel.SUCCESS,
+                        f"{app.name} post-install command completed",
+                        application=app.name,
+                        action="post_install",
+                        command=app.post_install,
+                        output=post_output
+                    )
         else:
             self.logger.error(f"Application {app.name} installation failed: {output}")
+
+            # Log installation failure with command output and error
+            self.log_installation_event(
+                LogLevel.ERROR,
+                f"{app.name} installation failed",
+                application=app.name,
+                action="install",
+                command=install_cmd,
+                error=output
+            )
 
         return success, output
 

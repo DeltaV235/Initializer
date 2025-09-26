@@ -187,18 +187,18 @@ class AppInstallProgressModal(ModalScreen):
             import os
             from pathlib import Path
 
-            # Create logs directory structure
-            config_dir = Path.home() / ".config" / "initializer"
-            self.progress_logs_dir = config_dir / "progress_logs"
-            self.progress_logs_dir.mkdir(parents=True, exist_ok=True)
+            # Use project root logs directory instead of user config
+            self.progress_logs_dir = Path("logs")
+            self.progress_logs_dir.mkdir(exist_ok=True)
 
             # Generate unique log file name with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            task_summary = "_".join([
-                task["action"]["application"].name[:8]
-                for task in [{"action": action} for action in self.actions[:3]]  # First 3 apps
-            ])
-            log_filename = f"app_install_{timestamp}_{task_summary}.log"
+
+            # Get package manager name for prefix
+            package_manager = getattr(self.app_installer, 'package_manager', 'unknown') or 'unknown'
+
+            # Generate filename without app names (cleaner approach)
+            log_filename = f"app_install_{package_manager}_{timestamp}.log"
             self.progress_log_file = self.progress_logs_dir / log_filename
 
             # Initialize log file with header
@@ -223,16 +223,36 @@ class AppInstallProgressModal(ModalScreen):
         try:
             if self.progress_log_file:
                 from datetime import datetime
+                import re
+
+                # Only convert \r to \n for specific apt progress patterns
+                if 'Reading database' in message and '\r' in message:
+                    # This is apt progress with carriage returns, convert to separate lines
+                    clean_message = message.replace('\r', '\n')
+                else:
+                    # For other content, just remove \r but keep content
+                    clean_message = message.replace('\r', '')
+
+                # Remove ANSI escape sequences
+                clean_message = re.sub(r'\x1b\[[0-9;]*m', '', clean_message)
+                clean_message = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', clean_message)
+                clean_message = clean_message.strip()
+
                 timestamp = datetime.now().strftime("%H:%M:%S")
 
-                # Don't add timestamp if message already has one or is a separator
-                if message.startswith("[") or message.startswith("="):
-                    log_entry = message
-                else:
-                    log_entry = f"[{timestamp}] {message}"
+                # Handle potential multiple lines
+                lines = clean_message.split('\n') if '\n' in clean_message else [clean_message]
 
                 with open(self.progress_log_file, 'a', encoding='utf-8') as f:
-                    f.write(log_entry + "\n")
+                    for line in lines:
+                        line = line.strip()
+                        if line:  # Only write non-empty lines
+                            # Don't add timestamp if line already has one or is a separator
+                            if line.startswith("[") or line.startswith("="):
+                                log_entry = line
+                            else:
+                                log_entry = f"[{timestamp}] {line}"
+                            f.write(log_entry + "\n")
                     f.flush()  # Ensure immediate writing
         except Exception as e:
             print(f"Failed to write to log file: {e}")
@@ -247,32 +267,46 @@ class AppInstallProgressModal(ModalScreen):
         try:
             from datetime import datetime
 
-            # Add timestamp if not already present
-            if not message.startswith('['):
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                log_line = f"[{timestamp}] {message}"
+            # Clean message and handle potential Reading database progress lines
+            clean_message = message.strip()
+
+            # Only split by newlines for Reading database progress
+            if 'Reading database' in clean_message and '\n' in clean_message:
+                message_lines = clean_message.split('\n')
             else:
-                log_line = message
+                message_lines = [clean_message]
 
-            # Track log lines for memory management (like APT modal)
-            self.log_lines.append(log_line)
+            for line in message_lines:
+                line = line.strip()
+                if not line:  # Skip empty lines
+                    continue
 
-            # Determine CSS class based on log type
-            css_class = "log-line"
-            if log_type == "success":
-                css_class = "log-line-success"
-            elif log_type == "error":
-                css_class = "log-line-error"
-            elif log_type == "warning":
-                css_class = "log-line-warning"
-            elif log_type == "info":
-                css_class = "log-line-info"
+                # Add timestamp only if not already present
+                if not line.startswith('[') and not line.startswith('='):
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    log_line = f"[{timestamp}] {line}"
+                else:
+                    log_line = line
 
-            # Add to log output container
-            log_container = self.query_one("#log-output", Vertical)
-            log_container.mount(Static(log_line, classes=css_class))
+                # Track log lines for memory management
+                self.log_lines.append(log_line)
 
-            # Keep only last 100 lines to prevent memory issues (like APT modal)
+                # Determine CSS class based on log type
+                css_class = "log-line"
+                if log_type == "success":
+                    css_class = "log-line-success"
+                elif log_type == "error":
+                    css_class = "log-line-error"
+                elif log_type == "warning":
+                    css_class = "log-line-warning"
+                elif log_type == "info":
+                    css_class = "log-line-info"
+
+                # Add to log output container
+                log_container = self.query_one("#log-output", Vertical)
+                log_container.mount(Static(log_line, classes=css_class))
+
+            # Keep only last 100 lines to prevent memory issues
             if len(self.log_lines) > 100:
                 self.log_lines = self.log_lines[-100:]
                 # Remove old log widgets
@@ -285,25 +319,28 @@ class AppInstallProgressModal(ModalScreen):
             content_area.scroll_end(animate=False)
 
         except Exception as e:
-            # Fallback: print to console if UI update fails (like APT modal)
+            # Fallback: print to console if UI update fails
             print(f"Failed to add log line: {e}")
             # Try to continue without crashing
 
     def add_log_line_safe(self, message: str, log_type: str = "normal") -> None:
         """Thread-safe wrapper for add_log_line that also writes to independent log file."""
         try:
-            # Always write to independent log file first (thread-safe)
-            self._write_to_log_file(message)
+            # Clean message before processing
+            clean_message = message.strip()
+
+            # Always write clean message to independent log file first (thread-safe)
+            self._write_to_log_file(clean_message)
 
             # Check if we're in the main thread for UI update
             import threading
             if threading.current_thread() is threading.main_thread():
                 # We're in the main thread, call directly
-                self.add_log_line(message, log_type)
+                self.add_log_line(clean_message, log_type)
             else:
                 # We're in a worker thread, use call_from_thread
                 def safe_add():
-                    self.add_log_line(message, log_type)
+                    self.add_log_line(clean_message, log_type)
                 self.app.call_from_thread(safe_add)
         except Exception as e:
             # Fallback: print to console and try to log to file
@@ -322,23 +359,23 @@ class AppInstallProgressModal(ModalScreen):
         """
         # Parse Rich markup to determine log type
         log_type = "normal"
-        clean_message = message
+        clean_message = message.strip()
 
         # Remove Rich markup and determine type
         import re
 
         # Check for color patterns in Rich markup
-        if re.search(r'\[green\]|\[success\]', message):
+        if re.search(r'\[green\]|\[success\]', clean_message):
             log_type = "success"
-        elif re.search(r'\[red\]|\[error\]', message):
+        elif re.search(r'\[red\]|\[error\]', clean_message):
             log_type = "error"
-        elif re.search(r'\[yellow\]|\[warning\]', message):
+        elif re.search(r'\[yellow\]|\[warning\]', clean_message):
             log_type = "warning"
-        elif re.search(r'\[blue\]|\[cyan\]|\[primary\]', message):
+        elif re.search(r'\[blue\]|\[cyan\]|\[primary\]', clean_message):
             log_type = "info"
 
         # Clean up Rich markup for display
-        clean_message = re.sub(r'\[/?[^\]]*\]', '', message)
+        clean_message = re.sub(r'\[/?[^\]]*\]', '', clean_message)
 
         self.add_log_line_safe(clean_message, log_type)
 
@@ -528,7 +565,7 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 70)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, None, update_install_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, "log_widget", update_install_progress)
                         
                         if success:
                             task["progress"] = 70
@@ -544,7 +581,7 @@ class AppInstallProgressModal(ModalScreen):
                                     task["progress"] = min(task_progress, 100)
                                     self._update_progress(i, task["progress"])
 
-                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, None, update_postinstall_progress)
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, "log_widget", update_postinstall_progress)
                                 if not post_success:
                                     self._append_log(None,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
@@ -642,7 +679,7 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 100)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, None, update_uninstall_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, "log_widget", update_uninstall_progress)
 
                         if success:
                             task["status"] = "success"
@@ -866,14 +903,37 @@ class AppInstallProgressModal(ModalScreen):
                     if not line_bytes:  # EOF reached
                         break
 
-                    # Decode bytes to string
+                    # Decode bytes to string and clean control characters
                     try:
                         line = line_bytes.decode('utf-8').strip()
+                        # Only convert \r to \n for specific apt progress patterns
+                        if 'Reading database' in line and '\r' in line:
+                            # This is apt progress with carriage returns, convert to separate lines
+                            line = line.replace('\r', '\n')
+                        else:
+                            # For other content, just remove \r but keep content
+                            line = line.replace('\r', '')
+
+                        # Remove ANSI escape sequences
+                        import re
+                        line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                        line = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
+                        line = line.strip()
                     except UnicodeDecodeError:
                         line = line_bytes.decode('utf-8', errors='ignore').strip()
+                        # Apply same logic for error case
+                        if 'Reading database' in line and '\r' in line:
+                            line = line.replace('\r', '\n')
+                        else:
+                            line = line.replace('\r', '')
 
                     if line:
-                        output_lines.append(line)
+                        # Split line by newlines if any were created from \r conversion
+                        line_parts = line.split('\n')
+                        for part in line_parts:
+                            part = part.strip()
+                            if part:  # Only add non-empty parts
+                                output_lines.append(part)
                         line_count += 1
 
                         # Smart progress estimation based on output patterns
@@ -887,18 +947,33 @@ class AppInstallProgressModal(ModalScreen):
                         if log_widget:
                             # Color-code different types of output
                             if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
-                                self._append_log(None,f"[red]  📄 {line}[/red]")
+                                self.add_log_line_safe(f"  📄 {line}", "error")
                                 error_occurred = True
                             elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self._append_log(None,f"[yellow]  📄 {line}[/yellow]")
+                                self.add_log_line_safe(f"  📄 {line}", "warning")
                             elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self._append_log(None,f"[blue]  📦 {line}[/blue]")
+                                self.add_log_line_safe(f"  📦 {line}", "info")
                             elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self._append_log(None,f"[green]  ✅ {line}[/green]")
+                                self.add_log_line_safe(f"  ✅ {line}", "success")
                             elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self._append_log(None,f"[cyan]  ⚙️ {line}[/cyan]")
+                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
                             else:
-                                self._append_log(None,f"[dim]  📄 {line}[/dim]")
+                                self.add_log_line_safe(f"  📄 {line}", "normal")
+                        else:
+                            # No log widget, always display real-time output
+                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
+                                self.add_log_line_safe(f"  📄 {line}", "error")
+                                error_occurred = True
+                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                self.add_log_line_safe(f"  📄 {line}", "warning")
+                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
+                                self.add_log_line_safe(f"  📦 {line}", "info")
+                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
+                                self.add_log_line_safe(f"  ✅ {line}", "success")
+                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
+                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
+                            else:
+                                self.add_log_line_safe(f"  📄 {line}", "normal")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -1007,14 +1082,37 @@ class AppInstallProgressModal(ModalScreen):
                     if not line_bytes:  # EOF reached
                         break
 
-                    # Decode bytes to string
+                    # Decode bytes to string and clean control characters
                     try:
                         line = line_bytes.decode('utf-8').strip()
+                        # Only convert \r to \n for specific apt progress patterns
+                        if 'Reading database' in line and '\r' in line:
+                            # This is apt progress with carriage returns, convert to separate lines
+                            line = line.replace('\r', '\n')
+                        else:
+                            # For other content, just remove \r but keep content
+                            line = line.replace('\r', '')
+
+                        # Remove ANSI escape sequences
+                        import re
+                        line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                        line = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
+                        line = line.strip()
                     except UnicodeDecodeError:
                         line = line_bytes.decode('utf-8', errors='ignore').strip()
+                        # Apply same logic for error case
+                        if 'Reading database' in line and '\r' in line:
+                            line = line.replace('\r', '\n')
+                        else:
+                            line = line.replace('\r', '')
 
                     if line:
-                        output_lines.append(line)
+                        # Split line by newlines if any were created from \r conversion
+                        line_parts = line.split('\n')
+                        for part in line_parts:
+                            part = part.strip()
+                            if part:  # Only add non-empty parts
+                                output_lines.append(part)
                         line_count += 1
 
                         # Smart progress estimation based on output patterns
@@ -1028,18 +1126,33 @@ class AppInstallProgressModal(ModalScreen):
                         if log_widget:
                             # Color-code different types of output
                             if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable']):
-                                self._append_log(None,f"[red]  📄 {line}[/red]")
+                                self.add_log_line_safe(f"  📄 {line}", "error")
                                 error_occurred = True
                             elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self._append_log(None,f"[yellow]  📄 {line}[/yellow]")
+                                self.add_log_line_safe(f"  📄 {line}", "warning")
                             elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self._append_log(None,f"[blue]  📦 {line}[/blue]")
+                                self.add_log_line_safe(f"  📦 {line}", "info")
                             elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self._append_log(None,f"[green]  ✅ {line}[/green]")
+                                self.add_log_line_safe(f"  ✅ {line}", "success")
                             elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self._append_log(None,f"[cyan]  ⚙️ {line}[/cyan]")
+                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
                             else:
-                                self._append_log(None,f"[dim]  📄 {line}[/dim]")
+                                self.add_log_line_safe(f"  📄 {line}", "normal")
+                        else:
+                            # No log widget, always display real-time output
+                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable']):
+                                self.add_log_line_safe(f"  📄 {line}", "error")
+                                error_occurred = True
+                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                self.add_log_line_safe(f"  📄 {line}", "warning")
+                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
+                                self.add_log_line_safe(f"  📦 {line}", "info")
+                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
+                                self.add_log_line_safe(f"  ✅ {line}", "success")
+                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
+                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
+                            else:
+                                self.add_log_line_safe(f"  📄 {line}", "normal")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -1287,7 +1400,7 @@ class AppInstallProgressModal(ModalScreen):
                         task["progress"] = 40
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, None)
+                        success, output = await self._execute_command_with_sudo_support(command, "log_widget")
 
                         if success:
                             task["progress"] = 70
@@ -1296,7 +1409,7 @@ class AppInstallProgressModal(ModalScreen):
                             # Execute post-install if any
                             if app.post_install:
                                 self._append_log(None,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
-                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, None)
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, "log_widget")
                                 if not post_success:
                                     self._append_log(None,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
@@ -1361,7 +1474,7 @@ class AppInstallProgressModal(ModalScreen):
                         task["progress"] = 50
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, None)
+                        success, output = await self._execute_command_with_sudo_support(command, "log_widget")
 
                         if success:
                             task["status"] = "success"

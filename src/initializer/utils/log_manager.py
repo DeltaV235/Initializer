@@ -88,22 +88,44 @@ class InstallationLogManager:
         if application:
             full_message = f"{application}: {message}"
 
-        # Add command info if provided
-        if command:
-            full_message += f" (cmd: {command[:50]}...)"
-
-        # Add error info if provided
-        if error:
-            full_message += f" - Error: {error[:100]}..."
-
         # Convert LogLevel to UI log type
         log_type = self._convert_log_level_to_ui_type(level)
 
-        # Send to UI
+        # Send basic message to UI first
         self._log_to_ui(full_message, log_type)
 
+        # If we have command details, log them separately for better readability
+        if command:
+            self._log_to_ui(f"Command: {command}", "info")
+
+        if output and output.strip():
+            # Split output into lines and send each line
+            output_lines = output.strip().split('\n')
+            self._log_to_ui("=== Command Output ===", "info")
+            for line in output_lines[-20:]:  # Only show last 20 lines to avoid flooding
+                if line.strip():  # Only log non-empty lines
+                    self._log_to_ui(f"  {line}", "normal")
+            self._log_to_ui("=== End Output ===", "info")
+
+        if error and error.strip():
+            # Split error into lines and send each line
+            error_lines = error.strip().split('\n')
+            self._log_to_ui("=== Error Output ===", "error")
+            for line in error_lines:
+                if line.strip():  # Only log non-empty lines
+                    self._log_to_ui(f"  {line}", "error")
+            self._log_to_ui("=== End Error ===", "error")
+
         # Also log to internal logger for debugging
-        self.logger.info(f"[{level.value}] {full_message}")
+        detailed_log = f"[{level.value}] {full_message}"
+        if command:
+            detailed_log += f" | Command: {command}"
+        if output:
+            detailed_log += f" | Output: {output[:200]}..."
+        if error:
+            detailed_log += f" | Error: {error[:200]}..."
+
+        self.logger.info(detailed_log)
 
     def set_total_apps(self, count: int) -> None:
         """Set the total number of applications to be processed.
