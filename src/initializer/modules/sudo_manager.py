@@ -211,6 +211,19 @@ class SudoManager:
         Returns:
             (成功状态, 输出信息或错误信息)
         """
+        # 如果是root用户，直接执行命令（去掉sudo前缀）
+        if self.is_root_user():
+            # 如果命令包含sudo，移除sudo部分
+            if self.is_sudo_required(command):
+                # 移除sudo部分，保留实际命令
+                clean_command = self._remove_sudo_from_command(command)
+                self.logger.debug(f"root用户直接执行命令: {clean_command}")
+                return self._execute_command_direct(clean_command)
+            else:
+                # 命令不包含sudo，直接执行
+                return self._execute_command_direct(command)
+
+        # 非root用户，继续原有逻辑
         if not self.is_verified():
             return False, "未验证sudo权限，请先进行权限验证"
 
@@ -263,6 +276,55 @@ class SudoManager:
             self.logger.error(f"sudo命令执行异常: {e}")
             return False, error_msg
 
+    def _remove_sudo_from_command(self, command: str) -> str:
+        """从命令中移除sudo部分.
+
+        Args:
+            command: 包含sudo的命令字符串
+
+        Returns:
+            移除sudo后的命令字符串
+        """
+        try:
+            # 处理各种sudo命令格式
+            import shlex
+
+            # 首先尝试用shell解析来处理复杂的命令
+            parts = shlex.split(command)
+
+            # 移除sudo及其参数
+            clean_parts = []
+            skip_next = False
+            for i, part in enumerate(parts):
+                if skip_next:
+                    skip_next = False
+                    continue
+
+                if part == 'sudo':
+                    # 跳过sudo，检查是否有参数（如-S, -u等）
+                    continue
+                elif part.startswith('-') and i > 0 and parts[i-1] == 'sudo':
+                    # 跳过sudo的参数，如-S, -u user等
+                    if part in ['-u', '-g', '-H', '-P']:
+                        skip_next = True  # 这些参数后面还有值
+                    continue
+                else:
+                    clean_parts.append(part)
+
+            # 重新组合命令
+            if clean_parts:
+                clean_command = ' '.join(clean_parts)
+                self.logger.debug(f"移除sudo后的命令: {clean_command}")
+                return clean_command
+            else:
+                return command
+
+        except Exception as e:
+            self.logger.warning(f"解析sudo命令失败，使用简单替换: {e}")
+            # 回退到简单的字符串替换
+            clean_command = command.replace('sudo ', '', 1).strip()
+            return clean_command if clean_command else command
+
     def _execute_command_direct(self, command: str) -> Tuple[bool, str]:
         """直接执行不需要sudo的命令.
 
@@ -304,6 +366,19 @@ class SudoManager:
         Returns:
             (成功状态, 输出信息或错误信息)
         """
+        # 如果是root用户，直接执行命令（去掉sudo前缀）
+        if self.is_root_user():
+            # 如果命令包含sudo，移除sudo部分
+            if self.is_sudo_required(command):
+                # 移除sudo部分，保留实际命令
+                clean_command = self._remove_sudo_from_command(command)
+                self.logger.debug(f"root用户异步直接执行命令: {clean_command}")
+                return await self._execute_command_direct_async(clean_command)
+            else:
+                # 命令不包含sudo，直接执行
+                return await self._execute_command_direct_async(command)
+
+        # 非root用户，继续原有逻辑
         if not self.is_verified():
             return False, "未验证sudo权限，请先进行权限验证"
 
@@ -394,6 +469,27 @@ class SudoManager:
         except Exception as e:
             return False, f"异步执行错误: {str(e)}"
 
+    def is_root_user(self) -> bool:
+        """检查当前用户是否为 root 用户.
+
+        Returns:
+            True如果是root用户，False否则
+        """
+        try:
+            # 使用 os.getuid() 检查用户ID，root用户的UID是0
+            user_id = os.getuid() if hasattr(os, 'getuid') else None
+            is_root = user_id == 0
+
+            if is_root:
+                self.logger.info("当前用户是 root 用户，无需 sudo 权限")
+            else:
+                self.logger.debug(f"当前用户 UID: {user_id}，非 root 用户")
+
+            return is_root
+        except Exception as e:
+            self.logger.error(f"检查root用户状态失败: {e}")
+            return False
+
     def check_sudo_available(self) -> bool:
         """检查系统是否支持sudo（不需要密码的基本检查）.
 
@@ -401,6 +497,11 @@ class SudoManager:
             True如果sudo可用，False否则
         """
         try:
+            # 如果是root用户，直接返回True（不需要sudo）
+            if self.is_root_user():
+                self.logger.info("当前是root用户，无需sudo命令")
+                return True
+
             # 检查sudo命令是否存在
             result = subprocess.run(
                 ["which", "sudo"],

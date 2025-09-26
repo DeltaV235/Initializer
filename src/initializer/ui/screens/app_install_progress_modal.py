@@ -4,7 +4,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar, TextArea
+from textual.widgets import Button, Static, Rule, Label, ProgressBar
 from textual.reactive import reactive
 from textual.events import Key
 from typing import List, Dict, Optional
@@ -47,11 +47,46 @@ class AppInstallProgressModal(ModalScreen):
         background: $surface;
     }
 
-    #log-output {
-        height: 100%;
-        padding: 1;
+    #log-container {
+        height: 1fr;
+        border: round $primary;
+        padding: 0;
+        margin: 0 0 1 0;
         background: $surface;
-        border: none;
+        overflow-y: auto;
+        scrollbar-size: 1 1;
+    }
+
+    #log-output {
+        height: auto;
+        min-height: 1;
+        background: $surface;
+        padding: 1;
+    }
+
+    .log-line {
+        height: auto;
+        min-height: 1;
+        color: $text;
+        background: transparent;
+    }
+
+    .log-line-success {
+        color: $success;
+        text-style: bold;
+    }
+
+    .log-line-error {
+        color: $error;
+        text-style: bold;
+    }
+
+    .log-line-warning {
+        color: $warning;
+    }
+
+    .log-line-info {
+        color: $primary;
     }
 
     .section-divider {
@@ -115,6 +150,12 @@ class AppInstallProgressModal(ModalScreen):
             self.app_installer = app_installer
             self.sudo_manager = sudo_manager  # Optional sudo manager
 
+            # Add log lines tracking like APT modal
+            self.log_lines = []
+
+            # Initialize independent log file system
+            self._init_independent_log_system()
+
             print("DEBUG: Basic attributes set successfully")
 
             # Task tracking
@@ -139,22 +180,167 @@ class AppInstallProgressModal(ModalScreen):
             traceback.print_exc()
             raise
 
-    def _append_log(self, log_widget: TextArea, message: str) -> None:
-        """Append a log message to the TextArea widget.
+    def _init_independent_log_system(self) -> None:
+        """Initialize the independent log file system for app progress."""
+        try:
+            from datetime import datetime
+            import os
+            from pathlib import Path
+
+            # Create logs directory structure
+            config_dir = Path.home() / ".config" / "initializer"
+            self.progress_logs_dir = config_dir / "progress_logs"
+            self.progress_logs_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate unique log file name with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            task_summary = "_".join([
+                task["action"]["application"].name[:8]
+                for task in [{"action": action} for action in self.actions[:3]]  # First 3 apps
+            ])
+            log_filename = f"app_install_{timestamp}_{task_summary}.log"
+            self.progress_log_file = self.progress_logs_dir / log_filename
+
+            # Initialize log file with header
+            self._write_to_log_file(f"=== App Installation Progress Log ===")
+            self._write_to_log_file(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self._write_to_log_file(f"Total tasks: {len(self.actions)}")
+            self._write_to_log_file(f"Log file: {self.progress_log_file}")
+            self._write_to_log_file("=" * 50)
+
+            print(f"DEBUG: Independent log system initialized: {self.progress_log_file}")
+
+        except Exception as e:
+            print(f"WARNING: Failed to initialize independent log system: {e}")
+            self.progress_log_file = None
+
+    def _write_to_log_file(self, message: str) -> None:
+        """Write a message to the independent log file.
 
         Args:
-            log_widget: The TextArea widget to append to
-            message: The message to append (supports Rich markup)
+            message: Message to write to the log file
         """
-        current_text = log_widget.text
-        if current_text:
-            # Add newline if there's existing content
-            new_text = current_text + "\n" + message
-        else:
-            new_text = message
-        log_widget.text = new_text
-        # Scroll to bottom to show latest message
-        log_widget.scroll_end(animate=False)
+        try:
+            if self.progress_log_file:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S")
+
+                # Don't add timestamp if message already has one or is a separator
+                if message.startswith("[") or message.startswith("="):
+                    log_entry = message
+                else:
+                    log_entry = f"[{timestamp}] {message}"
+
+                with open(self.progress_log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_entry + "\n")
+                    f.flush()  # Ensure immediate writing
+        except Exception as e:
+            print(f"Failed to write to log file: {e}")
+
+    def add_log_line(self, message: str, log_type: str = "normal") -> None:
+        """Add a line to the log display using Static components.
+
+        Args:
+            message: The message to display
+            log_type: Type of log line (normal, success, error, warning, info)
+        """
+        try:
+            from datetime import datetime
+
+            # Add timestamp if not already present
+            if not message.startswith('['):
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                log_line = f"[{timestamp}] {message}"
+            else:
+                log_line = message
+
+            # Track log lines for memory management (like APT modal)
+            self.log_lines.append(log_line)
+
+            # Determine CSS class based on log type
+            css_class = "log-line"
+            if log_type == "success":
+                css_class = "log-line-success"
+            elif log_type == "error":
+                css_class = "log-line-error"
+            elif log_type == "warning":
+                css_class = "log-line-warning"
+            elif log_type == "info":
+                css_class = "log-line-info"
+
+            # Add to log output container
+            log_container = self.query_one("#log-output", Vertical)
+            log_container.mount(Static(log_line, classes=css_class))
+
+            # Keep only last 100 lines to prevent memory issues (like APT modal)
+            if len(self.log_lines) > 100:
+                self.log_lines = self.log_lines[-100:]
+                # Remove old log widgets
+                log_widgets = log_container.children
+                if len(log_widgets) > 100:
+                    log_widgets[0].remove()
+
+            # Auto-scroll to bottom
+            content_area = self.query_one("#log-container", ScrollableContainer)
+            content_area.scroll_end(animate=False)
+
+        except Exception as e:
+            # Fallback: print to console if UI update fails (like APT modal)
+            print(f"Failed to add log line: {e}")
+            # Try to continue without crashing
+
+    def add_log_line_safe(self, message: str, log_type: str = "normal") -> None:
+        """Thread-safe wrapper for add_log_line that also writes to independent log file."""
+        try:
+            # Always write to independent log file first (thread-safe)
+            self._write_to_log_file(message)
+
+            # Check if we're in the main thread for UI update
+            import threading
+            if threading.current_thread() is threading.main_thread():
+                # We're in the main thread, call directly
+                self.add_log_line(message, log_type)
+            else:
+                # We're in a worker thread, use call_from_thread
+                def safe_add():
+                    self.add_log_line(message, log_type)
+                self.app.call_from_thread(safe_add)
+        except Exception as e:
+            # Fallback: print to console and try to log to file
+            print(f"Failed to add log line (safe): {message} - {e}")
+            try:
+                self._write_to_log_file(f"ERROR: Failed to display log: {message}")
+            except:
+                pass
+
+    def _append_log(self, log_widget, message: str) -> None:
+        """Legacy method for compatibility - determine log type from Rich markup and forward to add_log_line.
+
+        Args:
+            log_widget: Unused (kept for compatibility)
+            message: Message with potential Rich markup
+        """
+        # Parse Rich markup to determine log type
+        log_type = "normal"
+        clean_message = message
+
+        # Remove Rich markup and determine type
+        import re
+
+        # Check for color patterns in Rich markup
+        if re.search(r'\[green\]|\[success\]', message):
+            log_type = "success"
+        elif re.search(r'\[red\]|\[error\]', message):
+            log_type = "error"
+        elif re.search(r'\[yellow\]|\[warning\]', message):
+            log_type = "warning"
+        elif re.search(r'\[blue\]|\[cyan\]|\[primary\]', message):
+            log_type = "info"
+
+        # Clean up Rich markup for display
+        clean_message = re.sub(r'\[/?[^\]]*\]', '', message)
+
+        self.add_log_line_safe(clean_message, log_type)
 
     def on_mount(self) -> None:
         """Initialize the screen and start processing."""
@@ -205,14 +391,10 @@ class AppInstallProgressModal(ModalScreen):
                 # Installation log area
                 print("DEBUG: Creating log output")
                 yield Label("📋 Installation Logs:", classes="info-key")
-                with Container(id="log-container"):
-                    yield TextArea(
-                        id="log-output",
-                        read_only=True,
-                        show_line_numbers=False,
-                        soft_wrap=True,
-                        language=None
-                    )
+                with ScrollableContainer(id="log-container"):
+                    with Vertical(id="log-output"):
+                        # Add an initial log line to ensure container works
+                        yield Static("Starting installation process...", classes="log-line")
 
                 print("DEBUG: Log output created")
 
@@ -233,7 +415,7 @@ class AppInstallProgressModal(ModalScreen):
     @work(exclusive=True, thread=True)
     async def _start_processing(self) -> None:
         """Process all installation/uninstallation tasks."""
-        log_widget = self.query_one("#log-output", TextArea)
+        # No longer query for a specific widget - use add_log_line directly
 
         # Start logging session
         try:
@@ -255,10 +437,16 @@ class AppInstallProgressModal(ModalScreen):
             )
 
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self._append_log(log_widget,f"[{timestamp}] 📝 Log session started: {session_id}")
+            # Use thread-safe log method
+            self.add_log_line_safe(f"📝 Log session started: {session_id}")
+            # Also write detailed task list to independent log
+            self._write_to_log_file("Task list:")
+            for i, task in enumerate(self.tasks):
+                self._write_to_log_file(f"  {i+1}. {task['name']}")
+            self._write_to_log_file("=" * 30)
 
         except Exception as e:
-            self._append_log(log_widget,f"[yellow]⚠️ Log initialization failed: {e}[/yellow]")
+            self._append_log(None, f"[yellow]⚠️ Log initialization failed: {e}[/yellow]")
 
         # Initial permission check for sudo commands
         has_sudo_commands = any(
@@ -267,18 +455,18 @@ class AppInstallProgressModal(ModalScreen):
 
         if has_sudo_commands:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self._append_log(log_widget,f"[{timestamp}] Checking sudo permissions...")
+            self._append_log(None,f"[{timestamp}] Checking sudo permissions...")
 
             if self.sudo_manager and self.sudo_manager.is_verified():
-                self._append_log(log_widget,"[green]✅ Sudo permissions verified, using cached permissions[/green]")
+                self._append_log(None,"[green]✅ Sudo permissions verified, using cached permissions[/green]")
             elif not self.sudo_manager:
                 # No sudo manager, fallback to original check method
                 if not self.app_installer.check_sudo_available():
-                    self._append_log(log_widget,"[red]❌ Sudo permissions required but sudo is unavailable or user lacks permissions[/red]")
-                    self._append_log(log_widget,"[yellow]Please ensure:[/yellow]")
-                    self._append_log(log_widget,"[yellow]1. System has sudo installed[/yellow]")
-                    self._append_log(log_widget,"[yellow]2. Current user is in sudo group[/yellow]")
-                    self._append_log(log_widget,"[yellow]3. Sudo authentication is cached (try running 'sudo -v' manually)[/yellow]")
+                    self._append_log(None,"[red]❌ Sudo permissions required but sudo is unavailable or user lacks permissions[/red]")
+                    self._append_log(None,"[yellow]Please ensure:[/yellow]")
+                    self._append_log(None,"[yellow]1. System has sudo installed[/yellow]")
+                    self._append_log(None,"[yellow]2. Current user is in sudo group[/yellow]")
+                    self._append_log(None,"[yellow]3. Sudo authentication is cached (try running 'sudo -v' manually)[/yellow]")
 
                     # Mark all tasks as failed
                     for task in self.tasks:
@@ -290,10 +478,10 @@ class AppInstallProgressModal(ModalScreen):
                     self._enable_close_button()
                     return
                 else:
-                    self._append_log(log_widget,"[green]✅ Sudo permissions verified[/green]")
+                    self._append_log(None,"[green]✅ Sudo permissions verified[/green]")
             else:
                 # Has sudo manager but not verified, this situation should not happen
-                self._append_log(log_widget,"[red]❌ Sudo permission manager not properly initialized[/red]")
+                self._append_log(None,"[red]❌ Sudo permission manager not properly initialized[/red]")
                 # Mark all tasks as failed
                 for task in self.tasks:
                     task["status"] = "failed"
@@ -313,7 +501,7 @@ class AppInstallProgressModal(ModalScreen):
 
             # Log start
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self._append_log(log_widget,f"[{timestamp}] Starting: {task['name']}")
+            self._append_log(None,f"[{timestamp}] Starting: {task['name']}")
 
             # Get the action and application
             action = task["action"]
@@ -330,9 +518,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
+                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
 
-                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
+                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute installation
                         initial_progress = 40
@@ -346,7 +534,7 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 70)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, log_widget, update_install_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, None, update_install_progress)
                         
                         if success:
                             task["progress"] = 70
@@ -354,7 +542,7 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Execute post-install if any
                             if app.post_install:
-                                self._append_log(log_widget,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
+                                self._append_log(None,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
 
                                 # Create progress callback for post-install (70-100%)
                                 def update_postinstall_progress(percentage):
@@ -362,13 +550,13 @@ class AppInstallProgressModal(ModalScreen):
                                     task["progress"] = min(task_progress, 100)
                                     self._update_progress(i, task["progress"])
 
-                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget, update_postinstall_progress)
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, None, update_postinstall_progress)
                                 if not post_success:
-                                    self._append_log(log_widget,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
+                                    self._append_log(None,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(log_widget,f"[green]✅ {app.name} installed successfully[/green]")
+                            self._append_log(None,f"[green]✅ {app.name} installed successfully[/green]")
 
                             # Log successful installation
                             self.app_installer.log_installation_event(
@@ -382,9 +570,9 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                self._append_log(log_widget,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
+                                self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
-                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+                                self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -404,16 +592,16 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(log_widget,f"[red]❌ {app.name} installation failed[/red]")
-                            self._append_log(log_widget,"")
+                            self._append_log(None,f"[red]❌ {app.name} installation failed[/red]")
+                            self._append_log(None,"")
 
                             # Show raw error output first for debugging
                             if output and len(output.strip()) > 0:
-                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                self._append_log(None,"[red]🔍 Raw error output:[/red]")
                                 for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
                                     if line.strip():
-                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
-                                self._append_log(log_widget,"")
+                                        self._append_log(None,f"[dim]  {line}[/dim]")
+                                self._append_log(None,"")
 
                             # Generate user-friendly error analysis
                             friendly_error = self.app_installer.analyze_error_and_suggest_solution(
@@ -424,19 +612,19 @@ class AppInstallProgressModal(ModalScreen):
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        self._append_log(log_widget,f"[red]{line}[/red]")
+                                        self._append_log(None,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
+                                        self._append_log(None,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
+                                        self._append_log(None,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
+                                        self._append_log(None,f"[yellow]{line}[/yellow]")
                                     else:
-                                        self._append_log(log_widget,line)
+                                        self._append_log(None,line)
                     else:
                         task["status"] = "failed"
                         task["message"] = "Cannot get installation command"
-                        self._append_log(log_widget,f"[red]Error: Cannot get installation command for {app.name}[/red]")
+                        self._append_log(None,f"[red]Error: Cannot get installation command for {app.name}[/red]")
                 
                 else:  # uninstall
                     # Get uninstall command
@@ -444,9 +632,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
+                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
 
-                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
+                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute uninstallation
                         initial_progress = 50
@@ -460,18 +648,18 @@ class AppInstallProgressModal(ModalScreen):
                             task["progress"] = min(task_progress, 100)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, log_widget, update_uninstall_progress)
+                        success, output = await self._execute_command_with_sudo_support(command, None, update_uninstall_progress)
 
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(log_widget,f"[green]✅ {app.name} uninstalled successfully[/green]")
+                            self._append_log(None,f"[green]✅ {app.name} uninstalled successfully[/green]")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
-                                self._append_log(log_widget,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
+                                self._append_log(None,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
-                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
+                                self._append_log(None,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -481,39 +669,39 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(log_widget,f"[red]❌ {app.name} uninstallation failed[/red]")
-                            self._append_log(log_widget,"")
+                            self._append_log(None,f"[red]❌ {app.name} uninstallation failed[/red]")
+                            self._append_log(None,"")
 
                             # Show raw error output first for debugging
                             if output and len(output.strip()) > 0:
-                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                self._append_log(None,"[red]🔍 Raw error output:[/red]")
                                 for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
                                     if line.strip():
-                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
-                                self._append_log(log_widget,"")
+                                        self._append_log(None,f"[dim]  {line}[/dim]")
+                                self._append_log(None,"")
 
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        self._append_log(log_widget,f"[red]{line}[/red]")
+                                        self._append_log(None,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
+                                        self._append_log(None,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
+                                        self._append_log(None,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
+                                        self._append_log(None,f"[yellow]{line}[/yellow]")
                                     else:
-                                        self._append_log(log_widget,line)
+                                        self._append_log(None,line)
                     else:
                         task["status"] = "failed"
                         task["message"] = "Cannot get uninstall command"
-                        self._append_log(log_widget,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
+                        self._append_log(None,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
             
             except Exception as e:
                 task["status"] = "failed"
                 task["message"] = str(e)
-                self._append_log(log_widget,f"[red]Error: {str(e)}[/red]")
+                self._append_log(None,f"[red]Error: {str(e)}[/red]")
             
             self._update_task_display(i)
             self._update_progress(i, task["progress"])
@@ -527,14 +715,14 @@ class AppInstallProgressModal(ModalScreen):
         successful = sum(1 for t in self.tasks if t["status"] == "success")
         failed = sum(1 for t in self.tasks if t["status"] == "failed")
         
-        self._append_log(log_widget,"")
-        self._append_log(log_widget,f"[{timestamp}] " + "="*50)
-        self._append_log(log_widget,f"[bold]Installation completed: {successful} successful, {failed} failed[/bold]")
+        self._append_log(None,"")
+        self._append_log(None,f"[{timestamp}] " + "="*50)
+        self._append_log(None,f"[bold]Installation completed: {successful} successful, {failed} failed[/bold]")
         
         if failed == 0:
-            self._append_log(log_widget,"[green]✅ All tasks completed successfully![/green]")
+            self._append_log(None,"[green]✅ All tasks completed successfully![/green]")
         else:
-            self._append_log(log_widget,"[yellow]⚠️ Some tasks failed, please check logs for details.[/yellow]")
+            self._append_log(None,"[yellow]⚠️ Some tasks failed, please check logs for details.[/yellow]")
 
         # End logging session
         try:
@@ -548,7 +736,7 @@ class AppInstallProgressModal(ModalScreen):
             self.app_installer.end_logging_session()
 
         except Exception as e:
-            self._append_log(log_widget,f"[yellow]⚠️ Log session end failed: {e}[/yellow]")
+            self._append_log(None,f"[yellow]⚠️ Log session end failed: {e}[/yellow]")
     
     def _command_needs_sudo(self, task: Dict) -> bool:
         """Check if task needs sudo permissions.
@@ -576,7 +764,7 @@ class AppInstallProgressModal(ModalScreen):
             task: Task dictionary
 
         Returns:
-            True如果需要sudo权限，False否则
+            True if sudo privileges are required, False otherwise
         """
         action = task["action"]
         app = action["application"]
@@ -605,19 +793,19 @@ class AppInstallProgressModal(ModalScreen):
                 if not self.sudo_manager.is_verified():
                     error_msg = "Sudo permissions not verified"
                     if log_widget:
-                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                        self._append_log(None,f"[red]❌ {error_msg}[/red]")
                     return False, error_msg
 
                 # Use sudo manager to execute command, but need to implement real-time output support
-                return await self._execute_sudo_command_with_output(command, log_widget, progress_callback)
+                return await self._execute_sudo_command_with_output(command, None, progress_callback)
             else:
                 # Use original execution method
-                return await self._execute_command_async(command, log_widget, progress_callback)
+                return await self._execute_command_async(command, None, progress_callback)
 
         except Exception as e:
             error_msg = f"Command execution failed: {str(e)}"
             if log_widget:
-                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                self._append_log(None,f"[red]❌ {error_msg}[/red]")
             return False, error_msg
 
     async def _execute_sudo_command_with_output(self, command: str, log_widget=None, progress_callback=None) -> tuple:
@@ -637,23 +825,23 @@ class AppInstallProgressModal(ModalScreen):
                 if self.sudo_manager.is_sudo_required(command):
                     clean_command = self.sudo_manager._remove_sudo_from_command(command)
                     if log_widget:
-                        self._append_log(log_widget,f"[dim]🔑 Root user executing: {clean_command}[/dim]")
-                    return await self._execute_command_async(clean_command, log_widget, progress_callback)
+                        self._append_log(None,f"[dim]🔑 Root user executing: {clean_command}[/dim]")
+                    return await self._execute_command_async(clean_command, None, progress_callback)
                 else:
-                    return await self._execute_command_async(command, log_widget, progress_callback)
+                    return await self._execute_command_async(command, None, progress_callback)
 
             # Non-root user, need to use sudo password
             password = self.sudo_manager._decrypt_password(self.sudo_manager._password)
             if not password:
                 error_msg = "Failed to decrypt sudo password"
                 if log_widget:
-                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    self._append_log(None,f"[red]❌ {error_msg}[/red]")
                 return False, error_msg
 
             if log_widget:
-                self._append_log(log_widget,f"[dim]🔐 Executing with sudo: {command}[/dim]")
+                self._append_log(None,f"[dim]🔐 Executing with sudo: {command}[/dim]")
 
-            # 创建带密码输入的subprocess
+            # Create subprocess with password input
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdin=asyncio.subprocess.PIPE,
@@ -705,18 +893,18 @@ class AppInstallProgressModal(ModalScreen):
                         if log_widget:
                             # Color-code different types of output
                             if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
-                                self._append_log(log_widget,f"[red]  📄 {line}[/red]")
+                                self._append_log(None,f"[red]  📄 {line}[/red]")
                                 error_occurred = True
                             elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self._append_log(log_widget,f"[yellow]  📄 {line}[/yellow]")
+                                self._append_log(None,f"[yellow]  📄 {line}[/yellow]")
                             elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self._append_log(log_widget,f"[blue]  📦 {line}[/blue]")
+                                self._append_log(None,f"[blue]  📦 {line}[/blue]")
                             elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self._append_log(log_widget,f"[green]  ✅ {line}[/green]")
+                                self._append_log(None,f"[green]  ✅ {line}[/green]")
                             elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self._append_log(log_widget,f"[cyan]  ⚙️ {line}[/cyan]")
+                                self._append_log(None,f"[cyan]  ⚙️ {line}[/cyan]")
                             else:
-                                self._append_log(log_widget,f"[dim]  📄 {line}[/dim]")
+                                self._append_log(None,f"[dim]  📄 {line}[/dim]")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -739,7 +927,7 @@ class AppInstallProgressModal(ModalScreen):
                 await process.wait()
                 error_msg = "Command execution timeout (4.5 minutes)"
                 if log_widget:
-                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    self._append_log(None,f"[red]❌ {error_msg}[/red]")
                 return False, error_msg
 
             # Command completed - set progress to 100%
@@ -758,7 +946,7 @@ class AppInstallProgressModal(ModalScreen):
             else:
                 # Failure - provide detailed error information
                 if log_widget:
-                    self._append_log(log_widget,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
+                    self._append_log(None,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
 
                 if error_occurred or output_lines:
                     # Extract error lines for detailed reporting
@@ -767,24 +955,24 @@ class AppInstallProgressModal(ModalScreen):
                     if error_lines:
                         detailed_error = "\n".join(error_lines[-3:])  # Last 3 error lines
                         if log_widget:
-                            self._append_log(log_widget,f"[red]🔍 Error details: {detailed_error}[/red]")
+                            self._append_log(None,f"[red]🔍 Error details: {detailed_error}[/red]")
                         return False, detailed_error
                     else:
                         # No specific error lines, return last output lines
                         last_output = "\n".join(output_lines[-2:]) if output_lines else f"Command failed with exit code: {process.returncode}"
                         if log_widget:
-                            self._append_log(log_widget,f"[red]📋 Last output: {last_output}[/red]")
+                            self._append_log(None,f"[red]📋 Last output: {last_output}[/red]")
                         return False, last_output
                 else:
                     error_msg = f"Command failed with exit code: {process.returncode}"
                     if log_widget:
-                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                        self._append_log(None,f"[red]❌ {error_msg}[/red]")
                     return False, error_msg
 
         except Exception as e:
             error_msg = f"Sudo command execution error: {str(e)}"
             if log_widget:
-                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                self._append_log(None,f"[red]❌ {error_msg}[/red]")
             return False, error_msg
 
     async def _execute_command_async(self, command: str, log_widget=None, progress_callback=None) -> tuple:
@@ -845,19 +1033,19 @@ class AppInstallProgressModal(ModalScreen):
                         # Real-time log display if widget provided
                         if log_widget:
                             # Color-code different types of output
-                            if any(keyword in line.lower() for keyword in ['error', '错误', 'failed', '失败', 'permission denied', 'access denied', 'cannot', 'unable']):
-                                self._append_log(log_widget,f"[red]  📄 {line}[/red]")
+                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable']):
+                                self._append_log(None,f"[red]  📄 {line}[/red]")
                                 error_occurred = True
                             elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self._append_log(log_widget,f"[yellow]  📄 {line}[/yellow]")
+                                self._append_log(None,f"[yellow]  📄 {line}[/yellow]")
                             elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self._append_log(log_widget,f"[blue]  📦 {line}[/blue]")
+                                self._append_log(None,f"[blue]  📦 {line}[/blue]")
                             elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self._append_log(log_widget,f"[green]  ✅ {line}[/green]")
+                                self._append_log(None,f"[green]  ✅ {line}[/green]")
                             elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self._append_log(log_widget,f"[cyan]  ⚙️ {line}[/cyan]")
+                                self._append_log(None,f"[cyan]  ⚙️ {line}[/cyan]")
                             else:
-                                self._append_log(log_widget,f"[dim]  📄 {line}[/dim]")
+                                self._append_log(None,f"[dim]  📄 {line}[/dim]")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -875,7 +1063,7 @@ class AppInstallProgressModal(ModalScreen):
                 await process.wait()
                 error_msg = "Command execution timeout (4.5 minutes)"
                 if log_widget:
-                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    self._append_log(None,f"[red]❌ {error_msg}[/red]")
                 return False, error_msg
 
             # Command completed - set progress to 100%
@@ -886,7 +1074,7 @@ class AppInstallProgressModal(ModalScreen):
             if process.returncode == 0:
                 # Success
                 if not output_lines:
-                    return True, "命令执行成功"
+                    return True, "Command executed successfully"
                 else:
                     # Return last few lines as summary
                     summary_lines = output_lines[-3:] if len(output_lines) > 3 else output_lines
@@ -894,43 +1082,43 @@ class AppInstallProgressModal(ModalScreen):
             else:
                 # Failure - provide detailed error information
                 if log_widget:
-                    self._append_log(log_widget,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
+                    self._append_log(None,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
 
                 if error_occurred or output_lines:
                     # Extract error lines for detailed reporting
                     error_lines = [line for line in output_lines if any(keyword in line.lower() for keyword in
-                                 ['error', '错误', 'failed', '失败', 'permission denied', 'access denied', 'cannot', 'unable', 'not found', 'no such'])]
+                                 ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable', 'not found', 'no such'])]
                     if error_lines:
                         detailed_error = "\n".join(error_lines[-3:])  # Last 3 error lines
                         if log_widget:
-                            self._append_log(log_widget,f"[red]🔍 Error details: {detailed_error}[/red]")
+                            self._append_log(None,f"[red]🔍 Error details: {detailed_error}[/red]")
                         return False, detailed_error
                     else:
                         # No specific error lines, return last output lines
                         last_output = "\n".join(output_lines[-2:]) if output_lines else f"Command failed with exit code: {process.returncode}"
                         if log_widget:
-                            self._append_log(log_widget,f"[red]📋 Last output: {last_output}[/red]")
+                            self._append_log(None,f"[red]📋 Last output: {last_output}[/red]")
                         return False, last_output
                 else:
                     error_msg = f"Command failed with exit code: {process.returncode}"
                     if log_widget:
-                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                        self._append_log(None,f"[red]❌ {error_msg}[/red]")
                     return False, error_msg
 
         except FileNotFoundError:
             error_msg = "Command not found or cannot execute"
             if log_widget:
-                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                self._append_log(None,f"[red]❌ {error_msg}[/red]")
             return False, error_msg
         except PermissionError:
             error_msg = "Permission denied, cannot execute command"
             if log_widget:
-                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                self._append_log(None,f"[red]❌ {error_msg}[/red]")
             return False, error_msg
         except Exception as e:
             error_msg = f"Execution error: {str(e)}"
             if log_widget:
-                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                self._append_log(None,f"[red]❌ {error_msg}[/red]")
             return False, error_msg
 
     def _estimate_progress_from_output(self, line: str, line_count: int, command: str) -> int:
@@ -1024,8 +1212,8 @@ class AppInstallProgressModal(ModalScreen):
         pass
     
     def _enable_close_button(self) -> None:
-        """任务完成后启用键盘快捷键操作（原按钮功能）."""
-        # 检查是否有失败的任务
+        """Enable keyboard shortcuts after tasks completion (original button functionality)."""
+        # Check if there are any failed tasks
         failed_tasks = [task for task in self.tasks if task["status"] == "failed"]
         if failed_tasks:
             self.has_failed_tasks = True
@@ -1037,20 +1225,20 @@ class AppInstallProgressModal(ModalScreen):
 
     def _start_retry_process(self) -> None:
         """Start the retry process for failed tasks."""
-        log_widget = self.query_one("#log-output", TextArea)
+        # No longer need to query for log widget - use add_log_line directly
 
         # Find failed tasks
         failed_tasks = [task for task in self.tasks if task["status"] == "failed"]
         if not failed_tasks:
-            self._append_log(log_widget,"[yellow]没有失败的任务需要重试[/yellow]")
+            self._append_log(None, "[yellow]No failed tasks to retry[/yellow]")
             return
 
         # Log retry start
         timestamp = datetime.now().strftime("%H:%M:%S")
-        self._append_log(log_widget,"")
-        self._append_log(log_widget,f"[{timestamp}] " + "="*30)
-        self._append_log(log_widget,f"[bold blue]🔄 开始重试 {len(failed_tasks)} 个失败任务[/bold blue]")
-        self._append_log(log_widget,"="*50)
+        self._append_log(None,"")
+        self._append_log(None,f"[{timestamp}] " + "="*30)
+        self._append_log(None,f"[bold blue]🔄 Starting retry for {len(failed_tasks)} failed tasks[/bold blue]")
+        self._append_log(None,"="*50)
 
         # Reset failed tasks status
         for task in failed_tasks:
@@ -1068,7 +1256,7 @@ class AppInstallProgressModal(ModalScreen):
     @work(exclusive=True, thread=True)
     async def _start_retry_processing(self, retry_tasks: List[Dict]) -> None:
         """Process retry tasks."""
-        log_widget = self.query_one("#log-output", TextArea)
+        # No longer need to query for log widget - use add_log_line directly
 
         for task in retry_tasks:
             task_index = self.tasks.index(task)
@@ -1080,7 +1268,7 @@ class AppInstallProgressModal(ModalScreen):
 
             # Log start
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self._append_log(log_widget,f"[{timestamp}] 重试: {task['name']}")
+            self._append_log(None,f"[{timestamp}] Retry: {task['name']}")
 
             # Get the action and application
             action = task["action"]
@@ -1097,15 +1285,15 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
+                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
 
-                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
+                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute installation
                         task["progress"] = 40
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, log_widget)
+                        success, output = await self._execute_command_with_sudo_support(command, None)
 
                         if success:
                             task["progress"] = 70
@@ -1113,20 +1301,20 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Execute post-install if any
                             if app.post_install:
-                                self._append_log(log_widget,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
-                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget)
+                                self._append_log(None,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
+                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, None)
                                 if not post_success:
-                                    self._append_log(log_widget,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
+                                    self._append_log(None,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(log_widget,f"[green]✅ {app.name} re-installed successfully[/green]")
+                            self._append_log(None,f"[green]✅ {app.name} re-installed successfully[/green]")
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                self._append_log(log_widget,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
+                                self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
-                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+                                self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1136,34 +1324,34 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(log_widget,f"[red]❌ {app.name} retry installation failed[/red]")
-                            self._append_log(log_widget,"")
+                            self._append_log(None,f"[red]❌ {app.name} retry installation failed[/red]")
+                            self._append_log(None,"")
 
                             # Show raw error output first for debugging
                             if output and len(output.strip()) > 0:
-                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                self._append_log(None,"[red]🔍 Raw error output:[/red]")
                                 for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
                                     if line.strip():
-                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
-                                self._append_log(log_widget,"")
+                                        self._append_log(None,f"[dim]  {line}[/dim]")
+                                self._append_log(None,"")
 
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        self._append_log(log_widget,f"[red]{line}[/red]")
+                                        self._append_log(None,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
+                                        self._append_log(None,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
+                                        self._append_log(None,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
+                                        self._append_log(None,f"[yellow]{line}[/yellow]")
                                     else:
-                                        self._append_log(log_widget,line)
+                                        self._append_log(None,line)
                     else:
                         task["status"] = "failed"
                         task["message"] = "Cannot get installation command"
-                        self._append_log(log_widget,f"[red]Error: Cannot get installation command for {app.name}[/red]")
+                        self._append_log(None,f"[red]Error: Cannot get installation command for {app.name}[/red]")
 
                 else:  # uninstall
                     # Get uninstall command
@@ -1171,26 +1359,26 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
+                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
 
-                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
+                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute uninstallation
                         task["progress"] = 50
                         self._update_progress(task_index, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, log_widget)
+                        success, output = await self._execute_command_with_sudo_support(command, None)
 
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(log_widget,f"[green]✅ {app.name} re-uninstalled successfully[/green]")
+                            self._append_log(None,f"[green]✅ {app.name} re-uninstalled successfully[/green]")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
-                                self._append_log(log_widget,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
+                                self._append_log(None,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
-                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
+                                self._append_log(None,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1200,39 +1388,39 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(log_widget,f"[red]❌ {app.name} retry uninstallation failed[/red]")
-                            self._append_log(log_widget,"")
+                            self._append_log(None,f"[red]❌ {app.name} retry uninstallation failed[/red]")
+                            self._append_log(None,"")
 
                             # Show raw error output first for debugging
                             if output and len(output.strip()) > 0:
-                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                self._append_log(None,"[red]🔍 Raw error output:[/red]")
                                 for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
                                     if line.strip():
-                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
-                                self._append_log(log_widget,"")
+                                        self._append_log(None,f"[dim]  {line}[/dim]")
+                                self._append_log(None,"")
 
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        self._append_log(log_widget,f"[red]{line}[/red]")
+                                        self._append_log(None,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
+                                        self._append_log(None,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
+                                        self._append_log(None,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
+                                        self._append_log(None,f"[yellow]{line}[/yellow]")
                                     else:
-                                        self._append_log(log_widget,line)
+                                        self._append_log(None,line)
                     else:
                         task["status"] = "failed"
                         task["message"] = "Cannot get uninstall command"
-                        self._append_log(log_widget,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
+                        self._append_log(None,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
 
             except Exception as e:
                 task["status"] = "failed"
                 task["message"] = str(e)
-                self._append_log(log_widget,f"[red]Error: {str(e)}[/red]")
+                self._append_log(None,f"[red]Error: {str(e)}[/red]")
 
             self._update_task_display(task_index)
             self._update_progress(task_index, task["progress"])
@@ -1246,34 +1434,63 @@ class AppInstallProgressModal(ModalScreen):
         retry_successful = sum(1 for t in retry_tasks if t["status"] == "success")
         retry_failed = sum(1 for t in retry_tasks if t["status"] == "failed")
 
-        self._append_log(log_widget,"")
-        self._append_log(log_widget,f"[{timestamp}] " + "="*50)
-        self._append_log(log_widget,f"[bold]重试完成: {retry_successful} 成功, {retry_failed} 失败[/bold]")
+        self._append_log(None,"")
+        self._append_log(None,f"[{timestamp}] " + "="*50)
+        self._append_log(None,f"[bold]Retry completed: {retry_successful} successful, {retry_failed} failed[/bold]")
 
         if retry_failed == 0:
-            self._append_log(log_widget,"[green]🎉 All retry tasks completed successfully![/green]")
+            self._append_log(None,"[green]🎉 All retry tasks completed successfully![/green]")
         else:
-            self._append_log(log_widget,f"[yellow]⚠️ {retry_failed} tasks still failed, can retry again.[/yellow]")
+            self._append_log(None,f"[yellow]⚠️ {retry_failed} tasks still failed, can retry again.[/yellow]")
     
     def action_dismiss(self) -> None:
         """Dismiss the modal (only if completed)."""
         if self.all_completed:
+            # Write session summary to log file before dismissing
+            self._write_session_summary()
             self.dismiss()
+
+    def _write_session_summary(self) -> None:
+        """Write session summary to the independent log file."""
+        try:
+            from datetime import datetime
+
+            # Count results
+            successful_count = sum(1 for task in self.tasks if task["status"] == "success")
+            failed_count = sum(1 for task in self.tasks if task["status"] == "failed")
+
+            self._write_to_log_file("=" * 50)
+            self._write_to_log_file("=== Session Summary ===")
+            self._write_to_log_file(f"Session ended: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self._write_to_log_file(f"Total tasks: {len(self.tasks)}")
+            self._write_to_log_file(f"Successful: {successful_count}")
+            self._write_to_log_file(f"Failed: {failed_count}")
+
+            if failed_count > 0:
+                self._write_to_log_file("Failed tasks:")
+                for task in self.tasks:
+                    if task["status"] == "failed":
+                        self._write_to_log_file(f"  - {task['name']}: {task.get('message', 'No details')}")
+
+            self._write_to_log_file("=" * 50)
+            print(f"DEBUG: Session summary written to: {self.progress_log_file}")
+        except Exception as e:
+            print(f"Failed to write session summary: {e}")
 
     def action_scroll_down(self) -> None:
         """Scroll the log output down."""
         try:
-            log_widget = self.query_one("#log-output", TextArea)
-            log_widget.scroll_down(animate=False)
+            content_area = self.query_one("#log-container", ScrollableContainer)
+            content_area.scroll_down(animate=False)
         except Exception:
-            # If log widget not available yet, ignore
+            # If container not available yet, ignore
             pass
 
     def action_scroll_up(self) -> None:
         """Scroll the log output up."""
         try:
-            log_widget = self.query_one("#log-output", TextArea)
-            log_widget.scroll_up(animate=False)
+            content_area = self.query_one("#log-container", ScrollableContainer)
+            content_area.scroll_up(animate=False)
         except Exception:
-            # If log widget not available yet, ignore
+            # If container not available yet, ignore
             pass

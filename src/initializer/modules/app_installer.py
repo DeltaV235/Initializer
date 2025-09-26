@@ -1593,3 +1593,55 @@ class AppInstaller:
             List of supported format strings
         """
         return ["json", "yaml", "txt", "html"]
+
+    def save_installation_status(self, app_name: str, installed: bool) -> bool:
+        """Save installation status for an application.
+
+        Args:
+            app_name: Name of the application
+            installed: Installation status (True if installed, False if uninstalled)
+
+        Returns:
+            True if status was saved successfully, False otherwise
+        """
+        try:
+            self.logger.debug(f"Saving installation status for {app_name}: {installed}")
+
+            # Find the application and update its status
+            updated = False
+            for app in self.applications:
+                if app.name == app_name:
+                    app.installed = installed
+                    updated = True
+                    self.logger.debug(f"Updated application {app_name} status to {installed}")
+                    break
+
+            # Also update in software_items if it's in a suite
+            for item in self.software_items:
+                if isinstance(item, ApplicationSuite):
+                    for component in item.components:
+                        if component.name == app_name:
+                            component.installed = installed
+                            updated = True
+                            self.logger.debug(f"Updated suite component {app_name} status to {installed}")
+                            break
+
+            if not updated:
+                self.logger.warning(f"Application {app_name} not found in current configuration")
+                return False
+
+            # Log the status change as an installation event
+            action = "install" if installed else "uninstall"
+            status = "completed" if installed else "removed"
+            self.log_installation_event(
+                LogLevel.INFO,
+                f"Application {app_name} {status}",
+                application=app_name,
+                action=f"status_{action}"
+            )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to save installation status for {app_name}: {str(e)}")
+            return False

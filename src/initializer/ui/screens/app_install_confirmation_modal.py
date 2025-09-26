@@ -211,7 +211,17 @@ class AppInstallConfirmationModal(ModalScreen):
                 # 需要sudo权限，进行权限验证流程
                 self.logger.info("=== Sudo verification required ===")
                 self.logger.info("Starting sudo verification process")
-                success = await self._handle_sudo_verification()
+
+                # 如果是root用户，创建伪造的验证成功状态
+                if self.sudo_manager.is_root_user():
+                    self.logger.info("Root用户跳过密码验证，直接设置验证状态")
+                    # Root用户不需要密码验证，直接标记为已验证
+                    self.sudo_manager._verified = True
+                    success = True
+                else:
+                    # 非root用户进行正常的密码验证流程
+                    success = await self._handle_sudo_verification()
+
                 self.logger.info(f"=== Sudo verification completed - Result: {success} ===")
 
                 if success:
@@ -255,10 +265,16 @@ class AppInstallConfirmationModal(ModalScreen):
         """检查是否有命令需要sudo权限.
 
         Returns:
-            True如果有命令需要sudo权限，False否则
+            True如果有命令需要sudo权限且不是root用户，False否则
         """
         try:
             self.logger.debug("Checking if sudo is required for actions")
+
+            # 如果是root用户，直接返回False（不需要sudo权限验证）
+            if self.sudo_manager.is_root_user():
+                self.logger.info("当前用户是root，无需sudo权限验证")
+                return False
+
             for action in self.actions:
                 app = action["application"]
 
