@@ -4,7 +4,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar, RichLog
+from textual.widgets import Button, Static, Rule, Label, ProgressBar, TextArea
 from textual.reactive import reactive
 from textual.events import Key
 from typing import List, Dict, Optional
@@ -20,10 +20,11 @@ class AppInstallProgressModal(ModalScreen):
     BINDINGS = [
         ("escape", "close", "Close"),
         ("r", "retry_failed", "Retry Failed"),
-        ("l", "export_logs", "Export Logs"),
+        ("j", "scroll_down", "Scroll Down"),
+        ("k", "scroll_up", "Scroll Up"),
     ]
     
-    # CSS 样式与 Package 模块保持一致
+    # CSS styles consistent with Package module
     CSS = """
     AppInstallProgressModal {
         align: center middle;
@@ -38,65 +39,19 @@ class AppInstallProgressModal(ModalScreen):
         min-height: 1;
     }
 
-    #task-container {
-        height: auto;
-        max-height: 8;
-        overflow-y: auto;
-        padding: 1;
-        margin: 0 0 1 0;
-        border: round $primary;
-        background: $surface;
-    }
-
-    .task-item {
-        layout: horizontal;
-        height: 2;
-        margin: 0 0 1 0;
-        background: $surface;
-    }
-
-    .task-name {
-        width: 30%;
-        padding: 0 1 0 0;
-        color: $text;
-    }
-
-    .task-status {
-        width: 15%;
-        padding: 0 1 0 0;
-    }
-
-    .task-progress {
-        width: 55%;
-    }
-
-    #progress-container {
-        height: 3;
-        padding: 1;
-        margin: 0 0 1 0;
-        border: round $primary;
-        background: $surface;
-    }
-
     #log-container {
         height: 1fr;
         border: round $primary;
-        padding: 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: $surface;
     }
 
     #log-output {
         height: 100%;
+        padding: 1;
         background: $surface;
-    }
-
-    #button-container {
-        layout: horizontal;
-        align: center middle;
-        height: 3;
-        margin: 1 0 1 0;
-        background: $surface;
+        border: none;
     }
 
     .section-divider {
@@ -142,16 +97,6 @@ class AppInstallProgressModal(ModalScreen):
         background: $surface;
         text-style: none;
     }
-
-    #help-box {
-        dock: bottom;
-        width: 100%;
-        height: 3;
-        border: round white;
-        background: $surface;
-        padding: 0 1;
-        margin: 0;
-    }
     """
     
     # Reactive properties
@@ -168,7 +113,7 @@ class AppInstallProgressModal(ModalScreen):
 
             self.actions = actions
             self.app_installer = app_installer
-            self.sudo_manager = sudo_manager  # 可选的sudo管理器
+            self.sudo_manager = sudo_manager  # Optional sudo manager
 
             print("DEBUG: Basic attributes set successfully")
 
@@ -177,7 +122,7 @@ class AppInstallProgressModal(ModalScreen):
             for i, action in enumerate(actions):
                 print(f"DEBUG: Processing action {i}: {action}")
                 app = action["application"]
-                task_name = f"{'安装' if action['action'] == 'install' else '卸载'} {app.name}"
+                task_name = f"{'Installing' if action['action'] == 'install' else 'Uninstalling'} {app.name}"
                 self.tasks.append({
                     "name": task_name,
                     "action": action,
@@ -193,7 +138,24 @@ class AppInstallProgressModal(ModalScreen):
             import traceback
             traceback.print_exc()
             raise
-    
+
+    def _append_log(self, log_widget: TextArea, message: str) -> None:
+        """Append a log message to the TextArea widget.
+
+        Args:
+            log_widget: The TextArea widget to append to
+            message: The message to append (supports Rich markup)
+        """
+        current_text = log_widget.text
+        if current_text:
+            # Add newline if there's existing content
+            new_text = current_text + "\n" + message
+        else:
+            new_text = message
+        log_widget.text = new_text
+        # Scroll to bottom to show latest message
+        log_widget.scroll_end(animate=False)
+
     def on_mount(self) -> None:
         """Initialize the screen and start processing."""
         self._start_processing()
@@ -214,6 +176,18 @@ class AppInstallProgressModal(ModalScreen):
             self.dismiss()
             event.prevent_default()
             event.stop()
+        elif event.key == "r" and self.has_failed_tasks and self.all_completed:
+            self.action_retry_failed()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "j":
+            self.action_scroll_down()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "k":
+            self.action_scroll_up()
+            event.prevent_default()
+            event.stop()
     
     def compose(self) -> ComposeResult:
         """Compose the modal interface."""
@@ -222,60 +196,32 @@ class AppInstallProgressModal(ModalScreen):
             print(f"DEBUG: Tasks count: {len(self.tasks)}")
 
             with Container(classes="modal-container-lg"):
-                yield Static("📦 应用安装进度", id="modal-title")
-                yield Rule(classes="section-divider")
+                yield Static("📦 Application Installation Progress", id="modal-title")
 
                 print("DEBUG: Basic elements created")
 
-                # Task list (for multiple tasks)
-                if len(self.tasks) > 1:
-                    print("DEBUG: Creating task list for multiple tasks")
-                    with ScrollableContainer(id="task-container"):
-                        for i, task in enumerate(self.tasks):
-                            print(f"DEBUG: Creating UI for task {i}: {task['name']}")
-                            with Horizontal(classes="task-item"):
-                                yield Static(task["name"], id=f"task-name-{i}", classes="task-name")
-                                yield Static("⏳ 等待中", id=f"task-status-{i}", classes="task-status status-pending")
-                                yield ProgressBar(id=f"task-progress-{i}", classes="task-progress", total=100)
-                            print(f"DEBUG: Task {i} UI created successfully")
-
-                print("DEBUG: Task list completed")
-
-                # 主进度区域
-                print("DEBUG: Creating main progress container")
-                with Container(id="progress-container"):
-                    if len(self.tasks) == 1:
-                        yield Label(f"任务: {self.tasks[0]['name']}", classes="info-key")
-                    else:
-                        yield Label("总体进度", classes="info-key")
-                    yield ProgressBar(id="main-progress", total=100)
-
-                print("DEBUG: Main progress container completed")
-
                 yield Rule(classes="section-divider")
 
-                # 安装日志区域
+                # Installation log area
                 print("DEBUG: Creating log output")
-                yield Label("📋 安装日志:", classes="info-key")
+                yield Label("📋 Installation Logs:", classes="info-key")
                 with Container(id="log-container"):
-                    yield RichLog(id="log-output", highlight=True, markup=True, wrap=True)
+                    yield TextArea(
+                        id="log-output",
+                        read_only=True,
+                        show_line_numbers=False,
+                        soft_wrap=True,
+                        language=None
+                    )
 
                 print("DEBUG: Log output created")
 
-                # 操作按钮区域
-                print("DEBUG: Creating buttons")
-                with Horizontal(id="button-container"):
-                    yield Button("重试失败任务 (R)", id="retry-failed", variant="warning", disabled=True)
-                    yield Static("  ")  # Spacer
-                    yield Button("导出日志 (L)", id="export-logs", variant="success", disabled=True)
-                    yield Static("  ")  # Spacer
-                    yield Button("关闭 (ESC)", id="close", variant="default", disabled=True)
+                # After log output completion, no operation button area is added, all changed to keyboard shortcuts
+                print("DEBUG: All elements created, no button container")
 
-                print("DEBUG: All buttons created")
-
-            # 底部帮助区域 - 与 Package 模块保持一致
-            with Container(id="help-box"):
-                yield Label("ESC=关闭 | R=重试失败 | L=导出日志", classes="help-text")
+                # Bottom help area inside modal - consistent with other modals
+                yield Rule(classes="section-divider")
+                yield Label("ESC=Close | R=Retry Failed | J/K=Scroll", classes="help-text")
 
             print("DEBUG: compose() method completed successfully")
         except Exception as e:
@@ -287,7 +233,7 @@ class AppInstallProgressModal(ModalScreen):
     @work(exclusive=True, thread=True)
     async def _start_processing(self) -> None:
         """Process all installation/uninstallation tasks."""
-        log_widget = self.query_one("#log-output", RichLog)
+        log_widget = self.query_one("#log-output", TextArea)
 
         # Start logging session
         try:
@@ -304,15 +250,15 @@ class AppInstallProgressModal(ModalScreen):
             # Log session start
             self.app_installer.log_installation_event(
                 LogLevel.INFO,
-                f"开始安装会话 - 共 {len(self.tasks)} 个任务",
+                f"Starting installation session - {len(self.tasks)} tasks",
                 action="session_start"
             )
 
             timestamp = datetime.now().strftime("%H:%M:%S")
-            log_widget.write(f"[{timestamp}] 📝 日志会话已启动: {session_id}")
+            self._append_log(log_widget,f"[{timestamp}] 📝 Log session started: {session_id}")
 
         except Exception as e:
-            log_widget.write(f"[yellow]⚠️ 日志初始化失败: {e}[/yellow]")
+            self._append_log(log_widget,f"[yellow]⚠️ Log initialization failed: {e}[/yellow]")
 
         # Initial permission check for sudo commands
         has_sudo_commands = any(
@@ -321,37 +267,37 @@ class AppInstallProgressModal(ModalScreen):
 
         if has_sudo_commands:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            log_widget.write(f"[{timestamp}] 检查 sudo 权限...")
+            self._append_log(log_widget,f"[{timestamp}] Checking sudo permissions...")
 
             if self.sudo_manager and self.sudo_manager.is_verified():
-                log_widget.write("[green]✅ sudo 权限已验证，使用缓存权限[/green]")
+                self._append_log(log_widget,"[green]✅ Sudo permissions verified, using cached permissions[/green]")
             elif not self.sudo_manager:
-                # 没有sudo管理器，回退到原有检查方式
+                # No sudo manager, fallback to original check method
                 if not self.app_installer.check_sudo_available():
-                    log_widget.write("[red]❌ 检测到需要 sudo 权限，但 sudo 不可用或用户无权限[/red]")
-                    log_widget.write("[yellow]请确保:[/yellow]")
-                    log_widget.write("[yellow]1. 系统已安装 sudo[/yellow]")
-                    log_widget.write("[yellow]2. 当前用户已加入 sudo 组[/yellow]")
-                    log_widget.write("[yellow]3. 已通过 sudo 认证缓存（可尝试手动运行 'sudo -v'）[/yellow]")
+                    self._append_log(log_widget,"[red]❌ Sudo permissions required but sudo is unavailable or user lacks permissions[/red]")
+                    self._append_log(log_widget,"[yellow]Please ensure:[/yellow]")
+                    self._append_log(log_widget,"[yellow]1. System has sudo installed[/yellow]")
+                    self._append_log(log_widget,"[yellow]2. Current user is in sudo group[/yellow]")
+                    self._append_log(log_widget,"[yellow]3. Sudo authentication is cached (try running 'sudo -v' manually)[/yellow]")
 
                     # Mark all tasks as failed
                     for task in self.tasks:
                         task["status"] = "failed"
-                        task["message"] = "sudo 权限不可用"
+                        task["message"] = "Sudo permissions unavailable"
                         self._update_task_display(self.tasks.index(task))
 
                     self.all_completed = True
                     self._enable_close_button()
                     return
                 else:
-                    log_widget.write("[green]✅ sudo 权限验证通过[/green]")
+                    self._append_log(log_widget,"[green]✅ Sudo permissions verified[/green]")
             else:
-                # 有sudo管理器但未验证，这种情况不应该发生
-                log_widget.write("[red]❌ sudo 权限管理器未正确初始化[/red]")
+                # Has sudo manager but not verified, this situation should not happen
+                self._append_log(log_widget,"[red]❌ Sudo permission manager not properly initialized[/red]")
                 # Mark all tasks as failed
                 for task in self.tasks:
                     task["status"] = "failed"
-                    task["message"] = "sudo 权限管理器未初始化"
+                    task["message"] = "Sudo permission manager not initialized"
                     self._update_task_display(self.tasks.index(task))
 
                 self.all_completed = True
@@ -367,7 +313,7 @@ class AppInstallProgressModal(ModalScreen):
 
             # Log start
             timestamp = datetime.now().strftime("%H:%M:%S")
-            log_widget.write(f"[{timestamp}] 开始: {task['name']}")
+            self._append_log(log_widget,f"[{timestamp}] Starting: {task['name']}")
 
             # Get the action and application
             action = task["action"]
@@ -384,9 +330,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            log_widget.write(f"[yellow]⚠️ 需要管理员权限执行安装命令[/yellow]")
+                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
 
-                        log_widget.write(f"[dim]执行命令: {command}[/dim]")
+                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute installation
                         initial_progress = 40
@@ -408,7 +354,7 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Execute post-install if any
                             if app.post_install:
-                                log_widget.write(f"[dim]执行安装后配置: {app.post_install}[/dim]")
+                                self._append_log(log_widget,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
 
                                 # Create progress callback for post-install (70-100%)
                                 def update_postinstall_progress(percentage):
@@ -418,16 +364,16 @@ class AppInstallProgressModal(ModalScreen):
 
                                 post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget, update_postinstall_progress)
                                 if not post_success:
-                                    log_widget.write(f"[yellow]⚠️ 安装后配置失败: {post_output}[/yellow]")
+                                    self._append_log(log_widget,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            log_widget.write(f"[green]✅ {app.name} 安装成功[/green]")
+                            self._append_log(log_widget,f"[green]✅ {app.name} installed successfully[/green]")
 
                             # Log successful installation
                             self.app_installer.log_installation_event(
                                 LogLevel.SUCCESS,
-                                f"{app.name} 安装成功",
+                                f"{app.name} installed successfully",
                                 application=app.name,
                                 action="install",
                                 command=command,
@@ -436,9 +382,9 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                log_widget.write(f"[dim]  📝 已保存 {app.name} 的安装状态[/dim]")
+                                self._append_log(log_widget,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
-                                log_widget.write(f"[yellow]  ⚠️ 保存 {app.name} 安装状态失败[/yellow]")
+                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -446,7 +392,7 @@ class AppInstallProgressModal(ModalScreen):
                             # Log failed installation
                             self.app_installer.log_installation_event(
                                 LogLevel.ERROR,
-                                f"{app.name} 安装失败",
+                                f"{app.name} installation failed",
                                 application=app.name,
                                 action="install",
                                 command=command,
@@ -458,25 +404,39 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            log_widget.write(f"[red]❌ {app.name} 安装失败[/red]")
-                            log_widget.write("")
+                            self._append_log(log_widget,f"[red]❌ {app.name} installation failed[/red]")
+                            self._append_log(log_widget,"")
+
+                            # Show raw error output first for debugging
+                            if output and len(output.strip()) > 0:
+                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
+                                    if line.strip():
+                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
+                                self._append_log(log_widget,"")
+
+                            # Generate user-friendly error analysis
+                            friendly_error = self.app_installer.analyze_error_and_suggest_solution(
+                                output, command, app.name
+                            )
+
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        log_widget.write(f"[red]{line}[/red]")
+                                        self._append_log(log_widget,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        log_widget.write(f"[blue]{line}[/blue]")
+                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        log_widget.write(f"[dim]{line}[/dim]")
+                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        log_widget.write(f"[yellow]{line}[/yellow]")
+                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
                                     else:
-                                        log_widget.write(line)
+                                        self._append_log(log_widget,line)
                     else:
                         task["status"] = "failed"
-                        task["message"] = "无法获取安装命令"
-                        log_widget.write(f"[red]错误: 无法获取 {app.name} 的安装命令[/red]")
+                        task["message"] = "Cannot get installation command"
+                        self._append_log(log_widget,f"[red]Error: Cannot get installation command for {app.name}[/red]")
                 
                 else:  # uninstall
                     # Get uninstall command
@@ -484,9 +444,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            log_widget.write(f"[yellow]⚠️ 需要管理员权限执行卸载命令[/yellow]")
+                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
 
-                        log_widget.write(f"[dim]执行命令: {command}[/dim]")
+                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute uninstallation
                         initial_progress = 50
@@ -505,13 +465,13 @@ class AppInstallProgressModal(ModalScreen):
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            log_widget.write(f"[green]✅ {app.name} 卸载成功[/green]")
+                            self._append_log(log_widget,f"[green]✅ {app.name} uninstalled successfully[/green]")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
-                                log_widget.write(f"[dim]  📝 已保存 {app.name} 的卸载状态[/dim]")
+                                self._append_log(log_widget,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
-                                log_widget.write(f"[yellow]  ⚠️ 保存 {app.name} 卸载状态失败[/yellow]")
+                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -521,30 +481,39 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            log_widget.write(f"[red]❌ {app.name} 卸载失败[/red]")
-                            log_widget.write("")
+                            self._append_log(log_widget,f"[red]❌ {app.name} uninstallation failed[/red]")
+                            self._append_log(log_widget,"")
+
+                            # Show raw error output first for debugging
+                            if output and len(output.strip()) > 0:
+                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
+                                    if line.strip():
+                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
+                                self._append_log(log_widget,"")
+
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        log_widget.write(f"[red]{line}[/red]")
+                                        self._append_log(log_widget,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        log_widget.write(f"[blue]{line}[/blue]")
+                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        log_widget.write(f"[dim]{line}[/dim]")
+                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        log_widget.write(f"[yellow]{line}[/yellow]")
+                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
                                     else:
-                                        log_widget.write(line)
+                                        self._append_log(log_widget,line)
                     else:
                         task["status"] = "failed"
-                        task["message"] = "无法获取卸载命令"
-                        log_widget.write(f"[red]错误: 无法获取 {app.name} 的卸载命令[/red]")
+                        task["message"] = "Cannot get uninstall command"
+                        self._append_log(log_widget,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
             
             except Exception as e:
                 task["status"] = "failed"
                 task["message"] = str(e)
-                log_widget.write(f"[red]错误: {str(e)}[/red]")
+                self._append_log(log_widget,f"[red]Error: {str(e)}[/red]")
             
             self._update_task_display(i)
             self._update_progress(i, task["progress"])
@@ -558,61 +527,37 @@ class AppInstallProgressModal(ModalScreen):
         successful = sum(1 for t in self.tasks if t["status"] == "success")
         failed = sum(1 for t in self.tasks if t["status"] == "failed")
         
-        log_widget.write("")
-        log_widget.write(f"[{timestamp}] " + "="*50)
-        log_widget.write(f"[bold]安装完成: {successful} 成功, {failed} 失败[/bold]")
+        self._append_log(log_widget,"")
+        self._append_log(log_widget,f"[{timestamp}] " + "="*50)
+        self._append_log(log_widget,f"[bold]Installation completed: {successful} successful, {failed} failed[/bold]")
         
         if failed == 0:
-            log_widget.write("[green]✅ 所有任务成功完成！[/green]")
+            self._append_log(log_widget,"[green]✅ All tasks completed successfully![/green]")
         else:
-            log_widget.write("[yellow]⚠️ 部分任务失败，请查看日志了解详情。[/yellow]")
+            self._append_log(log_widget,"[yellow]⚠️ Some tasks failed, please check logs for details.[/yellow]")
 
-        # End logging session and export logs
+        # End logging session
         try:
             self.app_installer.log_installation_event(
                 LogLevel.INFO,
-                f"安装会话结束 - 成功: {successful}, 失败: {failed}",
+                f"Installation session ended - Success: {successful}, Failed: {failed}",
                 action="session_end"
             )
 
             # End logging session
             self.app_installer.end_logging_session()
 
-            # Auto-export logs in multiple formats
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            # Export as HTML for easy viewing
-            try:
-                html_file = self.app_installer.export_installation_logs(format="html")
-                log_widget.write(f"[dim]📄 HTML 日志已导出: {html_file}[/dim]")
-            except Exception as e:
-                log_widget.write(f"[yellow]⚠️ HTML 日志导出失败: {e}[/yellow]")
-
-            # Export as TXT for easy reading
-            try:
-                txt_file = self.app_installer.export_installation_logs(format="txt")
-                log_widget.write(f"[dim]📄 文本日志已导出: {txt_file}[/dim]")
-            except Exception as e:
-                log_widget.write(f"[yellow]⚠️ 文本日志导出失败: {e}[/yellow]")
-
-            # Export as JSON for detailed analysis
-            try:
-                json_file = self.app_installer.export_installation_logs(format="json")
-                log_widget.write(f"[dim]📄 JSON 日志已导出: {json_file}[/dim]")
-            except Exception as e:
-                log_widget.write(f"[yellow]⚠️ JSON 日志导出失败: {e}[/yellow]")
-
         except Exception as e:
-            log_widget.write(f"[yellow]⚠️ 日志会话结束失败: {e}[/yellow]")
+            self._append_log(log_widget,f"[yellow]⚠️ Log session end failed: {e}[/yellow]")
     
     def _command_needs_sudo(self, task: Dict) -> bool:
-        """检查任务是否需要sudo权限.
+        """Check if task needs sudo permissions.
 
         Args:
-            task: 任务字典
+            task: Task dictionary
 
         Returns:
-            True如果需要sudo权限，False否则
+            True if sudo permissions needed, False otherwise
         """
         action = task["action"]
         app = action["application"]
@@ -625,10 +570,10 @@ class AppInstallProgressModal(ModalScreen):
         return command and "sudo" in command
 
     def _command_needs_sudo_for_task(self, task: Dict) -> bool:
-        """检查当前任务的命令是否需要sudo权限.
+        """Check if current task command needs sudo permissions.
 
         Args:
-            task: 任务字典
+            task: Task dictionary
 
         Returns:
             True如果需要sudo权限，False否则
@@ -644,46 +589,77 @@ class AppInstallProgressModal(ModalScreen):
         return command and "sudo" in command
 
     async def _execute_command_with_sudo_support(self, command: str, log_widget=None, progress_callback=None) -> tuple:
-        """使用sudo支持执行命令.
-
-        Args:
-            command: 要执行的命令
-            log_widget: RichLog组件用于显示日志
-            progress_callback: 进度回调函数
-
-        Returns:
-            (success, output) 元组
-        """
-        # 检查是否有sudo管理器且命令需要sudo
-        if self.sudo_manager and self.sudo_manager.is_sudo_required(command):
-            if not self.sudo_manager.is_verified():
-                return False, "sudo权限未验证"
-
-            # 使用sudo管理器执行命令
-            return await self.sudo_manager.execute_with_sudo_async(command)
-        else:
-            # 使用原有的执行方法
-            return await self._execute_command_async(command, log_widget, progress_callback)
-
-    async def _execute_command_async(self, command: str, log_widget=None, progress_callback=None) -> tuple:
-        """Execute a command asynchronously with real-time output streaming and progress tracking.
+        """Execute command with sudo support.
 
         Args:
             command: Command to execute
-            log_widget: RichLog widget for real-time output display
-            progress_callback: Function to call for progress updates (percentage: int)
+            log_widget: TextArea widget for log display
+            progress_callback: Progress callback function
+
+        Returns:
+            (success, output) tuple
+        """
+        try:
+            # Check if sudo manager exists and command requires sudo
+            if self.sudo_manager and self.sudo_manager.is_sudo_required(command):
+                if not self.sudo_manager.is_verified():
+                    error_msg = "Sudo permissions not verified"
+                    if log_widget:
+                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    return False, error_msg
+
+                # Use sudo manager to execute command, but need to implement real-time output support
+                return await self._execute_sudo_command_with_output(command, log_widget, progress_callback)
+            else:
+                # Use original execution method
+                return await self._execute_command_async(command, log_widget, progress_callback)
+
+        except Exception as e:
+            error_msg = f"Command execution failed: {str(e)}"
+            if log_widget:
+                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+            return False, error_msg
+
+    async def _execute_sudo_command_with_output(self, command: str, log_widget=None, progress_callback=None) -> tuple:
+        """Execute sudo command with real-time output and progress tracking.
+
+        Args:
+            command: Command to execute with sudo
+            log_widget: TextArea widget for real-time output display
+            progress_callback: Function to call for progress updates
 
         Returns:
             Tuple of (success, output/error message)
         """
         try:
-            # Create subprocess for command execution
+            # If root user, remove sudo part
+            if self.sudo_manager.is_root_user():
+                if self.sudo_manager.is_sudo_required(command):
+                    clean_command = self.sudo_manager._remove_sudo_from_command(command)
+                    if log_widget:
+                        self._append_log(log_widget,f"[dim]🔑 Root user executing: {clean_command}[/dim]")
+                    return await self._execute_command_async(clean_command, log_widget, progress_callback)
+                else:
+                    return await self._execute_command_async(command, log_widget, progress_callback)
+
+            # Non-root user, need to use sudo password
+            password = self.sudo_manager._decrypt_password(self.sudo_manager._password)
+            if not password:
+                error_msg = "Failed to decrypt sudo password"
+                if log_widget:
+                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                return False, error_msg
+
+            if log_widget:
+                self._append_log(log_widget,f"[dim]🔐 Executing with sudo: {command}[/dim]")
+
+            # 创建带密码输入的subprocess
             process = await asyncio.create_subprocess_shell(
                 command,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Redirect stderr to stdout for unified output
-                text=True,
-                env=None,  # Inherit environment variables
+                text=False,  # Use binary mode to avoid "text must be False" error
                 shell=True
             )
 
@@ -691,19 +667,29 @@ class AppInstallProgressModal(ModalScreen):
             error_occurred = False
             progress_percentage = 0
 
-            # Read output line by line for real-time display
+            # Send password first
+            if password:
+                process.stdin.write(f"{password}\n".encode('utf-8'))
+                await process.stdin.drain()
+
+            # Read output lines for real-time display
             try:
                 line_count = 0
                 while True:
-                    line = await asyncio.wait_for(
+                    line_bytes = await asyncio.wait_for(
                         process.stdout.readline(),
                         timeout=30.0  # 30-second timeout per line
                     )
 
-                    if not line:  # EOF reached
+                    if not line_bytes:  # EOF reached
                         break
 
-                    line = line.strip()
+                    # Decode bytes to string
+                    try:
+                        line = line_bytes.decode('utf-8').strip()
+                    except UnicodeDecodeError:
+                        line = line_bytes.decode('utf-8', errors='ignore').strip()
+
                     if line:
                         output_lines.append(line)
                         line_count += 1
@@ -718,19 +704,160 @@ class AppInstallProgressModal(ModalScreen):
                         # Real-time log display if widget provided
                         if log_widget:
                             # Color-code different types of output
-                            if any(keyword in line.lower() for keyword in ['error', '错误', 'failed', '失败']):
-                                log_widget.write(f"[red]  📄 {line}[/red]")
+                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
+                                self._append_log(log_widget,f"[red]  📄 {line}[/red]")
                                 error_occurred = True
-                            elif any(keyword in line.lower() for keyword in ['warning', '警告', 'warn']):
-                                log_widget.write(f"[yellow]  📄 {line}[/yellow]")
-                            elif any(keyword in line.lower() for keyword in ['installing', '安装', 'downloading', '下载']):
-                                log_widget.write(f"[blue]  📦 {line}[/blue]")
-                            elif any(keyword in line.lower() for keyword in ['success', '成功', 'complete', '完成', 'done']):
-                                log_widget.write(f"[green]  ✅ {line}[/green]")
-                            elif any(keyword in line.lower() for keyword in ['processing', '处理', 'configuring', '配置', 'setting up']):
-                                log_widget.write(f"[cyan]  ⚙️ {line}[/cyan]")
+                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                self._append_log(log_widget,f"[yellow]  📄 {line}[/yellow]")
+                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
+                                self._append_log(log_widget,f"[blue]  📦 {line}[/blue]")
+                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
+                                self._append_log(log_widget,f"[green]  ✅ {line}[/green]")
+                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
+                                self._append_log(log_widget,f"[cyan]  ⚙️ {line}[/cyan]")
                             else:
-                                log_widget.write(f"[dim]  📄 {line}[/dim]")
+                                self._append_log(log_widget,f"[dim]  📄 {line}[/dim]")
+
+                        # Small delay to prevent UI flooding
+                        await asyncio.sleep(0.1)
+
+            except asyncio.TimeoutError:
+                # If readline times out, continue to check process status
+                pass
+
+            # Close stdin and wait for process completion
+            if process.stdin:
+                process.stdin.close()
+                await process.stdin.wait_closed()
+
+            # Wait for process completion with overall timeout
+            try:
+                await asyncio.wait_for(process.wait(), timeout=270.0)  # 4.5 minutes for process completion
+            except asyncio.TimeoutError:
+                # Kill the process if it times out
+                process.terminate()
+                await process.wait()
+                error_msg = "Command execution timeout (4.5 minutes)"
+                if log_widget:
+                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                return False, error_msg
+
+            # Command completed - set progress to 100%
+            if progress_callback:
+                progress_callback(100)
+
+            # Check return code
+            if process.returncode == 0:
+                # Success
+                if not output_lines:
+                    return True, "Command executed successfully"
+                else:
+                    # Return last few lines as summary
+                    summary_lines = output_lines[-3:] if len(output_lines) > 3 else output_lines
+                    return True, "\n".join(summary_lines)
+            else:
+                # Failure - provide detailed error information
+                if log_widget:
+                    self._append_log(log_widget,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
+
+                if error_occurred or output_lines:
+                    # Extract error lines for detailed reporting
+                    error_lines = [line for line in output_lines if any(keyword in line.lower() for keyword in
+                                 ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable'])]
+                    if error_lines:
+                        detailed_error = "\n".join(error_lines[-3:])  # Last 3 error lines
+                        if log_widget:
+                            self._append_log(log_widget,f"[red]🔍 Error details: {detailed_error}[/red]")
+                        return False, detailed_error
+                    else:
+                        # No specific error lines, return last output lines
+                        last_output = "\n".join(output_lines[-2:]) if output_lines else f"Command failed with exit code: {process.returncode}"
+                        if log_widget:
+                            self._append_log(log_widget,f"[red]📋 Last output: {last_output}[/red]")
+                        return False, last_output
+                else:
+                    error_msg = f"Command failed with exit code: {process.returncode}"
+                    if log_widget:
+                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    return False, error_msg
+
+        except Exception as e:
+            error_msg = f"Sudo command execution error: {str(e)}"
+            if log_widget:
+                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+            return False, error_msg
+
+    async def _execute_command_async(self, command: str, log_widget=None, progress_callback=None) -> tuple:
+        """Execute a command asynchronously with real-time output streaming and progress tracking.
+
+        Args:
+            command: Command to execute
+            log_widget: TextArea widget for real-time output display
+            progress_callback: Function to call for progress updates (percentage: int)
+
+        Returns:
+            Tuple of (success, output/error message)
+        """
+        try:
+            # Create subprocess for command execution
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,  # Redirect stderr to stdout for unified output
+                text=False,  # Use binary mode to avoid "text must be False" error
+                env=None,  # Inherit environment variables
+                shell=True
+            )
+
+            output_lines = []
+            error_occurred = False
+            progress_percentage = 0
+
+            # Read output line by line for real-time display
+            try:
+                line_count = 0
+                while True:
+                    line_bytes = await asyncio.wait_for(
+                        process.stdout.readline(),
+                        timeout=30.0  # 30-second timeout per line
+                    )
+
+                    if not line_bytes:  # EOF reached
+                        break
+
+                    # Decode bytes to string
+                    try:
+                        line = line_bytes.decode('utf-8').strip()
+                    except UnicodeDecodeError:
+                        line = line_bytes.decode('utf-8', errors='ignore').strip()
+
+                    if line:
+                        output_lines.append(line)
+                        line_count += 1
+
+                        # Smart progress estimation based on output patterns
+                        new_progress = self._estimate_progress_from_output(line, line_count, command)
+                        if new_progress > progress_percentage:
+                            progress_percentage = min(new_progress, 95)  # Cap at 95% until completion
+                            if progress_callback:
+                                progress_callback(progress_percentage)
+
+                        # Real-time log display if widget provided
+                        if log_widget:
+                            # Color-code different types of output
+                            if any(keyword in line.lower() for keyword in ['error', '错误', 'failed', '失败', 'permission denied', 'access denied', 'cannot', 'unable']):
+                                self._append_log(log_widget,f"[red]  📄 {line}[/red]")
+                                error_occurred = True
+                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                self._append_log(log_widget,f"[yellow]  📄 {line}[/yellow]")
+                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
+                                self._append_log(log_widget,f"[blue]  📦 {line}[/blue]")
+                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
+                                self._append_log(log_widget,f"[green]  ✅ {line}[/green]")
+                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
+                                self._append_log(log_widget,f"[cyan]  ⚙️ {line}[/cyan]")
+                            else:
+                                self._append_log(log_widget,f"[dim]  📄 {line}[/dim]")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -746,7 +873,10 @@ class AppInstallProgressModal(ModalScreen):
                 # Kill the process if it times out
                 process.terminate()
                 await process.wait()
-                return False, "命令执行总体超时 (4.5分钟)"
+                error_msg = "Command execution timeout (4.5 minutes)"
+                if log_widget:
+                    self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                return False, error_msg
 
             # Command completed - set progress to 100%
             if progress_callback:
@@ -762,22 +892,46 @@ class AppInstallProgressModal(ModalScreen):
                     summary_lines = output_lines[-3:] if len(output_lines) > 3 else output_lines
                     return True, "\n".join(summary_lines)
             else:
-                # Failure
+                # Failure - provide detailed error information
+                if log_widget:
+                    self._append_log(log_widget,f"[red]❌ Command failed with exit code: {process.returncode}[/red]")
+
                 if error_occurred or output_lines:
-                    error_lines = [line for line in output_lines if any(keyword in line.lower() for keyword in ['error', '错误', 'failed', '失败'])]
+                    # Extract error lines for detailed reporting
+                    error_lines = [line for line in output_lines if any(keyword in line.lower() for keyword in
+                                 ['error', '错误', 'failed', '失败', 'permission denied', 'access denied', 'cannot', 'unable', 'not found', 'no such'])]
                     if error_lines:
-                        return False, "\n".join(error_lines[-2:])  # Last 2 error lines
+                        detailed_error = "\n".join(error_lines[-3:])  # Last 3 error lines
+                        if log_widget:
+                            self._append_log(log_widget,f"[red]🔍 Error details: {detailed_error}[/red]")
+                        return False, detailed_error
                     else:
-                        return False, "\n".join(output_lines[-2:]) if output_lines else f"命令执行失败，退出码: {process.returncode}"
+                        # No specific error lines, return last output lines
+                        last_output = "\n".join(output_lines[-2:]) if output_lines else f"Command failed with exit code: {process.returncode}"
+                        if log_widget:
+                            self._append_log(log_widget,f"[red]📋 Last output: {last_output}[/red]")
+                        return False, last_output
                 else:
-                    return False, f"命令执行失败，退出码: {process.returncode}"
+                    error_msg = f"Command failed with exit code: {process.returncode}"
+                    if log_widget:
+                        self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+                    return False, error_msg
 
         except FileNotFoundError:
-            return False, "命令未找到或无法执行"
+            error_msg = "Command not found or cannot execute"
+            if log_widget:
+                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+            return False, error_msg
         except PermissionError:
-            return False, "权限不足，无法执行命令"
+            error_msg = "Permission denied, cannot execute command"
+            if log_widget:
+                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+            return False, error_msg
         except Exception as e:
-            return False, f"执行错误: {str(e)}"
+            error_msg = f"Execution error: {str(e)}"
+            if log_widget:
+                self._append_log(log_widget,f"[red]❌ {error_msg}[/red]")
+            return False, error_msg
 
     def _estimate_progress_from_output(self, line: str, line_count: int, command: str) -> int:
         """Estimate progress percentage based on command output patterns.
@@ -860,80 +1014,22 @@ class AppInstallProgressModal(ModalScreen):
         return int(base_progress)
     
     def _update_task_display(self, index: int) -> None:
-        """Update the display for a specific task."""
-        if len(self.tasks) <= 1:
-            return
-        
-        task = self.tasks[index]
-        status_widget = self.query_one(f"#task-status-{index}", Static)
-        
-        status_map = {
-            "pending": ("⏳ 等待中", "status-pending"),
-            "running": ("🔄 执行中", "status-running"),
-            "success": ("✅ 成功", "status-success"),
-            "failed": ("❌ 失败", "status-failed"),
-        }
-        
-        text, css_class = status_map.get(task["status"], ("未知", ""))
-        status_widget.update(text)
-        status_widget.set_class(css_class, True)
+        """Update task display - simplified without task list UI."""
+        # No UI task displays to update anymore
+        pass
     
     def _update_progress(self, task_index: int, progress: int) -> None:
-        """Update progress bars."""
-        # Update task-specific progress bar if multiple tasks
-        if len(self.tasks) > 1:
-            task_progress = self.query_one(f"#task-progress-{task_index}", ProgressBar)
-            task_progress.update(progress=progress)
-        
-        # Update main progress bar
-        main_progress = self.query_one("#main-progress", ProgressBar)
-        if len(self.tasks) == 1:
-            # Single task - show its progress
-            main_progress.update(progress=progress)
-        else:
-            # Multiple tasks - show overall progress
-            total_progress = sum(t["progress"] for t in self.tasks) / len(self.tasks)
-            main_progress.update(progress=int(total_progress))
+        """Update progress - simplified without progress bars."""
+        # No UI progress bars to update anymore
+        pass
     
     def _enable_close_button(self) -> None:
-        """Enable the close button and retry button when all tasks are complete."""
-        # Enable close button
-        close_button = self.query_one("#close", Button)
-        close_button.disabled = False
-        close_button.label = "✅ 关闭 (ESC)"
-        close_button.variant = "primary"
-
-        # Enable export logs button
-        export_button = self.query_one("#export-logs", Button)
-        export_button.disabled = False
-        export_button.label = "📄 导出日志 (L)"
-        export_button.variant = "success"
-
-        # Check if there are failed tasks and enable retry button
+        """任务完成后启用键盘快捷键操作（原按钮功能）."""
+        # 检查是否有失败的任务
         failed_tasks = [task for task in self.tasks if task["status"] == "failed"]
         if failed_tasks:
             self.has_failed_tasks = True
-            retry_button = self.query_one("#retry-failed", Button)
-            retry_button.disabled = False
-            retry_button.label = f"🔄 重试失败任务 ({len(failed_tasks)}) (R)"
-            retry_button.variant = "warning"
     
-    @on(Button.Pressed, "#close")
-    def action_close(self) -> None:
-        """Close the modal."""
-        if self.all_completed:
-            self.dismiss()
-
-    @on(Button.Pressed, "#retry-failed")
-    def on_retry_button_pressed(self) -> None:
-        """Handle retry button press."""
-        self.action_retry_failed()
-
-    @on(Button.Pressed, "#export-logs")
-    def on_export_logs_button_pressed(self) -> None:
-        """Handle export logs button press."""
-        self.action_export_logs()
-
     def action_retry_failed(self) -> None:
         """Handle retry failed tasks action (both button and R key)."""
         if self.has_failed_tasks and self.all_completed:
@@ -941,20 +1037,20 @@ class AppInstallProgressModal(ModalScreen):
 
     def _start_retry_process(self) -> None:
         """Start the retry process for failed tasks."""
-        log_widget = self.query_one("#log-output", RichLog)
+        log_widget = self.query_one("#log-output", TextArea)
 
         # Find failed tasks
         failed_tasks = [task for task in self.tasks if task["status"] == "failed"]
         if not failed_tasks:
-            log_widget.write("[yellow]没有失败的任务需要重试[/yellow]")
+            self._append_log(log_widget,"[yellow]没有失败的任务需要重试[/yellow]")
             return
 
         # Log retry start
         timestamp = datetime.now().strftime("%H:%M:%S")
-        log_widget.write("")
-        log_widget.write(f"[{timestamp}] " + "="*30)
-        log_widget.write(f"[bold blue]🔄 开始重试 {len(failed_tasks)} 个失败任务[/bold blue]")
-        log_widget.write("="*50)
+        self._append_log(log_widget,"")
+        self._append_log(log_widget,f"[{timestamp}] " + "="*30)
+        self._append_log(log_widget,f"[bold blue]🔄 开始重试 {len(failed_tasks)} 个失败任务[/bold blue]")
+        self._append_log(log_widget,"="*50)
 
         # Reset failed tasks status
         for task in failed_tasks:
@@ -966,24 +1062,13 @@ class AppInstallProgressModal(ModalScreen):
         self.all_completed = False
         self.has_failed_tasks = False
 
-        # Disable buttons during retry
-        close_button = self.query_one("#close", Button)
-        close_button.disabled = True
-        close_button.label = "关闭 (ESC)"
-        close_button.variant = "default"
-
-        retry_button = self.query_one("#retry-failed", Button)
-        retry_button.disabled = True
-        retry_button.label = "重试失败任务 (R)"
-        retry_button.variant = "warning"
-
-        # Start processing retry tasks
+        # Start retry processing (pure keyboard operation, no button state management)
         self._start_retry_processing(failed_tasks)
 
     @work(exclusive=True, thread=True)
     async def _start_retry_processing(self, retry_tasks: List[Dict]) -> None:
         """Process retry tasks."""
-        log_widget = self.query_one("#log-output", RichLog)
+        log_widget = self.query_one("#log-output", TextArea)
 
         for task in retry_tasks:
             task_index = self.tasks.index(task)
@@ -995,7 +1080,7 @@ class AppInstallProgressModal(ModalScreen):
 
             # Log start
             timestamp = datetime.now().strftime("%H:%M:%S")
-            log_widget.write(f"[{timestamp}] 重试: {task['name']}")
+            self._append_log(log_widget,f"[{timestamp}] 重试: {task['name']}")
 
             # Get the action and application
             action = task["action"]
@@ -1012,9 +1097,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            log_widget.write(f"[yellow]⚠️ 需要管理员权限执行安装命令[/yellow]")
+                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
 
-                        log_widget.write(f"[dim]执行命令: {command}[/dim]")
+                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute installation
                         task["progress"] = 40
@@ -1028,20 +1113,20 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Execute post-install if any
                             if app.post_install:
-                                log_widget.write(f"[dim]执行安装后配置: {app.post_install}[/dim]")
+                                self._append_log(log_widget,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
                                 post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, log_widget)
                                 if not post_success:
-                                    log_widget.write(f"[yellow]⚠️ 安装后配置失败: {post_output}[/yellow]")
+                                    self._append_log(log_widget,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            log_widget.write(f"[green]✅ {app.name} 重新安装成功[/green]")
+                            self._append_log(log_widget,f"[green]✅ {app.name} re-installed successfully[/green]")
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                log_widget.write(f"[dim]  📝 已保存 {app.name} 的安装状态[/dim]")
+                                self._append_log(log_widget,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
                             else:
-                                log_widget.write(f"[yellow]  ⚠️ 保存 {app.name} 安装状态失败[/yellow]")
+                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1051,25 +1136,34 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            log_widget.write(f"[red]❌ {app.name} 重新安装失败[/red]")
-                            log_widget.write("")
+                            self._append_log(log_widget,f"[red]❌ {app.name} retry installation failed[/red]")
+                            self._append_log(log_widget,"")
+
+                            # Show raw error output first for debugging
+                            if output and len(output.strip()) > 0:
+                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
+                                    if line.strip():
+                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
+                                self._append_log(log_widget,"")
+
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        log_widget.write(f"[red]{line}[/red]")
+                                        self._append_log(log_widget,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        log_widget.write(f"[blue]{line}[/blue]")
+                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        log_widget.write(f"[dim]{line}[/dim]")
+                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        log_widget.write(f"[yellow]{line}[/yellow]")
+                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
                                     else:
-                                        log_widget.write(line)
+                                        self._append_log(log_widget,line)
                     else:
                         task["status"] = "failed"
-                        task["message"] = "无法获取安装命令"
-                        log_widget.write(f"[red]错误: 无法获取 {app.name} 的安装命令[/red]")
+                        task["message"] = "Cannot get installation command"
+                        self._append_log(log_widget,f"[red]Error: Cannot get installation command for {app.name}[/red]")
 
                 else:  # uninstall
                     # Get uninstall command
@@ -1077,9 +1171,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            log_widget.write(f"[yellow]⚠️ 需要管理员权限执行卸载命令[/yellow]")
+                            self._append_log(log_widget,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
 
-                        log_widget.write(f"[dim]执行命令: {command}[/dim]")
+                        self._append_log(log_widget,f"[dim]Executing command: {command}[/dim]")
 
                         # Execute uninstallation
                         task["progress"] = 50
@@ -1090,13 +1184,13 @@ class AppInstallProgressModal(ModalScreen):
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            log_widget.write(f"[green]✅ {app.name} 重新卸载成功[/green]")
+                            self._append_log(log_widget,f"[green]✅ {app.name} re-uninstalled successfully[/green]")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
-                                log_widget.write(f"[dim]  📝 已保存 {app.name} 的卸载状态[/dim]")
+                                self._append_log(log_widget,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
                             else:
-                                log_widget.write(f"[yellow]  ⚠️ 保存 {app.name} 卸载状态失败[/yellow]")
+                                self._append_log(log_widget,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
                         else:
                             task["status"] = "failed"
                             task["message"] = output
@@ -1106,30 +1200,39 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            log_widget.write(f"[red]❌ {app.name} 重新卸载失败[/red]")
-                            log_widget.write("")
+                            self._append_log(log_widget,f"[red]❌ {app.name} retry uninstallation failed[/red]")
+                            self._append_log(log_widget,"")
+
+                            # Show raw error output first for debugging
+                            if output and len(output.strip()) > 0:
+                                self._append_log(log_widget,"[red]🔍 Raw error output:[/red]")
+                                for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
+                                    if line.strip():
+                                        self._append_log(log_widget,f"[dim]  {line}[/dim]")
+                                self._append_log(log_widget,"")
+
                             # Display friendly error with proper formatting
                             for line in friendly_error.split('\n'):
                                 if line.strip():
                                     if line.startswith('❌'):
-                                        log_widget.write(f"[red]{line}[/red]")
+                                        self._append_log(log_widget,f"[red]{line}[/red]")
                                     elif line.startswith('📋'):
-                                        log_widget.write(f"[blue]{line}[/blue]")
+                                        self._append_log(log_widget,f"[blue]{line}[/blue]")
                                     elif line.startswith('🔍'):
-                                        log_widget.write(f"[dim]{line}[/dim]")
+                                        self._append_log(log_widget,f"[dim]{line}[/dim]")
                                     elif line.startswith('  •'):
-                                        log_widget.write(f"[yellow]{line}[/yellow]")
+                                        self._append_log(log_widget,f"[yellow]{line}[/yellow]")
                                     else:
-                                        log_widget.write(line)
+                                        self._append_log(log_widget,line)
                     else:
                         task["status"] = "failed"
-                        task["message"] = "无法获取卸载命令"
-                        log_widget.write(f"[red]错误: 无法获取 {app.name} 的卸载命令[/red]")
+                        task["message"] = "Cannot get uninstall command"
+                        self._append_log(log_widget,f"[red]Error: Cannot get uninstall command for {app.name}[/red]")
 
             except Exception as e:
                 task["status"] = "failed"
                 task["message"] = str(e)
-                log_widget.write(f"[red]错误: {str(e)}[/red]")
+                self._append_log(log_widget,f"[red]Error: {str(e)}[/red]")
 
             self._update_task_display(task_index)
             self._update_progress(task_index, task["progress"])
@@ -1143,111 +1246,34 @@ class AppInstallProgressModal(ModalScreen):
         retry_successful = sum(1 for t in retry_tasks if t["status"] == "success")
         retry_failed = sum(1 for t in retry_tasks if t["status"] == "failed")
 
-        log_widget.write("")
-        log_widget.write(f"[{timestamp}] " + "="*50)
-        log_widget.write(f"[bold]重试完成: {retry_successful} 成功, {retry_failed} 失败[/bold]")
+        self._append_log(log_widget,"")
+        self._append_log(log_widget,f"[{timestamp}] " + "="*50)
+        self._append_log(log_widget,f"[bold]重试完成: {retry_successful} 成功, {retry_failed} 失败[/bold]")
 
         if retry_failed == 0:
-            log_widget.write("[green]🎉 所有重试任务都成功完成！[/green]")
+            self._append_log(log_widget,"[green]🎉 All retry tasks completed successfully![/green]")
         else:
-            log_widget.write(f"[yellow]⚠️ 仍有 {retry_failed} 个任务失败，可以再次重试。[/yellow]")
+            self._append_log(log_widget,f"[yellow]⚠️ {retry_failed} tasks still failed, can retry again.[/yellow]")
     
     def action_dismiss(self) -> None:
         """Dismiss the modal (only if completed)."""
         if self.all_completed:
             self.dismiss()
 
-    def action_export_logs(self) -> None:
-        """Export installation logs to file."""
-        if not self.all_completed:
-            return
-
-        log_widget = self.query_one("#log-output", RichLog)
-
+    def action_scroll_down(self) -> None:
+        """Scroll the log output down."""
         try:
-            # Get list of available sessions
-            sessions = self.app_installer.list_log_sessions()
+            log_widget = self.query_one("#log-output", TextArea)
+            log_widget.scroll_down(animate=False)
+        except Exception:
+            # If log widget not available yet, ignore
+            pass
 
-            if not sessions:
-                log_widget.write("[yellow]⚠️ 没有可用的日志会话[/yellow]")
-                return
-
-            # Get the most recent session (current or last completed)
-            current_session = sessions[0]
-            session_id = current_session['session_id']
-
-            log_widget.write("")
-            log_widget.write("[bold blue]📄 开始导出安装日志...[/bold blue]")
-
-            # Export in multiple formats
-            exported_files = []
-
-            # Export as HTML (for viewing in browser)
-            try:
-                html_file = self.app_installer.export_installation_logs(
-                    session_id=session_id,
-                    format="html"
-                )
-                exported_files.append(("HTML", html_file))
-                log_widget.write(f"[green]✅ HTML 日志已导出: {html_file}[/green]")
-            except Exception as e:
-                log_widget.write(f"[red]❌ HTML 导出失败: {e}[/red]")
-
-            # Export as TXT (for easy reading)
-            try:
-                txt_file = self.app_installer.export_installation_logs(
-                    session_id=session_id,
-                    format="txt"
-                )
-                exported_files.append(("TXT", txt_file))
-                log_widget.write(f"[green]✅ 文本日志已导出: {txt_file}[/green]")
-            except Exception as e:
-                log_widget.write(f"[red]❌ 文本导出失败: {e}[/red]")
-
-            # Export as JSON (for programmatic access)
-            try:
-                json_file = self.app_installer.export_installation_logs(
-                    session_id=session_id,
-                    format="json"
-                )
-                exported_files.append(("JSON", json_file))
-                log_widget.write(f"[green]✅ JSON 日志已导出: {json_file}[/green]")
-            except Exception as e:
-                log_widget.write(f"[red]❌ JSON 导出失败: {e}[/red]")
-
-            # Export as YAML (human-readable structured format)
-            try:
-                yaml_file = self.app_installer.export_installation_logs(
-                    session_id=session_id,
-                    format="yaml"
-                )
-                exported_files.append(("YAML", yaml_file))
-                log_widget.write(f"[green]✅ YAML 日志已导出: {yaml_file}[/green]")
-            except Exception as e:
-                log_widget.write(f"[red]❌ YAML 导出失败: {e}[/red]")
-
-            if exported_files:
-                log_widget.write("")
-                log_widget.write("[bold green]🎉 日志导出完成![/bold green]")
-                log_widget.write(f"[dim]会话 ID: {session_id}[/dim]")
-                log_widget.write(f"[dim]共导出 {len(exported_files)} 个文件格式[/dim]")
-
-                # Display summary of exported files
-                log_widget.write("")
-                log_widget.write("[bold]📁 导出文件列表:[/bold]")
-                for format_name, file_path in exported_files:
-                    log_widget.write(f"[cyan]  {format_name}:[/cyan] {file_path}")
-
-                # Provide usage instructions
-                log_widget.write("")
-                log_widget.write("[bold blue]💡 使用建议:[/bold blue]")
-                log_widget.write("[dim]• HTML 文件: 在浏览器中打开查看格式化的日志[/dim]")
-                log_widget.write("[dim]• TXT 文件: 用文本编辑器打开阅读详细日志[/dim]")
-                log_widget.write("[dim]• JSON 文件: 供程序化分析或其他工具使用[/dim]")
-                log_widget.write("[dim]• YAML 文件: 人类可读的结构化数据格式[/dim]")
-
-            else:
-                log_widget.write("[red]❌ 所有格式的日志导出都失败了[/red]")
-
-        except Exception as e:
-            log_widget.write(f"[red]❌ 导出日志时发生错误: {e}[/red]")
+    def action_scroll_up(self) -> None:
+        """Scroll the log output up."""
+        try:
+            log_widget = self.query_one("#log-output", TextArea)
+            log_widget.scroll_up(animate=False)
+        except Exception:
+            # If log widget not available yet, ignore
+            pass
