@@ -9,6 +9,7 @@ from textual.reactive import reactive
 from textual.events import Key
 from typing import List, Dict, Optional
 import asyncio
+import signal
 from datetime import datetime
 from ...utils.log_manager import LogLevel
 from ...modules.sudo_manager import SudoManager
@@ -138,6 +139,10 @@ class AppInstallProgressModal(ModalScreen):
     current_task_index = reactive(0)
     all_completed = reactive(False)
     has_failed_tasks = reactive(False)
+
+    # Process tracking for cleanup
+    _active_processes = []  # Track all active subprocesses
+    _is_aborting = False  # Flag to indicate user requested abort
     
     def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None):
         try:
@@ -395,8 +400,13 @@ class AppInstallProgressModal(ModalScreen):
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
         """Handle key events using @on decorator."""
-        if event.key == "escape" and self.all_completed:
-            self.dismiss()
+        if event.key == "escape":
+            if self.all_completed:
+                # Normal close after completion
+                self.dismiss()
+            else:
+                # Show abort confirmation dialog
+                self._show_abort_confirmation()
             event.prevent_default()
             event.stop()
         elif event.key == "r" and self.has_failed_tasks and self.all_completed:
@@ -557,6 +567,17 @@ class AppInstallProgressModal(ModalScreen):
                 self._append_log(None, "")  # Add blank line for readability
 
         for i, task in enumerate(self.tasks):
+            # Check if user requested abort before starting each task
+            if self._is_aborting:
+                # Mark all remaining tasks as aborted
+                for remaining_task in self.tasks[i:]:
+                    if remaining_task["status"] in ["pending", "running"]:
+                        remaining_task["status"] = "failed"
+                        remaining_task["message"] = "User aborted"
+                        remaining_task["progress"] = 0
+                        self._update_task_display(self.tasks.index(remaining_task))
+                break
+
             self.current_task_index = i
 
             # Update task status
@@ -1037,6 +1058,10 @@ class AppInstallProgressModal(ModalScreen):
                 if log_widget:
                     self._append_log(None,f"[red]❌ {error_msg}[/red]")
                 return False, error_msg
+            finally:
+                # Remove process from active list when done
+                if process in self._active_processes:
+                    self._active_processes.remove(process)
 
             # Command completed - set progress to 100%
             if progress_callback:
@@ -1105,6 +1130,9 @@ class AppInstallProgressModal(ModalScreen):
                 shell=True
             )
 
+            # Track process for cleanup
+            self._active_processes.append(process)
+
             output_lines = []
             error_occurred = False
             progress_percentage = 0
@@ -1113,6 +1141,11 @@ class AppInstallProgressModal(ModalScreen):
             try:
                 line_count = 0
                 while True:
+                    # Check if user requested abort
+                    if self._is_aborting:
+                        # Process was aborted by user
+                        break
+
                     line_bytes = await asyncio.wait_for(
                         process.stdout.readline(),
                         timeout=30.0  # 30-second timeout per line
@@ -1211,6 +1244,10 @@ class AppInstallProgressModal(ModalScreen):
                 if log_widget:
                     self._append_log(None,f"[red]❌ {error_msg}[/red]")
                 return False, error_msg
+            finally:
+                # Remove process from active list when done
+                if process in self._active_processes:
+                    self._active_processes.remove(process)
 
             # Command completed - set progress to 100%
             if progress_callback:
@@ -1648,25 +1685,25 @@ class AppInstallProgressModal(ModalScreen):
             pass
 
     def _refresh_main_menu_app_page(self, operation_message: str) -> None:
-        """刷新主菜单的应用安装页面以显示最新状态。
+        """Refresh main menu app install page to show latest status.
 
         Args:
-            operation_message: 操作完成消息，用于日志记录
+            operation_message: Operation completion message for logging
         """
         try:
             if hasattr(self, '_main_menu_ref') and self._main_menu_ref:
                 self._append_log(None, f"[dim]  🔄 Refreshing main menu app page after operation[/dim]")
 
-                # 使用call_from_thread确保在主线程中执行UI更新
+                # Use call_from_thread to ensure UI updates execute in main thread
                 def safe_refresh():
                     try:
                         self._main_menu_ref.refresh_and_reset_app_page()
-                        # 记录成功日志应该通过主菜单的日志系统，避免线程问题
+                        # Success logging should go through main menu's log system to avoid thread issues
                     except Exception as e:
-                        # 如果刷新失败，记录错误但不影响主流程
+                        # If refresh fails, log error but don't affect main flow
                         print(f"Failed to refresh main menu: {str(e)}")
 
-                # 安全地调用主菜单刷新
+                # Safely call main menu refresh
                 self.app.call_from_thread(safe_refresh)
 
                 self._append_log(None, f"[dim]  ✅ Main menu refresh requested successfully[/dim]")
@@ -1674,4 +1711,94 @@ class AppInstallProgressModal(ModalScreen):
                 self._append_log(None, f"[yellow]  ⚠️ No main menu reference available for refresh[/yellow]")
         except Exception as e:
             self._append_log(None, f"[yellow]  ⚠️ Failed to refresh main menu: {str(e)}[/yellow]")
-            # 记录错误但不重新抛出，确保不影响主流程
+            # Log error but don't re-throw to avoid affecting main flow
+
+    def _show_abort_confirmation(self) -> None:
+        """Show installation abort confirmation dialog."""
+        from .abort_confirmation_modal import AbortConfirmationModal
+
+        def handle_abort_result(confirmed: bool):
+            """Handle abort confirmation result."""
+            if confirmed:
+                # User confirmed abort
+                self._abort_installation()
+
+        # Push abort confirmation dialog
+        self.app.push_screen(AbortConfirmationModal(), handle_abort_result)
+
+    def _abort_installation(self) -> None:
+        """Abort the installation process."""
+        try:
+            self._is_aborting = True
+            timestamp = datetime.now().strftime("%H:%M:%S")
+
+            self._append_log(None, "")
+            self._append_log(None, f"[{timestamp}] " + "="*50)
+            self._append_log(None, "[yellow]⚠️ User requested installation abort...[/yellow]")
+
+            # Terminate all active processes
+            terminated_count = 0
+            for process in self._active_processes:
+                try:
+                    if process and process.returncode is None:  # Process is still running
+                        process.terminate()  # Send SIGTERM
+                        terminated_count += 1
+                        self._append_log(None, f"[dim]  • Terminating process PID {process.pid}[/dim]")
+                except Exception as e:
+                    self._append_log(None, f"[yellow]  ⚠️ Failed to terminate process: {str(e)}[/yellow]")
+
+            if terminated_count > 0:
+                self._append_log(None, f"[yellow]✅ Requested termination of {terminated_count} active processes[/yellow]")
+                self._append_log(None, "[yellow]⚠️ Warning: Some packages may be in partially installed state[/yellow]")
+                self._append_log(None, "[dim]  Suggestion: Run package manager repair command (e.g., 'sudo apt --fix-broken install')[/dim]")
+            else:
+                self._append_log(None, "[dim]  • No active processes to terminate[/dim]")
+
+            # Mark all unfinished tasks as interrupted
+            for task in self.tasks:
+                if task["status"] in ["pending", "running"]:
+                    task["status"] = "failed"
+                    task["message"] = "User aborted"
+                    task["progress"] = 0
+
+            self.all_completed = True
+            self._enable_close_button()
+
+            self._append_log(None, f"[{timestamp}] Installation aborted, you can close this window")
+            self._append_log(None, "="*50)
+
+        except Exception as e:
+            self._append_log(None, f"[red]❌ Abort handling failed: {str(e)}[/red]")
+
+    def on_unmount(self) -> None:
+        """Clean up resources and ensure all subprocesses are properly handled."""
+        try:
+            # Clean up all active processes
+            for process in self._active_processes:
+                try:
+                    if process and process.returncode is None:
+                        # Send SIGTERM for graceful termination
+                        process.terminate()
+                        try:
+                            # Wait up to 2 seconds for graceful exit
+                            import asyncio
+                            asyncio.wait_for(process.wait(), timeout=2.0)
+                        except asyncio.TimeoutError:
+                            # If process doesn't respond, force kill
+                            process.kill()
+                            process.wait()
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup process {process.pid}: {e}")
+
+            # Clear process list
+            self._active_processes.clear()
+
+            # Clean up log callback
+            if hasattr(self, 'app_installer') and self.app_installer:
+                try:
+                    self.app_installer.set_log_ui_callback(None)
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"Error in on_unmount cleanup: {e}")

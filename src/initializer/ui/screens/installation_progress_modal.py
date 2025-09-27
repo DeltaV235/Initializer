@@ -10,6 +10,7 @@ from textual.events import Key
 from typing import List, Dict, Optional
 import asyncio
 import subprocess
+import signal
 from datetime import datetime
 
 from ...modules.package_manager import PackageManagerDetector
@@ -114,6 +115,10 @@ class InstallationProgressModal(ModalScreen):
     # Reactive properties
     current_task_index = reactive(0)
     all_completed = reactive(False)
+
+    # Process tracking for cleanup
+    _active_processes = []  # Track all active subprocesses
+    _is_aborting = False  # Flag to indicate user requested abort
     
     def __init__(self, actions: List[Dict], config_manager=None):
         super().__init__()
@@ -149,8 +154,13 @@ class InstallationProgressModal(ModalScreen):
     @on(Key)
     def handle_key_event(self, event: Key) -> None:
         """Handle key events using @on decorator."""
-        if event.key == "escape" and self.all_completed:
-            self.dismiss()
+        if event.key == "escape":
+            if self.all_completed:
+                # Normal close after completion
+                self.dismiss()
+            else:
+                # Show abort confirmation dialog
+                self._show_abort_confirmation()
             event.prevent_default()
             event.stop()
     
@@ -192,6 +202,17 @@ class InstallationProgressModal(ModalScreen):
         log_widget = self.query_one("#log-output", RichLog)
         
         for i, task in enumerate(self.tasks):
+            # Check if user requested abort before starting each task
+            if self._is_aborting:
+                # Mark all remaining tasks as aborted
+                for remaining_task in self.tasks[i:]:
+                    if remaining_task["status"] in ["pending", "running"]:
+                        remaining_task["status"] = "failed"
+                        remaining_task["message"] = "User aborted"
+                        remaining_task["progress"] = 0
+                        self._update_task_display(self.tasks.index(remaining_task))
+                break
+
             self.current_task_index = i
             
             # Update task status
@@ -240,9 +261,17 @@ class InstallationProgressModal(ModalScreen):
                         stderr=asyncio.subprocess.STDOUT,
                         text=False
                     )
-                
+
+                # Track process for cleanup
+                self._active_processes.append(process)
+
                 # Read output line by line
                 while True:
+                    # Check if user requested abort
+                    if self._is_aborting:
+                        # Process was aborted by user
+                        break
+
                     line = await process.stdout.readline()
                     if not line:
                         break
@@ -261,6 +290,10 @@ class InstallationProgressModal(ModalScreen):
                 
                 # Wait for process to complete
                 return_code = await process.wait()
+
+                # Remove process from active list when done
+                if process in self._active_processes:
+                    self._active_processes.remove(process)
                 
                 if return_code == 0:
                     task["status"] = "success"
@@ -351,3 +384,88 @@ class InstallationProgressModal(ModalScreen):
         """Dismiss the modal (only if completed)."""
         if self.all_completed:
             self.dismiss()
+
+    def _show_abort_confirmation(self) -> None:
+        """Show installation abort confirmation dialog."""
+        from .abort_confirmation_modal import AbortConfirmationModal
+
+        def handle_abort_result(confirmed: bool):
+            """Handle abort confirmation result."""
+            if confirmed:
+                # User confirmed abort
+                self._abort_installation()
+
+        # Push abort confirmation dialog
+        self.app.push_screen(AbortConfirmationModal(), handle_abort_result)
+
+    def _abort_installation(self) -> None:
+        """Abort the installation process."""
+        try:
+            self._is_aborting = True
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            log_widget = self.query_one("#log-output", RichLog)
+
+            log_widget.write("")
+            log_widget.write(f"[{timestamp}] " + "="*50)
+            log_widget.write("[yellow]⚠️ User requested installation abort...[/yellow]")
+
+            # Terminate all active processes
+            terminated_count = 0
+            for process in self._active_processes:
+                try:
+                    if process and process.returncode is None:  # Process is still running
+                        process.terminate()  # Send SIGTERM
+                        terminated_count += 1
+                        log_widget.write(f"[dim]  • Terminating process PID {process.pid}[/dim]")
+                except Exception as e:
+                    log_widget.write(f"[yellow]  ⚠️ Failed to terminate process: {str(e)}[/yellow]")
+
+            if terminated_count > 0:
+                log_widget.write(f"[yellow]✅ Requested termination of {terminated_count} active processes[/yellow]")
+                log_widget.write("[yellow]⚠️ Warning: Some packages may be in partially installed state[/yellow]")
+                log_widget.write("[dim]  Suggestion: Run package manager repair command (e.g., 'sudo apt --fix-broken install')[/dim]")
+            else:
+                log_widget.write("[dim]  • No active processes to terminate[/dim]")
+
+            # Mark all unfinished tasks as interrupted
+            for task in self.tasks:
+                if task["status"] in ["pending", "running"]:
+                    task["status"] = "failed"
+                    task["message"] = "User aborted"
+                    task["progress"] = 0
+
+            self.all_completed = True
+            self._enable_close_button()
+
+            log_widget.write(f"[{timestamp}] Installation aborted, you can close this window")
+            log_widget.write("="*50)
+
+        except Exception as e:
+            log_widget = self.query_one("#log-output", RichLog)
+            log_widget.write(f"[red]❌ Abort handling failed: {str(e)}[/red]")
+
+    def on_unmount(self) -> None:
+        """Clean up resources and ensure all subprocesses are properly handled."""
+        try:
+            # Clean up all active processes
+            for process in self._active_processes:
+                try:
+                    if process and process.returncode is None:
+                        # Send SIGTERM for graceful termination
+                        process.terminate()
+                        try:
+                            # Wait up to 2 seconds for graceful exit
+                            import asyncio
+                            asyncio.wait_for(process.wait(), timeout=2.0)
+                        except asyncio.TimeoutError:
+                            # If process doesn't respond, force kill
+                            process.kill()
+                            process.wait()
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup process {process.pid}: {e}")
+
+            # Clear process list
+            self._active_processes.clear()
+
+        except Exception as e:
+            print(f"Error in on_unmount cleanup: {e}")
