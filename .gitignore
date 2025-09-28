@@ -13,6 +13,9 @@ pip-delete-this-directory.txt
 local_test_*
 temp_*
 
+# Development temporary files (moved from root)
+dev-temporary-files/
+
 # Virtual environments
 .env
 .venv
