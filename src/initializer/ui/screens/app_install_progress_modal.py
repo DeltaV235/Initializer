@@ -152,6 +152,7 @@ class AppInstallProgressModal(ModalScreen):
     # Process tracking for cleanup
     _active_processes = []  # Track all active subprocesses
     _is_aborting = False  # Flag to indicate user requested abort
+    _is_paused = False  # Flag to indicate processes are paused
     
     def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None):
         try:
@@ -1039,13 +1040,26 @@ class AppInstallProgressModal(ModalScreen):
             try:
                 line_count = 0
                 while True:
-                    line_bytes = await asyncio.wait_for(
-                        process.stdout.readline(),
-                        timeout=30.0  # 30-second timeout per line
-                    )
-
-                    if not line_bytes:  # EOF reached
+                    # Check if user requested abort
+                    if self._is_aborting:
                         break
+
+                    # Check if process is paused - wait for resume
+                    if self._is_paused:
+                        await asyncio.sleep(0.1)  # Wait 100ms before checking again
+                        continue
+
+                    try:
+                        line_bytes = await asyncio.wait_for(
+                            process.stdout.readline(),
+                            timeout=0.1  # Short timeout to check pause/abort frequently
+                        )
+
+                        if not line_bytes:  # EOF reached
+                            break
+                    except asyncio.TimeoutError:
+                        # No data available, check pause/abort status again
+                        continue
 
                     # Decode bytes to string and clean control characters
                     try:
@@ -1206,13 +1220,22 @@ class AppInstallProgressModal(ModalScreen):
                         # Process was aborted by user
                         break
 
-                    line_bytes = await asyncio.wait_for(
-                        process.stdout.readline(),
-                        timeout=30.0  # 30-second timeout per line
-                    )
+                    # Check if process is paused - wait for resume
+                    if self._is_paused:
+                        await asyncio.sleep(0.1)  # Wait 100ms before checking again
+                        continue
 
-                    if not line_bytes:  # EOF reached
-                        break
+                    try:
+                        line_bytes = await asyncio.wait_for(
+                            process.stdout.readline(),
+                            timeout=0.1  # Short timeout to check pause/abort frequently
+                        )
+
+                        if not line_bytes:  # EOF reached
+                            break
+                    except asyncio.TimeoutError:
+                        # No data available, check pause/abort status again
+                        continue
 
                     # Decode bytes to string and clean control characters
                     try:
@@ -1749,15 +1772,53 @@ class AppInstallProgressModal(ModalScreen):
             self._append_log(None, f"[yellow]  ⚠️ Failed to refresh main menu: {str(e)}[/yellow]")
             # Log error but don't re-throw to avoid affecting main flow
 
+    def _pause_active_processes(self) -> None:
+        """Pause installation by setting the pause flag."""
+        if self._is_paused:
+            return  # Already paused
+
+        try:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+
+            if len(self._active_processes) > 0:
+                self._is_paused = True
+                self._log_control("⏸️ Installation paused - waiting for user decision")
+                self._log_control("Processes will wait before continuing output processing")
+            else:
+                self._log_control("⚠️ No active processes found to pause")
+
+        except Exception as e:
+            self._log_error(f"Pause operation failed: {str(e)}")
+
+    def _resume_active_processes(self) -> None:
+        """Resume installation by clearing the pause flag."""
+        if not self._is_paused:
+            return  # Not paused
+
+        try:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+
+            self._is_paused = False
+            self._log_control("▶️ Installation resumed - continuing process")
+
+        except Exception as e:
+            self._log_error(f"Resume operation failed: {str(e)}")
+
     def _show_abort_confirmation(self) -> None:
         """Show installation abort confirmation dialog."""
         from .abort_confirmation_modal import AbortConfirmationModal
+
+        # Pause all active processes before showing confirmation
+        self._pause_active_processes()
 
         def handle_abort_result(confirmed: bool):
             """Handle abort confirmation result."""
             if confirmed:
                 # User confirmed abort
                 self._abort_installation()
+            else:
+                # User cancelled abort - resume processes
+                self._resume_active_processes()
 
         # Push abort confirmation dialog
         self.app.push_screen(AbortConfirmationModal(), handle_abort_result)
@@ -1766,6 +1827,7 @@ class AppInstallProgressModal(ModalScreen):
         """Abort the installation process."""
         try:
             self._is_aborting = True
+            self._is_paused = False  # Clear pause flag when aborting
             timestamp = datetime.now().strftime("%H:%M:%S")
 
             self._append_log(None, "")
