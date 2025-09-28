@@ -1,11 +1,10 @@
 """Quick verification layer for efficient preliminary package status checking."""
 
 import shutil
-import os
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 from ..utils.logger import get_module_logger
-from .application import Application
+from .software_models import Application
 
 
 class QuickVerificationChecker:
@@ -370,37 +369,3 @@ class QuickVerificationChecker:
 
         return False
 
-    def get_quick_verification_stats(self, applications: List[Application]) -> Dict[str, int]:
-        """Get statistics about quick verification capability.
-
-        Args:
-            applications: List of applications to analyze
-
-        Returns:
-            Dictionary with verification statistics
-        """
-        stats = {
-            "total_apps": len(applications),
-            "has_executables": 0,
-            "has_special_rules": 0,
-            "has_common_paths": 0,
-            "likely_verifiable": 0
-        }
-
-        for app in applications:
-            packages = app.get_package_list()
-
-            has_executable = any(self._check_executable_in_path(pkg) for pkg in packages)
-            has_special = any(pkg in self.special_detection_rules for pkg in packages)
-            has_paths = any(self._check_common_paths(pkg) for pkg in packages)
-
-            if has_executable:
-                stats["has_executables"] += 1
-            if has_special:
-                stats["has_special_rules"] += 1
-            if has_paths:
-                stats["has_common_paths"] += 1
-            if has_executable or has_special or has_paths:
-                stats["likely_verifiable"] += 1
-
-        return stats

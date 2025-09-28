@@ -1,13 +1,11 @@
 """Two-layer package status checker combining quick verification and batch system checking."""
 
 import time
-import asyncio
-from typing import List, Dict, Tuple, Any, Union
+from typing import List, Dict, Any, Union
 from ..utils.logger import get_module_logger
 from .quick_verification_checker import QuickVerificationChecker
 from .batch_package_checker import BatchPackageChecker
-from .application import Application
-from .software_models import ApplicationSuite, SoftwareItem
+from .software_models import Application, ApplicationSuite, SoftwareItem
 
 
 class TwoLayerPackageChecker:
@@ -130,70 +128,6 @@ class TwoLayerPackageChecker:
             }
         }
 
-    def reset_stats(self) -> None:
-        """Reset performance statistics."""
-        self.stats = {
-            "total_checks": 0,
-            "l2_hits": 0,
-            "l3_checks": 0,
-            "l2_hit_rate": 0.0,
-            "total_time": 0.0,
-            "l2_time": 0.0,
-            "l3_time": 0.0
-        }
-        self.logger.info("Performance statistics reset")
-
-    async def analyze_verification_potential(self, applications: List[Application]) -> Dict[str, Any]:
-        """Analyze how well the quick verification layer works for given applications.
-
-        Args:
-            applications: List of applications to analyze
-
-        Returns:
-            Analysis report with verification potential
-        """
-        self.logger.info("Analyzing quick verification potential...")
-
-        # Get quick verification stats
-        quick_stats = self.quick_checker.get_quick_verification_stats(applications)
-
-        # Simulate a quick verification run (without actually doing system checks)
-        quick_results, unverified_apps = self.quick_checker.quick_verify_applications(applications)
-
-        analysis = {
-            "total_applications": len(applications),
-            "quick_verifiable": len(quick_results),
-            "need_system_check": len(unverified_apps),
-            "quick_verification_rate": round((len(quick_results) / len(applications)) * 100, 1) if applications else 0,
-            "detailed_stats": quick_stats,
-            "applications_by_verification_method": {
-                "quick_verified": [app.name for app in applications if app.name in quick_results],
-                "need_system_check": [app.name for app in unverified_apps]
-            }
-        }
-
-        self.logger.info(f"Analysis: {analysis['quick_verification_rate']}% can be quickly verified")
-        return analysis
-
-    def configure_quick_verification(self, custom_rules: Dict[str, List[str]] = None,
-                                   custom_paths: Dict[str, List[str]] = None) -> None:
-        """Configure custom rules for quick verification.
-
-        Args:
-            custom_rules: Custom package detection rules {package_name: [alternative_names]}
-            custom_paths: Custom path templates {pm_type: [path_templates]}
-        """
-        if custom_rules:
-            self.quick_checker.special_detection_rules.update(custom_rules)
-            self.logger.info(f"Added {len(custom_rules)} custom detection rules")
-
-        if custom_paths:
-            for pm_type, paths in custom_paths.items():
-                if pm_type in self.quick_checker.common_paths:
-                    self.quick_checker.common_paths[pm_type].extend(paths)
-                else:
-                    self.quick_checker.common_paths[pm_type] = paths
-            self.logger.info(f"Added custom paths for {len(custom_paths)} package managers")
 
     async def check_software_items(self, software_items: List[Union[ApplicationSuite, Application]]) -> Dict[str, bool]:
         """Check installation status for mixed software items (suites and standalone applications).
@@ -255,21 +189,3 @@ class TwoLayerPackageChecker:
 
         return item_results
 
-    def get_all_applications_from_items(self, software_items: List[Union[ApplicationSuite, Application]]) -> List[Application]:
-        """Extract all applications from mixed software items (expand suite components).
-
-        Args:
-            software_items: List of software items
-
-        Returns:
-            Flat list of all applications
-        """
-        all_applications = []
-
-        for item in software_items:
-            if isinstance(item, ApplicationSuite):
-                all_applications.extend(item.components)
-            else:
-                all_applications.append(item)
-
-        return all_applications
