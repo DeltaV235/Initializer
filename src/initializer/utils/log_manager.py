@@ -101,20 +101,16 @@ class InstallationLogManager:
         if output and output.strip():
             # Split output into lines and send each line
             output_lines = output.strip().split('\n')
-            self._log_to_ui("=== Command Output ===", "info")
             for line in output_lines[-20:]:  # Only show last 20 lines to avoid flooding
                 if line.strip():  # Only log non-empty lines
                     self._log_to_ui(f"  {line}", "normal")
-            self._log_to_ui("=== End Output ===", "info")
 
         if error and error.strip():
             # Split error into lines and send each line
             error_lines = error.strip().split('\n')
-            self._log_to_ui("=== Error Output ===", "error")
             for line in error_lines:
                 if line.strip():  # Only log non-empty lines
                     self._log_to_ui(f"  {line}", "error")
-            self._log_to_ui("=== End Error ===", "error")
 
         # Also log to internal logger for debugging
         detailed_log = f"[{level.value}] {full_message}"

@@ -15,6 +15,15 @@ from ...utils.log_manager import LogLevel
 from ...modules.sudo_manager import SudoManager
 
 
+class LogCategory:
+    """Log category prefixes for better log organization."""
+    CONTROL = "▶ SYS"
+    APT = "├ APT"
+    PROCESS = "├ PROC"
+    USER = "● USER"
+    ERROR = "✗ ERR"
+
+
 class AppInstallProgressModal(ModalScreen):
     """Modal screen for showing application installation/uninstallation progress."""
     
@@ -185,6 +194,40 @@ class AppInstallProgressModal(ModalScreen):
             traceback.print_exc()
             raise
 
+    # Categorized logging methods
+    def _log_control(self, message: str) -> None:
+        """Log control messages with proper prefix and indentation."""
+        formatted_message = f"{LogCategory.CONTROL} {message}"
+        self.add_log_line_safe(formatted_message)
+
+    def _log_apt(self, message: str) -> None:
+        """Log APT output with proper prefix and indentation."""
+        formatted_message = f"  {LogCategory.APT} {message}"
+        self.add_log_line_safe(formatted_message)
+
+    def _log_process(self, message: str) -> None:
+        """Log process messages with proper prefix and indentation."""
+        formatted_message = f"  {LogCategory.PROCESS} {message}"
+        self.add_log_line_safe(formatted_message)
+
+    def _log_user(self, message: str) -> None:
+        """Log user interaction messages with proper prefix and indentation."""
+        formatted_message = f"{LogCategory.USER} {message}"
+        self.add_log_line_safe(formatted_message)
+
+    def _log_error(self, message: str) -> None:
+        """Log error messages with proper prefix and indentation."""
+        formatted_message = f"{LogCategory.ERROR} {message}"
+        self.add_log_line_safe(formatted_message)
+
+    def categorized_log_callback(self, message: str, log_type: str = "normal") -> None:
+        """Callback for app_installer to route messages through categorization system."""
+        # Remove any existing emoji prefixes that might confuse categorization
+        clean_message = message
+
+        # Route through our categorization system instead of directly to add_log_line_safe
+        self._append_log(None, clean_message)
+
     def _init_independent_log_system(self) -> None:
         """Initialize the independent log file system for app progress."""
         try:
@@ -211,7 +254,6 @@ class AppInstallProgressModal(ModalScreen):
             self._write_to_log_file(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self._write_to_log_file(f"Total tasks: {len(self.actions)}")
             self._write_to_log_file(f"Log file: {self.progress_log_file}")
-            self._write_to_log_file("=" * 50)
 
             print(f"DEBUG: Independent log system initialized: {self.progress_log_file}")
 
@@ -241,7 +283,6 @@ class AppInstallProgressModal(ModalScreen):
                 # Remove ANSI escape sequences
                 clean_message = re.sub(r'\x1b\[[0-9;]*m', '', clean_message)
                 clean_message = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', clean_message)
-                clean_message = clean_message.strip()
 
                 timestamp = datetime.now().strftime("%H:%M:%S")
 
@@ -250,14 +291,22 @@ class AppInstallProgressModal(ModalScreen):
 
                 with open(self.progress_log_file, 'a', encoding='utf-8') as f:
                     for line in lines:
-                        line = line.strip()
-                        if line:  # Only write non-empty lines
-                            # Don't add timestamp if line already has one or is a separator
-                            if line.startswith("[") or line.startswith("="):
-                                log_entry = line
-                            else:
-                                log_entry = f"[{timestamp}] {line}"
-                            f.write(log_entry + "\n")
+                        # Don't strip to preserve indentation, but check if line is empty
+                        if not line.strip():  # Skip completely empty lines
+                            continue
+
+                        # Check if line already has category prefix or timestamp
+                        has_category_prefix = any(prefix in line for prefix in [
+                            LogCategory.CONTROL, LogCategory.APT, LogCategory.PROCESS,
+                            LogCategory.USER, LogCategory.ERROR
+                        ])
+
+                        # Don't add timestamp if line already has category prefix, timestamp, or is separator
+                        if has_category_prefix or line.strip().startswith("[") or line.strip().startswith("="):
+                            log_entry = line
+                        else:
+                            log_entry = f"[{timestamp}] {line}"
+                        f.write(log_entry + "\n")
                     f.flush()  # Ensure immediate writing
         except Exception as e:
             print(f"Failed to write to log file: {e}")
@@ -272,22 +321,27 @@ class AppInstallProgressModal(ModalScreen):
         try:
             from datetime import datetime
 
-            # Clean message and handle potential Reading database progress lines
-            clean_message = message.strip()
+            # Preserve original message format (don't strip indentation/prefixes)
+            original_message = message
 
             # Only split by newlines for Reading database progress
-            if 'Reading database' in clean_message and '\n' in clean_message:
-                message_lines = clean_message.split('\n')
+            if 'Reading database' in original_message and '\n' in original_message:
+                message_lines = original_message.split('\n')
             else:
-                message_lines = [clean_message]
+                message_lines = [original_message]
 
             for line in message_lines:
-                line = line.strip()
                 if not line:  # Skip empty lines
                     continue
 
-                # Add timestamp only if not already present
-                if not line.startswith('[') and not line.startswith('='):
+                # Check if line already has category prefix or timestamp
+                has_category_prefix = any(prefix in line for prefix in [
+                    LogCategory.CONTROL, LogCategory.APT, LogCategory.PROCESS,
+                    LogCategory.USER, LogCategory.ERROR
+                ])
+
+                # Add timestamp only if line doesn't have category prefix, timestamp, or special formatting
+                if not has_category_prefix and not line.startswith('[') and not line.startswith('='):
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     log_line = f"[{timestamp}] {line}"
                 else:
@@ -331,21 +385,21 @@ class AppInstallProgressModal(ModalScreen):
     def add_log_line_safe(self, message: str, log_type: str = "normal") -> None:
         """Thread-safe wrapper for add_log_line that also writes to independent log file."""
         try:
-            # Clean message before processing
-            clean_message = message.strip()
+            # Preserve original message format (don't strip indentation/prefixes)
+            original_message = message
 
-            # Always write clean message to independent log file first (thread-safe)
-            self._write_to_log_file(clean_message)
+            # Always write original message to independent log file first (thread-safe)
+            self._write_to_log_file(original_message)
 
             # Check if we're in the main thread for UI update
             import threading
             if threading.current_thread() is threading.main_thread():
                 # We're in the main thread, call directly
-                self.add_log_line(clean_message, log_type)
+                self.add_log_line(original_message, log_type)
             else:
                 # We're in a worker thread, use call_from_thread
                 def safe_add():
-                    self.add_log_line(clean_message, log_type)
+                    self.add_log_line(original_message, log_type)
                 self.app.call_from_thread(safe_add)
         except Exception as e:
             # Fallback: print to console and try to log to file
@@ -356,33 +410,65 @@ class AppInstallProgressModal(ModalScreen):
                 pass
 
     def _append_log(self, log_widget, message: str) -> None:
-        """Legacy method for compatibility - determine log type from Rich markup and forward to add_log_line.
+        """Auto-categorize and format log messages with appropriate prefixes.
 
         Args:
             log_widget: Unused (kept for compatibility)
-            message: Message with potential Rich markup
+            message: Message with potential Rich markup or raw content
         """
-        # Parse Rich markup to determine log type
-        log_type = "normal"
-        clean_message = message.strip()
-
-        # Remove Rich markup and determine type
         import re
 
-        # Check for color patterns in Rich markup
-        if re.search(r'\[green\]|\[success\]', clean_message):
-            log_type = "success"
-        elif re.search(r'\[red\]|\[error\]', clean_message):
-            log_type = "error"
-        elif re.search(r'\[yellow\]|\[warning\]', clean_message):
-            log_type = "warning"
-        elif re.search(r'\[blue\]|\[cyan\]|\[primary\]', clean_message):
-            log_type = "info"
+        # Don't strip the message to preserve indentation
+        original_message = message
 
-        # Clean up Rich markup for display
-        clean_message = re.sub(r'\[/?[^\]]*\]', '', clean_message)
+        # Skip empty messages to avoid creating empty prefix lines
+        if not original_message.strip():
+            # For empty messages, just add a blank line without prefix
+            self.add_log_line_safe("")
+            return
 
-        self.add_log_line_safe(clean_message, log_type)
+        # Check if message already has a category prefix (check original message directly)
+        if any(prefix in original_message for prefix in [
+            LogCategory.CONTROL, LogCategory.APT, LogCategory.PROCESS,
+            LogCategory.USER, LogCategory.ERROR
+        ]):
+            # Message already has a category prefix, use it as-is (preserve the prefix)
+            self.add_log_line_safe(original_message)
+            return
+
+        # For auto-categorization, remove Rich markup for analysis only
+        clean_for_analysis = re.sub(r'\[/?[^\]]*\]', '', original_message)
+        clean_lower = clean_for_analysis.lower()
+
+        # APT-specific output patterns
+        if any(pattern in clean_lower for pattern in [
+            'reading package lists', 'building dependency tree', 'reading state information',
+            'reading database', 'the following', 'need to get', 'after this operation', 'setting up',
+            'processing triggers', 'preparing to unpack', 'unpacking', 'selecting previously'
+        ]):
+            formatted_message = f"  {LogCategory.APT} {clean_for_analysis}"
+        # Control/system messages
+        elif any(pattern in clean_lower for pattern in [
+            'starting', 'completed', 'session', 'checking sudo', 'executing command',
+            'installation', 'update already executed', 'saved installation status',
+            'refreshing main menu', 'command:', 'application.*completed'
+        ]):
+            formatted_message = f"{LogCategory.CONTROL} {clean_for_analysis}"
+        # Error messages
+        elif any(pattern in clean_lower for pattern in [
+            'error', 'failed', 'critical', 'exception', 'abort'
+        ]):
+            formatted_message = f"{LogCategory.ERROR} {clean_for_analysis}"
+        # User interaction
+        elif any(pattern in clean_lower for pattern in [
+            'administrator privileges required', 'sudo', 'password'
+        ]):
+            formatted_message = f"{LogCategory.USER} {clean_for_analysis}"
+        else:
+            # Default to process category for other messages
+            formatted_message = f"  {LogCategory.PROCESS} {clean_for_analysis}"
+
+        self.add_log_line_safe(formatted_message)
 
     def on_mount(self) -> None:
         """Initialize the screen and start processing."""
@@ -463,7 +549,7 @@ class AppInstallProgressModal(ModalScreen):
     async def _start_processing(self) -> None:
         """Process all installation/uninstallation tasks."""
         # Set up log UI callback to connect app installer logs to UI
-        self.app_installer.set_log_ui_callback(self.add_log_line_safe)
+        self.app_installer.set_log_ui_callback(self.categorized_log_callback)
 
         # Start logging session (simplified)
         try:
@@ -479,7 +565,7 @@ class AppInstallProgressModal(ModalScreen):
 
             timestamp = datetime.now().strftime("%H:%M:%S")
             # Use thread-safe log method
-            self.add_log_line_safe(f"📝 Log session started: {session_id}")
+            self._log_control(f"📝 Log session started: {session_id}")
             # Also write detailed task list to independent log
             self._write_to_log_file("Task list:")
             for i, task in enumerate(self.tasks):
@@ -487,7 +573,7 @@ class AppInstallProgressModal(ModalScreen):
             self._write_to_log_file("=" * 30)
 
         except Exception as e:
-            self._append_log(None, f"[yellow]⚠️ Log initialization failed: {e}[/yellow]")
+            self._log_error(f"⚠️ Log initialization failed: {e}")
 
         # Initial permission check for sudo commands
         has_sudo_commands = any(
@@ -584,9 +670,8 @@ class AppInstallProgressModal(ModalScreen):
             task["status"] = "running"
             self._update_task_display(i)
 
-            # Log start
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            self._append_log(None,f"[{timestamp}] Starting: {task['name']}")
+            # Log start with categorized logging
+            self._log_control(f"🚀 Starting: {task['name']}")
 
             # Get the action and application
             action = task["action"]
@@ -603,9 +688,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
+                            self._log_user("⚠️ Administrator privileges required for installation command")
 
-                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
+                        self._log_control(f"Executing command: {command}")
 
                         # Execute installation
                         initial_progress = 40
@@ -627,7 +712,7 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Execute post-install if any
                             if app.post_install:
-                                self._append_log(None,f"[dim]Executing post-install configuration: {app.post_install}[/dim]")
+                                self._log_control(f"Executing post-install configuration: {app.post_install}")
 
                                 # Create progress callback for post-install (70-100%)
                                 def update_postinstall_progress(percentage):
@@ -637,11 +722,11 @@ class AppInstallProgressModal(ModalScreen):
 
                                 post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, "log_widget", update_postinstall_progress)
                                 if not post_success:
-                                    self._append_log(None,f"[yellow]⚠️ Post-install configuration failed: {post_output}[/yellow]")
+                                    self._log_error(f"⚠️ Post-install configuration failed: {post_output}")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(None,f"[green]✅ {app.name} installed successfully[/green]")
+                            self._log_control(f"✅ {app.name} installed successfully")
 
                             # Log successful installation
                             self.app_installer.log_installation_event(
@@ -655,9 +740,9 @@ class AppInstallProgressModal(ModalScreen):
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
+                                self._log_process(f"📝 Saved installation status for {app.name}")
                             else:
-                                self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+                                self._log_error(f"⚠️ Failed to save installation status for {app.name}")
 
                             # Immediately refresh main menu app page after successful installation
                             self._refresh_main_menu_app_page(f"{app.name} installed successfully")
@@ -680,7 +765,7 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(None,f"[red]❌ {app.name} installation failed[/red]")
+                            self._log_error(f"❌ {app.name} installation failed")
                             self._append_log(None,"")
 
                             # Show raw error output first for debugging
@@ -720,9 +805,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
+                            self._log_user("⚠️ Administrator privileges required for uninstallation command")
 
-                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
+                        self._log_control(f"Executing command: {command}")
 
                         # Execute uninstallation
                         initial_progress = 50
@@ -741,13 +826,13 @@ class AppInstallProgressModal(ModalScreen):
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(None,f"[green]✅ {app.name} uninstalled successfully[/green]")
+                            self._log_control(f"✅ {app.name} uninstalled successfully")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
-                                self._append_log(None,f"[dim]  📝 Saved uninstall status for {app.name}[/dim]")
+                                self._log_process(f"📝 Saved uninstall status for {app.name}")
                             else:
-                                self._append_log(None,f"[yellow]  ⚠️ Failed to save uninstall status for {app.name}[/yellow]")
+                                self._log_error(f"⚠️ Failed to save uninstall status for {app.name}")
 
                             # Immediately refresh main menu app page after successful uninstallation
                             self._refresh_main_menu_app_page(f"{app.name} uninstalled successfully")
@@ -760,7 +845,7 @@ class AppInstallProgressModal(ModalScreen):
                                 output, command, app.name
                             )
 
-                            self._append_log(None,f"[red]❌ {app.name} uninstallation failed[/red]")
+                            self._log_error(f"❌ {app.name} uninstallation failed")
                             self._append_log(None,"")
 
                             # Show raw error output first for debugging
@@ -805,15 +890,14 @@ class AppInstallProgressModal(ModalScreen):
         timestamp = datetime.now().strftime("%H:%M:%S")
         successful = sum(1 for t in self.tasks if t["status"] == "success")
         failed = sum(1 for t in self.tasks if t["status"] == "failed")
-        
+
         self._append_log(None,"")
-        self._append_log(None,f"[{timestamp}] " + "="*50)
-        self._append_log(None,f"[bold]Installation completed: {successful} successful, {failed} failed[/bold]")
+        self._log_control(f"📊 Installation completed: {successful} successful, {failed} failed")
         
         if failed == 0:
-            self._append_log(None,"[green]✅ All tasks completed successfully![/green]")
+            self._log_control("🎉 All tasks completed successfully!")
         else:
-            self._append_log(None,"[yellow]⚠️ Some tasks failed, please check logs for details.[/yellow]")
+            self._log_error("⚠️ Some tasks failed, please check logs for details.")
 
         # End logging session
         try:
@@ -994,46 +1078,22 @@ class AppInstallProgressModal(ModalScreen):
                             part = part.strip()
                             if part:  # Only add non-empty parts
                                 output_lines.append(part)
+
+                                # Process each part through auto-categorization system
+                                if log_widget:
+                                    # Use _append_log for consistent categorization
+                                    self._append_log(None, part)
+                                    # Check for errors to set error_occurred flag
+                                    if any(keyword in part.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
+                                        error_occurred = True
+                                else:
+                                    # No log widget, still use auto-categorization
+                                    self._append_log(None, part)
+                                    # Check for errors to set error_occurred flag
+                                    if any(keyword in part.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
+                                        error_occurred = True
+
                         line_count += 1
-
-                        # Smart progress estimation based on output patterns
-                        new_progress = self._estimate_progress_from_output(line, line_count, command)
-                        if new_progress > progress_percentage:
-                            progress_percentage = min(new_progress, 95)  # Cap at 95% until completion
-                            if progress_callback:
-                                progress_callback(progress_percentage)
-
-                        # Real-time log display if widget provided
-                        if log_widget:
-                            # Color-code different types of output
-                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
-                                self.add_log_line_safe(f"  📄 {line}", "error")
-                                error_occurred = True
-                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self.add_log_line_safe(f"  📄 {line}", "warning")
-                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self.add_log_line_safe(f"  📦 {line}", "info")
-                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self.add_log_line_safe(f"  ✅ {line}", "success")
-                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
-                            else:
-                                self.add_log_line_safe(f"  📄 {line}", "normal")
-                        else:
-                            # No log widget, always display real-time output
-                            if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied']):
-                                self.add_log_line_safe(f"  📄 {line}", "error")
-                                error_occurred = True
-                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self.add_log_line_safe(f"  📄 {line}", "warning")
-                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self.add_log_line_safe(f"  📦 {line}", "info")
-                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self.add_log_line_safe(f"  ✅ {line}", "success")
-                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
-                            else:
-                                self.add_log_line_safe(f"  📄 {line}", "normal")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -1194,37 +1254,19 @@ class AppInstallProgressModal(ModalScreen):
                             if progress_callback:
                                 progress_callback(progress_percentage)
 
-                        # Real-time log display if widget provided
+                        # Real-time log display using auto-categorization
                         if log_widget:
-                            # Color-code different types of output
+                            # Use _append_log for consistent categorization
+                            self._append_log(None, line)
+                            # Check for errors to set error_occurred flag
                             if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable']):
-                                self.add_log_line_safe(f"  📄 {line}", "error")
                                 error_occurred = True
-                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self.add_log_line_safe(f"  📄 {line}", "warning")
-                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self.add_log_line_safe(f"  📦 {line}", "info")
-                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self.add_log_line_safe(f"  ✅ {line}", "success")
-                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
-                            else:
-                                self.add_log_line_safe(f"  📄 {line}", "normal")
                         else:
-                            # No log widget, always display real-time output
+                            # No log widget, still use auto-categorization
+                            self._append_log(None, line)
+                            # Check for errors to set error_occurred flag
                             if any(keyword in line.lower() for keyword in ['error', 'failed', 'permission denied', 'access denied', 'cannot', 'unable']):
-                                self.add_log_line_safe(f"  📄 {line}", "error")
                                 error_occurred = True
-                            elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                self.add_log_line_safe(f"  📄 {line}", "warning")
-                            elif any(keyword in line.lower() for keyword in ['installing', 'downloading']):
-                                self.add_log_line_safe(f"  📦 {line}", "info")
-                            elif any(keyword in line.lower() for keyword in ['success', 'complete', 'done']):
-                                self.add_log_line_safe(f"  ✅ {line}", "success")
-                            elif any(keyword in line.lower() for keyword in ['processing', 'configuring', 'setting up']):
-                                self.add_log_line_safe(f"  ⚙️ {line}", "info")
-                            else:
-                                self.add_log_line_safe(f"  📄 {line}", "normal")
 
                         # Small delay to prevent UI flooding
                         await asyncio.sleep(0.1)
@@ -1419,9 +1461,7 @@ class AppInstallProgressModal(ModalScreen):
         # Log retry start
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._append_log(None,"")
-        self._append_log(None,f"[{timestamp}] " + "="*30)
-        self._append_log(None,f"[bold blue]🔄 Starting retry for {len(failed_tasks)} failed tasks[/bold blue]")
-        self._append_log(None,"="*50)
+        self._log_control(f"🔄 Starting retry for {len(failed_tasks)} failed tasks")
 
         # Reset failed tasks status
         for task in failed_tasks:
@@ -1468,9 +1508,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for installation command[/yellow]")
+                            self._log_user("⚠️ Administrator privileges required for installation command")
 
-                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
+                        self._log_control(f"Executing command: {command}")
 
                         # Execute installation
                         task["progress"] = 40
@@ -1491,13 +1531,13 @@ class AppInstallProgressModal(ModalScreen):
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(None,f"[green]✅ {app.name} re-installed successfully[/green]")
+                            self._log_control(f"✅ {app.name} re-installed successfully")
 
                             # Save installation status to persist state
                             if self.app_installer.save_installation_status(app.name, True):
-                                self._append_log(None,f"[dim]  📝 Saved installation status for {app.name}[/dim]")
+                                self._log_process(f"📝 Saved installation status for {app.name}")
                             else:
-                                self._append_log(None,f"[yellow]  ⚠️ Failed to save installation status for {app.name}[/yellow]")
+                                self._log_error(f"⚠️ Failed to save installation status for {app.name}")
 
                             # Immediately refresh main menu app page after successful re-installation
                             self._refresh_main_menu_app_page(f"{app.name} re-installed successfully")
@@ -1545,9 +1585,9 @@ class AppInstallProgressModal(ModalScreen):
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
-                            self._append_log(None,f"[yellow]⚠️ Administrator privileges required for uninstallation command[/yellow]")
+                            self._log_user("⚠️ Administrator privileges required for uninstallation command")
 
-                        self._append_log(None,f"[dim]Executing command: {command}[/dim]")
+                        self._log_control(f"Executing command: {command}")
 
                         # Execute uninstallation
                         task["progress"] = 50
@@ -1558,7 +1598,7 @@ class AppInstallProgressModal(ModalScreen):
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._append_log(None,f"[green]✅ {app.name} re-uninstalled successfully[/green]")
+                            self._log_control(f"✅ {app.name} re-uninstalled successfully")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
@@ -1624,8 +1664,7 @@ class AppInstallProgressModal(ModalScreen):
         retry_failed = sum(1 for t in retry_tasks if t["status"] == "failed")
 
         self._append_log(None,"")
-        self._append_log(None,f"[{timestamp}] " + "="*50)
-        self._append_log(None,f"[bold]Retry completed: {retry_successful} successful, {retry_failed} failed[/bold]")
+        self._log_control(f"Retry completed: {retry_successful} successful, {retry_failed} failed")
 
         if retry_failed == 0:
             self._append_log(None,"[green]🎉 All retry tasks completed successfully![/green]")
@@ -1648,8 +1687,7 @@ class AppInstallProgressModal(ModalScreen):
             successful_count = sum(1 for task in self.tasks if task["status"] == "success")
             failed_count = sum(1 for task in self.tasks if task["status"] == "failed")
 
-            self._write_to_log_file("=" * 50)
-            self._write_to_log_file("=== Session Summary ===")
+            self._write_to_log_file("Session Summary")
             self._write_to_log_file(f"Session ended: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self._write_to_log_file(f"Total tasks: {len(self.tasks)}")
             self._write_to_log_file(f"Successful: {successful_count}")
@@ -1660,8 +1698,6 @@ class AppInstallProgressModal(ModalScreen):
                 for task in self.tasks:
                     if task["status"] == "failed":
                         self._write_to_log_file(f"  - {task['name']}: {task.get('message', 'No details')}")
-
-            self._write_to_log_file("=" * 50)
             print(f"DEBUG: Session summary written to: {self.progress_log_file}")
         except Exception as e:
             print(f"Failed to write session summary: {e}")
@@ -1733,7 +1769,6 @@ class AppInstallProgressModal(ModalScreen):
             timestamp = datetime.now().strftime("%H:%M:%S")
 
             self._append_log(None, "")
-            self._append_log(None, f"[{timestamp}] " + "="*50)
             self._append_log(None, "[yellow]⚠️ User requested installation abort...[/yellow]")
 
             # Terminate all active processes
@@ -1765,7 +1800,6 @@ class AppInstallProgressModal(ModalScreen):
             self._enable_close_button()
 
             self._append_log(None, f"[{timestamp}] Installation aborted, you can close this window")
-            self._append_log(None, "="*50)
 
         except Exception as e:
             self._append_log(None, f"[red]❌ Abort handling failed: {str(e)}[/red]")
