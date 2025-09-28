@@ -6,11 +6,11 @@ import subprocess
 from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, ScrollableContainer
+from textual.containers import Container, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label
+from textual.widgets import Static, Rule, Label
 from textual.events import Key
-from typing import Callable, Optional, List
+from typing import Callable, List
 
 from ...modules.package_manager import PackageManagerDetector
 from .mirror_source_processor import APTMirrorProcessor

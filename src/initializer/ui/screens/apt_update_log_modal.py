@@ -7,7 +7,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Static, Rule, ProgressBar
+from textual.widgets import Static, Rule
 from textual.events import Key
 from typing import Callable, Optional
 

@@ -1,16 +1,12 @@
 """Main application class for the Linux System Initializer."""
 
-import asyncio
 import sys
 import subprocess
-from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
-from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header
-from textual.screen import Screen
 from textual.binding import Binding
 
 from .config_manager import ConfigManager

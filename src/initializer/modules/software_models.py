@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Union
+from typing import List
 
 
 class SoftwareItem(ABC):

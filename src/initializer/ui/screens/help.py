@@ -4,7 +4,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Static, Rule, Label, Markdown
+from textual.widgets import Button, Static, Rule, Markdown
 
 from ...config_manager import ConfigManager
 

@@ -2,12 +2,10 @@
 
 import subprocess
 import asyncio
-import shutil
 import time
-from typing import List, Dict, Optional, Tuple, Any
-from pathlib import Path
+from typing import List, Dict, Tuple
 from ..utils.logger import get_module_logger
-from .application import Application
+from .software_models import Application
 
 
 class BatchPackageChecker:

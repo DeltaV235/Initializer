@@ -1,20 +1,17 @@
 """Main menu screen for the Linux System Initializer."""
 
-import re
-import asyncio
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar, ListView, ListItem
+from textual.widgets import Button, Static, Rule, Label
 from textual.reactive import reactive
-from textual.message import Message
 
 from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
 from ...modules.package_manager import PackageManagerDetector
 from ...modules.app_installer import AppInstaller
-from ...modules.software_models import ApplicationSuite, Application
+from ...modules.software_models import ApplicationSuite
 from ...utils.logger import get_ui_logger
 
 # Initialize logger for this screen

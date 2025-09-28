@@ -2,11 +2,11 @@
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer, VerticalScroll
+from textual.containers import Container, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label, Input
+from textual.widgets import Static, Rule, Label
 from textual.events import Key
-from typing import Callable, Optional, List, Dict
+from typing import Callable, Optional, List
 
 from ...modules.package_manager import PackageManagerDetector
 

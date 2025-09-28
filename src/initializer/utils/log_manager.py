@@ -1,6 +1,5 @@
 """Simplified Installation Log Manager for the Linux System Initializer."""
 
-from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable
 from enum import Enum

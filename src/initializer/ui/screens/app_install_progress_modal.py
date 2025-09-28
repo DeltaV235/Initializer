@@ -2,9 +2,9 @@
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
+from textual.containers import Container, Vertical, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, Rule, Label, ProgressBar
+from textual.widgets import Static, Rule, Label
 from textual.reactive import reactive
 from textual.events import Key
 from typing import List, Dict, Optional
