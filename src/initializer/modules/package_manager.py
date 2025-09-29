@@ -88,10 +88,6 @@ class PackageManagerDetector:
 
         return managers
     
-    def _detect_package_managers(self) -> List[PackageManager]:
-        """Detect available package managers on the system (backward compatibility)."""
-        return [pm for pm in self.all_package_managers if pm.available]
-    
     def _get_current_source(self, pm_name: str) -> Optional[str]:
         """Get the current source/mirror for a package manager."""
         try:
@@ -157,17 +153,6 @@ class PackageManagerDetector:
     def get_available_mirrors(self, pm_name: str) -> Dict[str, str]:
         """Get available mirror sources for a package manager."""
         return self._mirror_sources.get(pm_name, {})
-    
-    def get_available_mirrors_with_info(self, pm_name: str) -> List[Dict[str, str]]:
-        """Get available mirror sources with detailed info for a package manager."""
-        try:
-            # Load the raw configuration directly
-            modules_config = self.config_manager.load_config("modules")
-            package_manager_config = modules_config.get('modules', {}).get('package_manager', {})
-            mirrors_config = package_manager_config.get('mirrors', {}).get(pm_name, {})
-            return mirrors_config.get('sources', [])
-        except Exception:
-            return []
     
     def _load_mirror_sources_from_config(self) -> Dict[str, Dict[str, str]]:
         """Load mirror sources from configuration file."""

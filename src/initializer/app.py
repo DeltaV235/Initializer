@@ -137,23 +137,6 @@ class InitializerApp(App):
             if self.debug_mode:
                 self.console.print(f"[yellow]Preset not found: {preset_name}[/yellow]")
 
-    def get_sudo_manager(self) -> Optional[SudoManager]:
-        """获取sudo管理器实例.
-
-        Returns:
-            SudoManager实例，如果未设置则返回None
-        """
-        return self.sudo_manager
-
-    def set_sudo_manager(self, sudo_manager: SudoManager) -> None:
-        """设置sudo管理器实例.
-
-        Args:
-            sudo_manager: SudoManager实例
-        """
-        self.sudo_manager = sudo_manager
-        self.logger.info("已设置应用级sudo管理器")
-
     def _cleanup_sudo_manager(self) -> None:
         """清理sudo管理器中的敏感数据."""
         if self.sudo_manager:

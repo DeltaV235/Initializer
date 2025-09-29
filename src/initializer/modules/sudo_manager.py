@@ -540,11 +540,6 @@ class SudoManager:
 
         self.logger.info("已清理sudo密码缓存")
 
-    def reset_retry_count(self) -> None:
-        """重置重试计数器."""
-        self._retry_count = 0
-        self.logger.debug("重置sudo重试计数器")
-
     def __del__(self):
         """析构函数，确保清理敏感数据."""
         try:

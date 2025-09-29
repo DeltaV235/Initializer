@@ -923,15 +923,6 @@ class AppInstaller:
                 self.logger.warning(f"Individual status check failed for {app.name}: {str(e)}")
                 app.installed = False
     
-    def get_all_applications(self) -> List[Application]:
-        """Get all configured applications with their current status.
-
-        Returns:
-            List of Application objects with updated status
-        """
-        self.refresh_all_status()
-        return self.applications
-
     def get_all_software_items(self) -> List[Union[ApplicationSuite, Application]]:
         """Get all configured software items (suites and standalone applications) with current status.
 
@@ -940,62 +931,6 @@ class AppInstaller:
         """
         self.refresh_all_status()
         return self.software_items
-
-    def get_software_items_for_display(self, expanded_suites: set = None) -> List[Union[ApplicationSuite, Application]]:
-        """Get software items formatted for UI display with expansion state.
-
-        Args:
-            expanded_suites: Set of suite names that should be expanded
-
-        Returns:
-            List of software items with expansion state applied
-        """
-        expanded_suites = expanded_suites or set()
-
-        # Update expansion state based on provided set
-        for item in self.software_items:
-            if isinstance(item, ApplicationSuite):
-                item.expanded = item.name in expanded_suites
-
-        # Refresh status
-        self.refresh_all_status()
-
-        return self.software_items
-
-    def toggle_suite_expansion(self, suite_name: str) -> bool:
-        """Toggle the expansion state of a suite.
-
-        Args:
-            suite_name: Name of the suite to toggle
-
-        Returns:
-            New expansion state (True if expanded, False if collapsed)
-        """
-        for item in self.software_items:
-            if isinstance(item, ApplicationSuite) and item.name == suite_name:
-                item.expanded = not item.expanded
-                self.logger.debug(f"Suite '{suite_name}' {'expanded' if item.expanded else 'collapsed'}")
-                return item.expanded
-
-        self.logger.warning(f"Suite '{suite_name}' not found")
-        return False
-
-    def get_flat_display_items(self) -> List[Union[ApplicationSuite, Application]]:
-        """Get flattened list of items for display (expanded suites show components).
-
-        Returns:
-            Flattened list where expanded suites are followed by their components
-        """
-        display_items = []
-
-        for item in self.software_items:
-            display_items.append(item)
-
-            # If it's an expanded suite, add its components
-            if isinstance(item, ApplicationSuite) and item.expanded:
-                display_items.extend(item.components)
-
-        return display_items
     
     def execute_command(self, command: str) -> Tuple[bool, str]:
         """Execute a shell command.
