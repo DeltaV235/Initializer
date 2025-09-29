@@ -1447,6 +1447,16 @@ class MainMenuScreen(Screen):
         """Apply the selected app installation changes."""
         logger.debug("action_apply_app_changes called")
 
+        # 只有在app_install段才能应用应用更改
+        if self.selected_segment != "app_install":
+            logger.debug(f"Not in app_install segment (current: {self.selected_segment}), ignoring A key")
+            return
+
+        # 只有在右侧面板有焦点时才能应用更改（使用与space和enter键相同的检查方式）
+        if self._is_focus_in_left_panel():
+            logger.debug("Focus is in left panel, ignoring A key")
+            return
+
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             logger.debug("No app install cache or cache is dict, returning")
             return
