@@ -1,4 +1,4 @@
-"""Application Installation Confirmation Modal."""
+"""Application Installation Confirmation."""
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -8,12 +8,12 @@ from textual.widgets import Static, Rule, Label
 from textual.events import Key
 from typing import Callable, List, Dict, Optional
 from ...modules.sudo_manager import SudoManager
-from .sudo_password_modal import SudoPasswordModal, SudoRetryModal
+from .sudo_prompt import SudoPrompt, SudoRetry
 from ...utils.logger import get_module_logger
 
 
-class AppInstallConfirmationModal(ModalScreen):
-    """Modal screen for confirming application installation/uninstallation."""
+class AppInstallConfirm(ModalScreen):
+    """Screen for confirming application installation/uninstallation."""
     
     BINDINGS = [
         ("escape", "cancel_operation", "Cancel"),
@@ -30,7 +30,7 @@ class AppInstallConfirmationModal(ModalScreen):
     
     # CSS styles for the modal - only custom styles not covered by global styles
     CSS = """
-    AppInstallConfirmationModal {
+    AppInstallConfirm {
         align: center middle;
     }
 
@@ -80,7 +80,7 @@ class AppInstallConfirmationModal(ModalScreen):
         self.logger = get_module_logger("app_install_confirmation_modal")
         self.sudo_manager = SudoManager()
 
-        self.logger.info(f"AppInstallConfirmationModal initialized with {len(actions)} actions")
+        self.logger.info(f"AppInstallConfirm initialized with {len(actions)} actions")
     
     def on_mount(self) -> None:
         """Initialize the screen."""
@@ -363,7 +363,7 @@ class AppInstallConfirmationModal(ModalScreen):
         Returns:
             用户输入的密码，如果用户取消则返回None
         """
-        password_modal = SudoPasswordModal(
+        password_modal = SudoPrompt(
             retry_count=self.sudo_manager.get_retry_count(),
             max_retries=3
         )
@@ -380,7 +380,7 @@ class AppInstallConfirmationModal(ModalScreen):
         Returns:
             True如果用户选择重试，False如果用户取消
         """
-        retry_modal = SudoRetryModal(
+        retry_modal = SudoRetry(
             retry_count=self.sudo_manager.get_retry_count(),
             max_retries=3,
             error_message=error_message
@@ -391,7 +391,7 @@ class AppInstallConfirmationModal(ModalScreen):
 
     async def _show_sudo_unavailable_error(self) -> None:
         """显示sudo不可用的错误信息."""
-        error_modal = SudoRetryModal(
+        error_modal = SudoRetry(
             retry_count=3,  # 显示为已达到最大重试次数
             max_retries=3,
             error_message="系统未安装sudo或当前用户无权限使用sudo"

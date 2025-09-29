@@ -1,4 +1,4 @@
-"""Abort Installation Confirmation Modal."""
+"""Abort Installation Confirmation."""
 
 from textual import on
 from textual.app import ComposeResult
@@ -8,8 +8,8 @@ from textual.widgets import Button, Static, Rule
 from textual.events import Key
 
 
-class AbortConfirmationModal(ModalScreen[bool]):
-    """Modal screen for confirming installation abort."""
+class AbortConfirm(ModalScreen[bool]):
+    """Screen for confirming installation abort."""
 
     BINDINGS = [
         ("escape", "cancel_abort", "Cancel"),
@@ -20,7 +20,7 @@ class AbortConfirmationModal(ModalScreen[bool]):
 
     # CSS styles for the modal
     CSS = """
-    AbortConfirmationModal {
+    AbortConfirm {
         align: center middle;
     }
 

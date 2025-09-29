@@ -1,4 +1,4 @@
-"""Source Selection Modal for Package Manager."""
+"""Package Mirror Picker for Package Manager."""
 
 from textual import on
 from textual.app import ComposeResult
@@ -11,8 +11,8 @@ from typing import Callable, Optional, List
 from ...modules.package_manager import PackageManagerDetector
 
 
-class SourceSelectionModal(ModalScreen):
-    """Modal screen for selecting package manager source."""
+class PackageMirrorPicker(ModalScreen):
+    """Screen for selecting package manager mirror source."""
     
     BINDINGS = [
         ("escape", "dismiss", "Cancel"),
@@ -20,7 +20,7 @@ class SourceSelectionModal(ModalScreen):
     
     # CSS styles for the modal
     CSS = """
-    SourceSelectionModal {
+    PackageMirrorPicker {
         align: center middle;
     }
 

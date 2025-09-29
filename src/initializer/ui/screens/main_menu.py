@@ -720,11 +720,11 @@ class MainMenuScreen(Screen):
             # Clear panel focus before showing modal
             self._clear_panel_focus()
             # Show package manager installation modal instead of separate screen
-            from .package_manager_install_modal import PackageManagerInstallModal
+            from .package_manager_installer import PackageManagerInstaller
             def on_install_actions_selected(actions: list):
                 # Handle installation actions if needed
                 pass
-            self.app.push_screen(PackageManagerInstallModal(on_install_actions_selected, self.config_manager))
+            self.app.push_screen(PackageManagerInstaller(on_install_actions_selected, self.config_manager))
         elif self._pm_focused_item == "source":
             # Directly show source selection modal without intermediate screen
             self._show_source_selection_modal()
@@ -736,8 +736,8 @@ class MainMenuScreen(Screen):
 
         try:
             from ...modules.package_manager import PackageManagerDetector
-            from .source_selection_modal import SourceSelectionModal
-            from .mirror_confirmation_modal import MirrorConfirmationModal
+            from .package_mirror_picker import PackageMirrorPicker
+            from .package_mirror_confirm import PackageMirrorConfirm
             
             # Get the primary package manager
             detector = PackageManagerDetector(self.config_manager)
@@ -748,7 +748,7 @@ class MainMenuScreen(Screen):
                 return
             
             # Create source selection modal first to capture its reference
-            source_modal_ref = SourceSelectionModal(primary_pm, None, self.config_manager)
+            source_modal_ref = PackageMirrorPicker(primary_pm, None, self.config_manager)
 
             def on_source_selected(selected_source: str):
                 # Show confirmation modal
@@ -765,7 +765,7 @@ class MainMenuScreen(Screen):
                 # Show confirmation modal with source modal reference and main menu reference
                 try:
                     self.app.push_screen(
-                        MirrorConfirmationModal(primary_pm, selected_source, on_confirmation_result, self.config_manager, source_modal_ref, self)
+                        PackageMirrorConfirm(primary_pm, selected_source, on_confirmation_result, self.config_manager, source_modal_ref, self)
                     )
                 except Exception as e:
                     self._show_message(f"Error showing confirmation: {str(e)}", error=True)
@@ -1496,7 +1496,7 @@ class MainMenuScreen(Screen):
         if actions:
             logger.debug(f"Showing confirmation modal for {len(actions)} actions")
             # Show confirmation modal with callback-based approach
-            from .app_install_confirmation_modal import AppInstallConfirmationModal
+            from .app_install_confirm import AppInstallConfirm
 
             # Store reference to confirmation modal for cascading close
             confirmation_modal_ref = None
@@ -1510,13 +1510,13 @@ class MainMenuScreen(Screen):
                 if confirmed:
                     logger.info("=== User confirmed, creating progress modal ===")
                     # Show progress modal
-                    from .app_install_progress_modal import AppInstallProgressModal
+                    from .app_install_progress import AppInstallProgress
                     try:
-                        logger.info("About to create AppInstallProgressModal...")
+                        logger.info("About to create AppInstallProgress...")
                         # 传递sudo_manager和主菜单引用到progress modal
-                        progress_modal = AppInstallProgressModal(actions, self.app_installer, sudo_manager)
+                        progress_modal = AppInstallProgress(actions, self.app_installer, sudo_manager)
                         progress_modal._main_menu_ref = self  # 传递主菜单引用用于刷新
-                        logger.info("AppInstallProgressModal created successfully")
+                        logger.info("AppInstallProgress created successfully")
 
                         # Create a custom progress modal that knows about the confirmation modal
                         progress_modal._confirmation_modal = confirmation_modal_ref
@@ -1549,7 +1549,7 @@ class MainMenuScreen(Screen):
                     logger.info("=== User cancelled installation ===")
 
             try:
-                modal = AppInstallConfirmationModal(actions, on_confirmation, self.app_installer)
+                modal = AppInstallConfirm(actions, on_confirmation, self.app_installer)
                 confirmation_modal_ref = modal  # Store reference for cascading close
                 # Clear panel focus before showing modal
                 self._clear_panel_focus()
@@ -1705,11 +1705,11 @@ class MainMenuScreen(Screen):
             # Clear panel focus before showing modal
             self._clear_panel_focus()
             # Open package manager installation modal
-            from .package_manager_install_modal import PackageManagerInstallModal
+            from .package_manager_installer import PackageManagerInstaller
             def on_install_actions_selected(actions: list):
                 # Handle installation actions if needed
                 pass
-            self.app.push_screen(PackageManagerInstallModal(on_install_actions_selected, self.config_manager))
+            self.app.push_screen(PackageManagerInstaller(on_install_actions_selected, self.config_manager))
 
         elif button_id and button_id.startswith("apply-app-changes-"):
             # Apply app changes (legacy support)
@@ -1720,7 +1720,7 @@ class MainMenuScreen(Screen):
         if not hasattr(self, '_primary_pm') or not self._primary_pm:
             return
             
-        from .source_selection_modal import SourceSelectionModal
+        from .package_mirror_picker import PackageMirrorPicker
         def on_source_selected(source_url: str) -> None:
             """Handle source selection."""
             if source_url:
@@ -1740,7 +1740,7 @@ class MainMenuScreen(Screen):
                     # Show error message
                     self._show_temp_message(f"❌ {message}")
         
-        modal = SourceSelectionModal(self._primary_pm, on_source_selected, self.config_manager)
+        modal = PackageMirrorPicker(self._primary_pm, on_source_selected, self.config_manager)
         # Clear panel focus before showing modal
         self._clear_panel_focus()
         self.app.push_screen(modal)

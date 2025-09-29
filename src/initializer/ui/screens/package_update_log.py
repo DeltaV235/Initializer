@@ -1,4 +1,4 @@
-"""APT Update Log Modal for full-screen progress and log display."""
+"""Package Update Log for full-screen progress and log display."""
 
 import re
 import subprocess
@@ -12,12 +12,12 @@ from textual.events import Key
 from typing import Callable, Optional
 
 
-class APTUpdateLogModal(ModalScreen):
-    """Full-screen modal for displaying APT update progress and logs."""
+class PackageUpdateLog(ModalScreen):
+    """Full-screen screen for displaying package update progress and logs."""
     
     # CSS styles for progress modal
     CSS = """
-    APTUpdateLogModal {
+    PackageUpdateLog {
         align: center middle;
     }
 
@@ -125,7 +125,7 @@ class APTUpdateLogModal(ModalScreen):
                 try:
                     # Search for the source modal and close it
                     for screen in list(self.app.screen_stack):
-                        if screen.__class__.__name__ == 'SourceSelectionModal':
+                        if screen.__class__.__name__ == 'PackageMirrorPicker':
                             try:
                                 screen.dismiss()
                                 break

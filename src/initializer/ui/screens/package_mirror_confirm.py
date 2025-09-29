@@ -1,4 +1,4 @@
-"""Mirror Confirmation Modal for Package Manager."""
+"""Package Mirror Confirmation for Package Manager."""
 
 import os
 import shutil
@@ -13,11 +13,11 @@ from textual.events import Key
 from typing import Callable, List
 
 from ...modules.package_manager import PackageManagerDetector
-from .mirror_source_processor import APTMirrorProcessor
-from .apt_update_log_modal import APTUpdateLogModal
+from .package_mirror_updater import PackageMirrorUpdater
+from .package_update_log import PackageUpdateLog
 
 
-class MirrorConfirmationModal(ModalScreen):
+class PackageMirrorConfirm(ModalScreen):
     """Modal screen for confirming mirror source change."""
 
     BINDINGS = [
@@ -35,7 +35,7 @@ class MirrorConfirmationModal(ModalScreen):
 
     # CSS styles for the modal
     CSS = """
-    MirrorConfirmationModal {
+    PackageMirrorConfirm {
         align: center middle;
     }
 
@@ -130,10 +130,10 @@ class MirrorConfirmationModal(ModalScreen):
 
         # Initialize APT mirror processor for complete handling
         if self.package_manager.name == "apt":
-            self.apt_processor = APTMirrorProcessor(new_source)
-            self.affected_files = self.apt_processor.get_affected_files_list()
+            self.mirror_updater = PackageMirrorUpdater(new_source)
+            self.affected_files = self.mirror_updater.get_affected_files_list()
         else:
-            self.apt_processor = None
+            self.mirror_updater = None
             self.affected_files = self._get_affected_files()
         
     def _get_affected_files(self) -> List[str]:
@@ -200,9 +200,9 @@ class MirrorConfirmationModal(ModalScreen):
                 
                 # Show specific backup file examples - only filenames
                 if self.package_manager.name == "apt":
-                    if self.apt_processor:
+                    if self.mirror_updater:
                         # Use the processor to get accurate backup file names
-                        main_file_path, file_format = self.apt_processor._detect_main_sources_file()
+                        main_file_path, file_format = self.mirror_updater._detect_main_sources_file()
                         if file_format == "deb822":
                             yield Static(f"  • ubuntu.sources.bak_{backup_suffix}", classes="backup-info")
                         else:
@@ -219,7 +219,7 @@ class MirrorConfirmationModal(ModalScreen):
                                 try:
                                     with open(file_path, 'r') as f:
                                         content = f.read()
-                                    if self.apt_processor._contains_ubuntu_sources(content):
+                                    if self.mirror_updater._contains_ubuntu_sources(content):
                                         ubuntu_files_count += 1
                                 except:
                                     continue
@@ -301,7 +301,7 @@ class MirrorConfirmationModal(ModalScreen):
             # Method 2: Search through screen stack as fallback
             stack_copy = list(self.app.screen_stack)
             for screen in stack_copy:
-                if screen.__class__.__name__ == 'SourceSelectionModal':
+                if screen.__class__.__name__ == 'PackageMirrorPicker':
                     try:
                         screen.dismiss()
                         break
@@ -427,12 +427,12 @@ class MirrorConfirmationModal(ModalScreen):
     
     def _change_apt_mirror(self, backup_suffix: str) -> tuple[bool, str]:
         """Change APT mirror source with complete backup and replacement."""
-        if not self.apt_processor:
+        if not self.mirror_updater:
             return False, "APT processor not initialized"
 
         try:
             # Use the complete processor for mirror change
-            result = self.apt_processor.process_complete_mirror_change(backup_suffix)
+            result = self.mirror_updater.process_complete_mirror_change(backup_suffix)
 
             # For APT, we need to dismiss this confirmation modal BEFORE showing the progress modal
             def dismiss_and_show_apt_progress():
@@ -450,7 +450,7 @@ class MirrorConfirmationModal(ModalScreen):
                         self.callback(False, f"Mirror changed but apt update failed: {message}")
 
                 # Show the APT progress modal with source selection closing enabled and source modal reference
-                self.app.push_screen(APTUpdateLogModal(on_apt_update_complete, close_source_selection=True, source_modal_ref=self.source_modal, main_menu_ref=self.main_menu_ref))
+                self.app.push_screen(PackageUpdateLog(on_apt_update_complete, close_source_selection=True, source_modal_ref=self.source_modal, main_menu_ref=self.main_menu_ref))
 
             # Schedule the modal dismissal and progress display
             self.app.call_from_thread(dismiss_and_show_apt_progress)

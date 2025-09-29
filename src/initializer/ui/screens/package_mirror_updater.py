@@ -1,6 +1,6 @@
 """
-APT镜像源完整处理模块示例
-用于说明sources.list.d目录处理逻辑
+Package mirror updater module for handling APT mirror configuration updates.
+Used for complete sources.list.d directory processing logic.
 """
 
 import os
@@ -11,13 +11,13 @@ from typing import List, Tuple, Dict
 
 from ...utils.logger import get_ui_logger
 
-class APTMirrorProcessor:
-    """APT镜像源完整处理器"""
+class PackageMirrorUpdater:
+    """Package mirror updater for APT mirror configuration."""
     
     def __init__(self, new_mirror_url: str):
         self.new_mirror_url = new_mirror_url.rstrip('/')
         self.backup_suffix = ""
-        self.logger = get_ui_logger("mirror_source_processor")
+        self.logger = get_ui_logger("package_mirror_updater")
 
         # Log initialization
         self.logger.info(f"APT mirror processor initialized with URL: {new_mirror_url}")

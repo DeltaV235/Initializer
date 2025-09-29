@@ -1,4 +1,4 @@
-"""Sudo密码输入Modal - 安全的密码输入界面组件."""
+"""Sudo Password Prompt - secure password input interface component."""
 
 from textual import on
 from textual.app import ComposeResult
@@ -9,8 +9,8 @@ from textual.events import Key
 from typing import Optional
 
 
-class SudoPasswordModal(ModalScreen[Optional[str]]):
-    """Sudo密码输入Modal - 提供安全的密码输入界面."""
+class SudoPrompt(ModalScreen[Optional[str]]):
+    """Sudo password prompt - provides secure password input interface."""
 
     BINDINGS = [
         ("escape", "cancel_modal", "取消"),
@@ -19,7 +19,7 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
 
     # CSS样式
     CSS = """
-    SudoPasswordModal {
+    SudoPrompt {
         align: center middle;
     }
 
@@ -245,8 +245,8 @@ class SudoPasswordModal(ModalScreen[Optional[str]]):
             pass
 
 
-class SudoRetryModal(ModalScreen[bool]):
-    """Sudo重试确认Modal - 询问用户是否继续重试."""
+class SudoRetry(ModalScreen[bool]):
+    """Sudo retry confirmation - asks user whether to continue retrying."""
 
     BINDINGS = [
         ("escape", "cancel_retry", "取消"),
@@ -257,7 +257,7 @@ class SudoRetryModal(ModalScreen[bool]):
 
     # CSS样式
     CSS = """
-    SudoRetryModal {
+    SudoRetry {
         align: center middle;
     }
 

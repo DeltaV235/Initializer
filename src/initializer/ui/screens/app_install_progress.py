@@ -1,4 +1,4 @@
-"""Application Installation Progress Modal."""
+"""Application Installation Progress."""
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -24,8 +24,8 @@ class LogCategory:
     ERROR = "✗ ERR"
 
 
-class AppInstallProgressModal(ModalScreen):
-    """Modal screen for showing application installation/uninstallation progress."""
+class AppInstallProgress(ModalScreen):
+    """Screen for showing application installation/uninstallation progress."""
     
     BINDINGS = [
         ("escape", "close", "Close"),
@@ -36,7 +36,7 @@ class AppInstallProgressModal(ModalScreen):
     
     # CSS styles consistent with Package module
     CSS = """
-    AppInstallProgressModal {
+    AppInstallProgress {
         align: center middle;
     }
 
@@ -157,7 +157,7 @@ class AppInstallProgressModal(ModalScreen):
     def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None):
         try:
             super().__init__()
-            print(f"DEBUG: AppInstallProgressModal __init__ called with {len(actions)} actions")
+            print(f"DEBUG: AppInstallProgress __init__ called with {len(actions)} actions")
             print(f"DEBUG: sudo_manager provided: {sudo_manager is not None}")
             print(f"DEBUG: app_installer: {app_installer}")
 
@@ -188,9 +188,9 @@ class AppInstallProgressModal(ModalScreen):
                 })
                 print(f"DEBUG: Task {i} added: {task_name}")
 
-            print(f"DEBUG: AppInstallProgressModal __init__ completed successfully with {len(self.tasks)} tasks")
+            print(f"DEBUG: AppInstallProgress __init__ completed successfully with {len(self.tasks)} tasks")
         except Exception as e:
-            print(f"CRITICAL ERROR in AppInstallProgressModal __init__: {e}")
+            print(f"CRITICAL ERROR in AppInstallProgress __init__: {e}")
             import traceback
             traceback.print_exc()
             raise
@@ -1701,6 +1701,10 @@ class AppInstallProgressModal(ModalScreen):
             self._write_session_summary()
             self.dismiss()
 
+    def action_close(self) -> None:
+        """Handle close action (Esc key) - same as dismiss."""
+        self.action_dismiss()
+
     def _write_session_summary(self) -> None:
         """Write session summary to the independent log file."""
         try:
@@ -1806,7 +1810,7 @@ class AppInstallProgressModal(ModalScreen):
 
     def _show_abort_confirmation(self) -> None:
         """Show installation abort confirmation dialog."""
-        from .abort_confirmation_modal import AbortConfirmationModal
+        from .abort_confirm import AbortConfirm
 
         # Pause all active processes before showing confirmation
         self._pause_active_processes()
@@ -1821,7 +1825,7 @@ class AppInstallProgressModal(ModalScreen):
                 self._resume_active_processes()
 
         # Push abort confirmation dialog
-        self.app.push_screen(AbortConfirmationModal(), handle_abort_result)
+        self.app.push_screen(AbortConfirm(), handle_abort_result)
 
     def _abort_installation(self) -> None:
         """Abort the installation process."""

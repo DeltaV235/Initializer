@@ -1,4 +1,4 @@
-"""Package Manager Installation Selection Modal."""
+"""Package Manager Installer."""
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -12,8 +12,8 @@ from textual.reactive import reactive
 from ...modules.package_manager import PackageManagerDetector, PackageManager
 
 
-class PackageManagerInstallModal(ModalScreen):
-    """Modal screen for selecting package managers to install/uninstall."""
+class PackageManagerInstaller(ModalScreen):
+    """Screen for selecting package managers to install/uninstall."""
     
     BINDINGS = [
         ("escape", "dismiss", "Cancel"),
@@ -22,7 +22,7 @@ class PackageManagerInstallModal(ModalScreen):
     
     # CSS styles for the modal
     CSS = """
-    PackageManagerInstallModal {
+    PackageManagerInstaller {
         align: center middle;
     }
 
