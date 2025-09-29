@@ -6,6 +6,7 @@ from textual.containers import Container, Vertical, Horizontal, ScrollableContai
 from textual.screen import Screen
 from textual.widgets import Button, Static, Rule, Label
 from textual.reactive import reactive
+from textual.events import Key
 
 from ...config_manager import ConfigManager
 from ...modules.system_info import SystemInfoModule
@@ -26,7 +27,6 @@ class MainMenuScreen(Screen):
         ("q", "quit", "Quit"),
         ("enter", "select_item", "Select"),
         ("tab", "switch_panel", "Switch Panel"),
-        ("a", "apply_app_changes", "Apply Changes"),
         ("r", "refresh_current_page", "Refresh"),
         # Vim-like navigation
         ("h", "nav_left", "Left"),
@@ -1353,10 +1353,14 @@ class MainMenuScreen(Screen):
                 # Update help text when selection changes
                 self._update_help_text()
 
-    def _handle_app_enter_key(self) -> None:
-        """Handle Enter key press for suite expansion/collapse and app selection."""
+    def _handle_app_enter_key(self) -> bool:
+        """Handle Enter key press for suite expansion/collapse or direct app installation.
+
+        Returns:
+            True if the event was handled, False otherwise
+        """
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
-            return
+            return False
 
         # Build display list based on current expansion state
         display_items = self._build_display_items()
@@ -1376,9 +1380,15 @@ class MainMenuScreen(Screen):
 
                 # Refresh the display to show/hide components
                 self.update_settings_panel()
+                return True
             else:
-                # For non-suite items, treat Enter like Space (toggle selection)
-                self._toggle_current_app()
+                # For non-suite items (actual applications), trigger installation confirmation
+                # This replaces the old A key functionality
+                # Apply changes only to the currently focused application
+                self._apply_single_app_change()
+                return True
+
+        return False
 
     def _build_display_items(self):
         """Build the current display items list based on expansion state."""
@@ -1392,6 +1402,81 @@ class MainMenuScreen(Screen):
                     display_items.append(("component", component, 1))
 
         return display_items
+
+    def _apply_single_app_change(self) -> None:
+        """Apply changes to only the currently focused application."""
+        logger.debug("_apply_single_app_change called")
+
+        if not self.app_install_cache or isinstance(self.app_install_cache, dict):
+            logger.debug("No app install cache or cache is dict, returning")
+            return
+
+        # Build display list based on current expansion state
+        display_items = self._build_display_items()
+
+        if 0 <= self.app_focused_index < len(display_items):
+            item_type, item, indent_level = display_items[self.app_focused_index]
+
+            # Only handle actual applications, not suite headers
+            if item_type in ["suite_or_app", "component"] and not isinstance(item, ApplicationSuite):
+                # Determine the action needed for this specific app
+                current_state = item.installed
+                logger.debug(f"Current app: {item.name}, installed: {current_state}")
+
+                # Create action for this single app
+                action = None
+                if current_state:
+                    # App is installed, so uninstall it
+                    action = {
+                        "action": "uninstall",
+                        "application": item
+                    }
+                    logger.debug(f"Will uninstall {item.name}")
+                else:
+                    # App is not installed, so install it
+                    action = {
+                        "action": "install",
+                        "application": item
+                    }
+                    logger.debug(f"Will install {item.name}")
+
+                if action:
+                    # Show confirmation for this single action
+                    self._show_single_app_confirmation([action])
+                else:
+                    logger.debug("No action determined for current app")
+            else:
+                logger.debug("Current focus is not on an application")
+
+    def _show_single_app_confirmation(self, actions: list) -> None:
+        """Show confirmation dialog for a single app action."""
+        logger.debug(f"Showing confirmation for single app action: {actions}")
+
+        from .app_install_confirm import AppInstallConfirm
+
+        def on_confirmation(confirmed: bool, sudo_manager=None):
+            logger.info(f"Single app confirmation result: {confirmed}")
+            if confirmed:
+                from .app_install_progress import AppInstallProgress
+                try:
+                    progress_modal = AppInstallProgress(actions, self.app_installer, sudo_manager)
+                    progress_modal._main_menu_ref = self
+                    self.app.push_screen(progress_modal)
+                    logger.info("Single app progress modal pushed successfully")
+                except Exception as e:
+                    logger.error(f"Error in single app confirmation callback: {e}", exc_info=True)
+            else:
+                logger.info("User cancelled single app installation")
+
+        try:
+            modal = AppInstallConfirm(actions, on_confirmation, self.app_installer)
+            self._clear_panel_focus()
+            logger.debug("Pushing single app confirmation modal")
+            self.app.push_screen(modal)
+            logger.debug("Single app confirmation modal pushed successfully")
+        except Exception as e:
+            logger.error(f"Failed to show single app confirmation modal: {e}", exc_info=True)
+            self._show_message("Failed to show confirmation dialog")
 
     def _ensure_valid_focus_index(self):
         """Ensure app_focused_index is within valid bounds."""
@@ -1443,19 +1528,9 @@ class MainMenuScreen(Screen):
 
         return changes
 
-    def action_apply_app_changes(self) -> None:
-        """Apply the selected app installation changes."""
-        logger.debug("action_apply_app_changes called")
-
-        # 只有在app_install段才能应用应用更改
-        if self.selected_segment != "app_install":
-            logger.debug(f"Not in app_install segment (current: {self.selected_segment}), ignoring A key")
-            return
-
-        # 只有在右侧面板有焦点时才能应用更改（使用与space和enter键相同的检查方式）
-        if self._is_focus_in_left_panel():
-            logger.debug("Focus is in left panel, ignoring A key")
-            return
+    def _apply_app_changes_internal(self) -> None:
+        """Internal method to apply app changes without focus checks."""
+        logger.debug("_apply_app_changes_internal called")
 
         if not self.app_install_cache or isinstance(self.app_install_cache, dict):
             logger.debug("No app install cache or cache is dict, returning")
@@ -1469,6 +1544,11 @@ class MainMenuScreen(Screen):
             self._show_message("No changes to apply")
             return
 
+        # 调用完整的应用安装逻辑，跳过开头的焦点检查
+        self._execute_app_changes(changes)
+
+    def _execute_app_changes(self, changes) -> None:
+        """Execute the app changes logic (extracted from action_apply_app_changes)."""
         # Prepare actions list
         actions = []
         for item in self.app_install_cache:
@@ -1567,12 +1647,28 @@ class MainMenuScreen(Screen):
                 self.app.push_screen(modal)
                 logger.debug("Confirmation modal pushed successfully")
             except Exception as e:
-                logger.error(f"Error creating or pushing confirmation modal: {e}", exc_info=True)
-        else:
-            logger.debug("No actions to perform")
+                logger.error(f"Failed to show confirmation modal: {e}", exc_info=True)
+                self._show_message("Failed to show confirmation dialog")
+
+    def action_apply_app_changes(self) -> None:
+        """Apply the selected app installation changes."""
+        logger.debug("action_apply_app_changes called")
+
+        # 只有在app_install段才能应用应用更改
+        if self.selected_segment != "app_install":
+            logger.debug(f"Not in app_install segment (current: {self.selected_segment}), ignoring A key")
+            return
+
+        # 只有在右侧面板有焦点时才能应用更改（使用与space和enter键相同的检查方式）
+        if self._is_focus_in_left_panel():
+            logger.debug("Focus is in left panel, ignoring A key")
+            return
+
+        # 调用内部方法执行实际逻辑
+        self._apply_app_changes_internal()
 
     # Navigation and interaction methods for right panel content
-    
+
     def _build_homebrew_settings(self, container: ScrollableContainer) -> None:
         """Build Homebrew settings panel."""
         # Check if we have cached data and not currently loading
@@ -1899,8 +1995,11 @@ class MainMenuScreen(Screen):
         if event.key == "enter" and self.selected_segment == "app_install":
             # Only handle enter key when in right panel (app list)
             if not self._is_focus_in_left_panel():
-                self._handle_app_enter_key()
-                return True  # Consume the event
+                handled = self._handle_app_enter_key()
+                if handled:
+                    event.prevent_default()
+                    event.stop()
+                    return True  # Consume the event only if it was actually handled
 
         # Handle 1-6 shortcuts only when focus is in left panel
         if event.key in ["1", "2", "3", "4", "5", "6"] and self._is_focus_in_left_panel():
@@ -2539,9 +2638,9 @@ class MainMenuScreen(Screen):
                     changes = self._calculate_app_changes()
                     logger.debug(f"App changes calculated: install={len(changes['install'])}, uninstall={len(changes['uninstall'])}")
                     if changes["install"] or changes["uninstall"]:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter/Space=Toggle | A=Apply Changes | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Space=Toggle | Enter=Apply Changes | Q=Quit"
                     else:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Enter/Space=Toggle | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Navigate | Space=Toggle | Enter=Apply Changes | Q=Quit"
                 elif self.selected_segment == "homebrew":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "user_management":

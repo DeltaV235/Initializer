@@ -17,7 +17,6 @@ class AppInstallConfirm(ModalScreen):
     
     BINDINGS = [
         ("escape", "cancel_operation", "Cancel"),
-        ("enter", "confirm_change", "Confirm"),
         ("y", "confirm_change", "Yes"),
         ("n", "cancel_operation", "No"),
         ("j", "scroll_down", "Scroll Down"),
@@ -80,12 +79,21 @@ class AppInstallConfirm(ModalScreen):
         self.logger = get_module_logger("app_install_confirmation_modal")
         self.sudo_manager = SudoManager()
 
+        # 防止立即确认的标志
+        self._just_opened = True
+
         self.logger.info(f"AppInstallConfirm initialized with {len(actions)} actions")
     
     def on_mount(self) -> None:
         """Initialize the screen."""
         self.focus()
+        # 延迟一小段时间后允许键盘确认，防止立即触发
+        self.set_timer(0.5, self._enable_keyboard_confirm)
     
+    def _enable_keyboard_confirm(self) -> None:
+        """Enable keyboard confirmation after a short delay."""
+        self._just_opened = False
+
     def can_focus(self) -> bool:
         """Return True to allow this modal to receive focus."""
         return True
@@ -99,6 +107,12 @@ class AppInstallConfirm(ModalScreen):
     def handle_key_event(self, event: Key) -> None:
         """Handle key events using @on decorator for reliable event processing."""
         if event.key == "enter":
+            # 防止立即确认（刚打开对话框时）
+            if self._just_opened:
+                self.logger.debug("Ignoring Enter key - dialog just opened")
+                event.prevent_default()
+                event.stop()
+                return
             self.action_confirm_change()
             event.prevent_default()
             event.stop()
@@ -107,6 +121,12 @@ class AppInstallConfirm(ModalScreen):
             event.prevent_default()
             event.stop()
         elif event.key == "y":
+            # Y键也需要检查延迟
+            if self._just_opened:
+                self.logger.debug("Ignoring Y key - dialog just opened")
+                event.prevent_default()
+                event.stop()
+                return
             self.action_confirm_change()
             event.prevent_default()
             event.stop()
