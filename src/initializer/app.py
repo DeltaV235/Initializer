@@ -3,6 +3,7 @@
 import sys
 import subprocess
 from typing import Optional
+import logging
 
 from rich.console import Console
 from textual.app import App, ComposeResult
@@ -16,7 +17,11 @@ from .modules.sudo_manager import SudoManager
 
 def cleanup_terminal_state():
     """Comprehensive terminal state cleanup matching reset-terminal.sh."""
+    logger = logging.getLogger("initializer.app.cleanup")
+
     try:
+        logger.debug("开始终端状态清理")
+
         # Force flush any pending output first
         sys.stdout.flush()
         sys.stderr.flush()
@@ -52,29 +57,45 @@ def cleanup_terminal_state():
         time.sleep(0.1)
 
         # Critical: Reset terminal input/output settings using stty if available
-        import subprocess
         try:
             # Reset terminal to sane state - this should restore echo and proper input
             # Use /dev/tty to ensure we're operating on the actual terminal
             with open('/dev/tty', 'w') as tty:
                 subprocess.run(['stty', 'sane'], check=False, timeout=1, stdin=tty, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired, OSError):
-            pass
+            logger.debug("stty sane 执行成功")
+        except FileNotFoundError:
+            logger.debug("stty 命令未找到")
+        except subprocess.TimeoutExpired:
+            logger.debug("stty 命令超时")
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug(f"stty 命令执行失败: {e}")
 
         # Additional reset using tput if available
         try:
             subprocess.run(['tput', 'sgr0'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired):
-            pass
+            logger.debug("tput sgr0 执行成功")
+        except FileNotFoundError:
+            logger.debug("tput 命令未找到")
+        except subprocess.TimeoutExpired:
+            logger.debug("tput 命令超时")
+        except subprocess.SubprocessError as e:
+            logger.debug(f"tput 命令执行失败: {e}")
 
         # Final reset attempt with direct terminal command
         try:
             subprocess.run(['reset'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired):
-            pass
+            logger.debug("reset 命令执行成功")
+        except FileNotFoundError:
+            logger.debug("reset 命令未找到")
+        except subprocess.TimeoutExpired:
+            logger.warning("reset 命令超时")
+        except subprocess.SubprocessError as e:
+            logger.debug(f"reset 命令执行失败: {e}")
 
-    except Exception:
-        pass
+        logger.info("终端状态清理完成")
+
+    except Exception as e:
+        logger.error(f"终端清理过程中出现异常: {e}")
 
 
 class InitializerApp(App):
