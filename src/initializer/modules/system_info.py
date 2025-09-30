@@ -14,19 +14,23 @@ except ImportError:
     EXTENDED_INFO_AVAILABLE = False
 
 from ..config_manager import ConfigManager
+from ..utils.logger import get_module_logger
 
 
 class SystemInfoModule:
     """Module for gathering comprehensive system information."""
-    
+
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         # Load raw configuration directly
         modules_config = config_manager.load_config("modules")
         self.config = modules_config.get('modules', {}).get('system_info', {})
-        
+        self.logger = get_module_logger("system_info")
+        self.logger.info("系统信息模块初始化完成")
+
     def get_distribution_info(self) -> Dict[str, str]:
         """Get Linux distribution information."""
+        self.logger.debug("开始获取发行版信息")
         info = {
             "System": platform.system(),
             "Release": platform.release(),
@@ -34,127 +38,155 @@ class SystemInfoModule:
             "Machine": platform.machine(),
             "Architecture": platform.architecture()[0],
         }
-        
+
         if EXTENDED_INFO_AVAILABLE:
             info.update({
                 "Distribution": distro.name(),
                 "Distro Version": distro.version(),
                 "Distro Codename": distro.codename(),
             })
+            self.logger.debug(f"使用 distro 库获取发行版信息: {distro.name()}")
         else:
             # Fallback method
+            self.logger.debug("distro 库不可用，使用 /etc/os-release 获取信息")
             try:
                 with open("/etc/os-release", "r") as f:
                     for line in f:
                         if line.startswith("PRETTY_NAME="):
                             info["Distribution"] = line.split("=")[1].strip().strip('"')
                             break
+                self.logger.debug(f"从 /etc/os-release 读取成功: {info.get('Distribution', 'Unknown')}")
             except FileNotFoundError:
+                self.logger.warning("/etc/os-release 文件不存在")
                 info["Distribution"] = "Unknown"
-                
+            except Exception as e:
+                self.logger.error(f"读取 /etc/os-release 失败: {e}")
+                info["Distribution"] = "Unknown"
+
         return info
-    
+
     def get_package_manager_info(self) -> Dict[str, str]:
         """Detect available package managers and their sources."""
+        self.logger.info("开始检测包管理器")
         package_managers = {
             "apt": "APT (Debian/Ubuntu)",
             "yum": "YUM (RHEL/CentOS)",
-            "dnf": "DNF (Fedora)", 
+            "dnf": "DNF (Fedora)",
             "pacman": "Pacman (Arch)",
             "zypper": "Zypper (openSUSE)",
             "brew": "Homebrew",
             "pkg": "FreeBSD pkg",
             "portage": "Portage (Gentoo)",
         }
-        
+
         detected = {}
-        
+
         for pm, description in package_managers.items():
             if shutil.which(pm):
                 try:
                     # Get version information
                     result = subprocess.run(
-                        [pm, "--version"], 
-                        capture_output=True, 
-                        text=True, 
+                        [pm, "--version"],
+                        capture_output=True,
+                        text=True,
                         timeout=5
                     )
-                    
+
                     if result.returncode == 0:
                         version_line = result.stdout.split('\n')[0]
                         # Extract just the version number for cleaner display
                         if pm == "apt":
                             version = version_line.split()[1] if len(version_line.split()) > 1 else "Installed"
                             detected[description] = f"✓ {version}"
-                            
+                            self.logger.debug(f"检测到 {pm}: {version}")
+
                             # Add APT sources information
                             apt_sources = self._get_apt_sources()
                             if apt_sources:
                                 detected[f"{description} - Sources"] = apt_sources
-                                
+
                         elif pm == "pacman":
                             version = version_line.split()[2] if len(version_line.split()) > 2 else "Installed"
                             detected[description] = f"✓ {version}"
-                            
+                            self.logger.debug(f"检测到 {pm}: {version}")
+
                             # Add Pacman mirror information
                             pacman_mirrors = self._get_pacman_mirrors()
                             if pacman_mirrors:
                                 detected[f"{description} - Mirrors"] = pacman_mirrors
-                                
+
                         elif pm in ["yum", "dnf"]:
                             version = version_line[:50]  # Limit length
                             detected[description] = f"✓ {version}"
-                            
+                            self.logger.debug(f"检测到 {pm}: {version[:30]}")
+
                             # Add YUM/DNF repository information
                             repos = self._get_yum_dnf_repos(pm)
                             if repos:
                                 detected[f"{description} - Repos"] = repos
-                                
+
                         elif pm == "brew":
                             version = version_line[:50]
                             detected[description] = f"✓ {version}"
-                            
+                            self.logger.debug(f"检测到 {pm}: {version[:30]}")
+
                             # Add Homebrew sources information
                             brew_sources = self._get_homebrew_sources()
                             if brew_sources:
                                 detected[f"{description} - Sources"] = brew_sources
-                                
+
                         else:
                             version = version_line[:50]  # Limit length
                             detected[description] = f"✓ {version}"
+                            self.logger.debug(f"检测到 {pm}")
                     else:
                         detected[description] = "✓ Installed"
-                        
-                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+                        self.logger.debug(f"检测到 {pm} (无版本信息)")
+
+                except subprocess.TimeoutExpired:
                     detected[description] = "✓ Detected"
-        
+                    self.logger.warning(f"{pm} 版本检测超时")
+                except subprocess.CalledProcessError as e:
+                    detected[description] = "✓ Detected"
+                    self.logger.debug(f"{pm} 命令执行失败: {e}")
+                except FileNotFoundError:
+                    self.logger.debug(f"{pm} 命令未找到")
+
         # If no package managers detected, try to guess from the distribution
         if not detected:
+            self.logger.warning("未检测到任何包管理器，尝试从发行版文件推测")
             try:
                 if Path("/etc/debian_version").exists():
                     detected["APT (Debian/Ubuntu)"] = "? Possibly available but not detected"
+                    self.logger.info("发现 /etc/debian_version，可能是 Debian 系发行版")
                 elif Path("/etc/redhat-release").exists():
                     detected["YUM/DNF (Red Hat)"] = "? Possibly available but not detected"
+                    self.logger.info("发现 /etc/redhat-release，可能是 Red Hat 系发行版")
                 elif Path("/etc/arch-release").exists():
                     detected["Pacman (Arch)"] = "? Possibly available but not detected"
+                    self.logger.info("发现 /etc/arch-release，可能是 Arch 系发行版")
                 else:
                     detected["Unknown"] = "No package managers available"
-            except Exception:
+                    self.logger.warning("无法识别发行版类型")
+            except Exception as e:
                 detected["Detection Failed"] = "Unable to detect package managers"
-                    
+                self.logger.error(f"检测发行版文件时出错: {e}")
+
+        self.logger.info(f"包管理器检测完成: {len(detected)} 项")
         return detected
-    
+
     def _get_apt_sources(self) -> str:
         """Get APT sources information."""
+        self.logger.debug("获取 APT 源信息")
         try:
             # Check main sources.list
             sources_files = ["/etc/apt/sources.list"]
-            
+
             # Check sources.list.d directory
             sources_d = Path("/etc/apt/sources.list.d")
             if sources_d.exists():
                 sources_files.extend([str(f) for f in sources_d.glob("*.list")])
-            
+
             apt_sources = []
             for sources_file in sources_files:
                 try:
@@ -170,21 +202,27 @@ class SystemInfoModule:
                                         domain = url.split('://')[1].split('/')[0]
                                         if domain not in apt_sources:
                                             apt_sources.append(domain)
-                except (PermissionError, FileNotFoundError):
+                except PermissionError:
+                    self.logger.warning(f"无权限读取 APT 源文件: {sources_file}")
                     continue
-            
+                except FileNotFoundError:
+                    self.logger.debug(f"APT 源文件不存在: {sources_file}")
+                    continue
+
             if apt_sources:
+                self.logger.debug(f"找到 {len(apt_sources)} 个 APT 源")
                 return ", ".join(apt_sources[:3])  # Show first 3
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"获取 APT 源信息失败: {e}")
         return ""
-    
+
     def _get_pacman_mirrors(self) -> str:
         """Get Pacman mirror information."""
+        self.logger.debug("获取 Pacman 镜像信息")
         try:
             pacman_conf = "/etc/pacman.conf"
             mirrorlist = "/etc/pacman.d/mirrorlist"
-            
+
             mirrors = []
             for conf_file in [pacman_conf, mirrorlist]:
                 try:
@@ -197,22 +235,28 @@ class SystemInfoModule:
                                     domain = url.split('://')[1].split('/')[0]
                                     if domain not in mirrors:
                                         mirrors.append(domain)
-                except (PermissionError, FileNotFoundError):
+                except PermissionError:
+                    self.logger.warning(f"无权限读取 Pacman 配置: {conf_file}")
                     continue
-            
+                except FileNotFoundError:
+                    self.logger.debug(f"Pacman 配置不存在: {conf_file}")
+                    continue
+
             if mirrors:
+                self.logger.debug(f"找到 {len(mirrors)} 个 Pacman 镜像")
                 return ", ".join(mirrors[:3])  # Show first 3
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"获取 Pacman 镜像信息失败: {e}")
         return ""
     
     def _get_yum_dnf_repos(self, cmd: str) -> str:
         """Get YUM/DNF repository information."""
+        self.logger.debug(f"获取 {cmd} 仓库列表")
         try:
             result = subprocess.run(
-                [cmd, "repolist", "enabled"], 
-                capture_output=True, 
-                text=True, 
+                [cmd, "repolist", "enabled"],
+                capture_output=True,
+                text=True,
                 timeout=10
             )
             if result.returncode == 0:
@@ -225,21 +269,25 @@ class SystemInfoModule:
                             repo_name = parts[0]
                             if repo_name not in repos:
                                 repos.append(repo_name)
-                
+
                 if repos:
+                    self.logger.debug(f"找到 {len(repos)} 个 {cmd} 仓库")
                     return ", ".join(repos[:3])  # Show first 3
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-            pass
+        except subprocess.TimeoutExpired:
+            self.logger.warning(f"{cmd} repolist 超时")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.logger.debug(f"{cmd} repolist 执行失败: {e}")
         return ""
-    
+
     def _get_homebrew_sources(self) -> str:
         """Get Homebrew source information."""
+        self.logger.debug("获取 Homebrew 源信息")
         try:
             # Check Homebrew core tap
             result = subprocess.run(
-                ["brew", "tap"], 
-                capture_output=True, 
-                text=True, 
+                ["brew", "tap"],
+                capture_output=True,
+                text=True,
                 timeout=10
             )
             if result.returncode == 0:
@@ -247,24 +295,26 @@ class SystemInfoModule:
                 core_taps = [tap for tap in taps if 'core' in tap or 'homebrew' in tap]
                 if core_taps:
                     return ", ".join(core_taps[:2])
-                    
+
             # Check HOMEBREW_BOTTLE_DOMAIN environment variable
             result = subprocess.run(
-                ["brew", "config"], 
-                capture_output=True, 
-                text=True, 
+                ["brew", "config"],
+                capture_output=True,
+                text=True,
                 timeout=5
             )
-            
+
             for line in result.stdout.split('\n'):
                 if 'HOMEBREW_BOTTLE_DOMAIN' in line and ':' in line:
                     domain = line.split(':', 1)[1].strip()
                     if domain:
                         return f"Bottles: {domain}"
                     break
-                        
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-            pass
+
+        except subprocess.TimeoutExpired:
+            self.logger.warning("Homebrew 命令超时")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.logger.debug(f"Homebrew 命令执行失败: {e}")
         return ""
     
     def get_cpu_info(self) -> Dict[str, str]:

@@ -176,7 +176,6 @@ class MainMenuScreen(Screen):
             logger.debug("Initial focus set to left panel")
         except Exception as e:
             logger.error(f"Failed to set initial focus: {e}")
-            pass
 
         # Initialize button states after panel focus is set
         # Arrow display will be handled by watch_current_panel_focus when _update_panel_focus is called
@@ -216,8 +215,9 @@ class MainMenuScreen(Screen):
             for child in children:
                 try:
                     child.remove()
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Widget already removed or not mounted
+                    logger.debug(f"Could not remove child widget: {e}")
             
             # Reset package manager focus state and cleanup when switching segments
             if self.selected_segment != "package_manager":
@@ -590,8 +590,8 @@ class MainMenuScreen(Screen):
                     pm_item.update(f"[#7dd3fc]▶[/#7dd3fc] {self._primary_pm.name.upper()}")
                 else:
                     pm_item.update(f"  {self._primary_pm.name.upper()}")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"无法更新包管理器显示: {e}")
 
         try:
             # Update source item using unique ID
@@ -606,8 +606,8 @@ class MainMenuScreen(Screen):
                     source_item.update(f"[#7dd3fc]▶[/#7dd3fc] {source}")
                 else:
                     source_item.update(f"  {source}")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"无法更新镜像源显示: {e}")
     
     def _clear_pm_focus_indicators(self) -> None:
         """Clear all arrow indicators in package manager section."""
@@ -619,8 +619,8 @@ class MainMenuScreen(Screen):
             pm_item = self.query_one(f"#pm-manager-item-{self._pm_unique_suffix}", Static)
             if hasattr(self, '_primary_pm') and self._primary_pm:
                 pm_item.update(f"  {self._primary_pm.name.upper()}")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"更新包管理器名称失败: {e}")
             
         try:
             # Clear source item arrow if it exists
@@ -630,8 +630,8 @@ class MainMenuScreen(Screen):
                 if len(source) > 60:
                     source = source[:57] + "..."
                 source_item.update(f"  {source}")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"更新镜像源名称失败: {e}")
 
     def _clear_app_focus_indicators(self) -> None:
         """Clear all arrow indicators in app install section."""
@@ -708,11 +708,12 @@ class MainMenuScreen(Screen):
                         # Update status widget
                         status_widget.update(status_display)
 
-                except Exception:
+                except Exception as e:
                     # If we can't find the container, skip this item
+                    logger.debug(f"无法更新应用状态容器 {i}: {e}")
                     continue
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"更新应用安装指示器失败: {e}")
     
     def _handle_pm_item_selection(self) -> None:
         """Handle selection of package manager items."""
@@ -1255,12 +1256,14 @@ class MainMenuScreen(Screen):
                         # Update status widget
                         status_widget.update(status_display)
 
-                except Exception:
+                except Exception as e:
                     # If we can't find the container, skip this item
+                    logger.debug(f"无法更新应用状态容器: {e}")
                     continue
 
-        except Exception:
+        except Exception as e:
             # If we can't update indicators, fall back to full refresh
+            logger.warning(f"批量更新应用指示器失败，执行完整刷新: {e}")
             self.update_settings_panel()
 
     def _navigate_app_items(self, direction: str) -> None:
@@ -1297,8 +1300,8 @@ class MainMenuScreen(Screen):
                     scrollable_container.scroll_to_widget(current_container, animate=True, speed=60, center=True)
                     return
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"刷新应用安装页面失败: {e}")
 
         # Fallback: manual scrolling calculation
         try:
@@ -1320,8 +1323,9 @@ class MainMenuScreen(Screen):
                 # Item is below visible area - scroll down
                 scrollable_container.scroll_y = current_position - container_height + 3
 
-        except Exception:
+        except Exception as e:
             # Final fallback: simple scroll by direction
+            logger.debug(f"精确滚动失败，使用简单滚动: {e}")
             if direction:
                 try:
                     scrollable_container = self.query_one("#settings-scroll", ScrollableContainer)
@@ -1329,8 +1333,8 @@ class MainMenuScreen(Screen):
                         scrollable_container.scroll_down(animate=True)
                     else:
                         scrollable_container.scroll_up(animate=True)
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"简单滚动也失败: {e}")
 
     def _toggle_current_app(self) -> None:
         """Toggle the selection state of the currently focused app."""
@@ -1783,8 +1787,8 @@ class MainMenuScreen(Screen):
             for child in children:
                 child.remove()
             settings_container.mount(Static(f"❌ {message}", id="error-message"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"显示错误消息失败: {e}")
     
     @on(Button.Pressed)
     def handle_segment_selection(self, event: Button.Pressed) -> None:
@@ -1859,8 +1863,8 @@ class MainMenuScreen(Screen):
             title_widget.update(message)
             # Reset after 3 seconds
             self.set_timer(3.0, lambda: title_widget.update(original_title))
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"显示临时消息失败: {e}")
     
     def _handle_focus_change(self) -> None:
         """Handle focus changes on segment buttons."""
@@ -1914,9 +1918,9 @@ class MainMenuScreen(Screen):
             
             display_title = title_map.get(selected_id, "Settings")
             title_widget.update(display_title)
-        except Exception:
+        except Exception as e:
             # Silently fail if title widget not found
-            pass
+            logger.debug(f"更新面板标题失败: {e}")
     
     def _clear_panel_focus(self) -> None:
         """Clear panel focus styles to prevent highlight leak to modals."""
@@ -1925,8 +1929,8 @@ class MainMenuScreen(Screen):
             right_panel = self.query_one("#right-panel", Vertical)
             left_panel.remove_class("panel-focused")
             right_panel.remove_class("panel-focused")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"清除面板焦点样式失败: {e}")
 
     def _update_panel_focus(self, is_left_focused: bool) -> None:
         """Update panel focus styles based on which panel has focus."""
@@ -1954,7 +1958,6 @@ class MainMenuScreen(Screen):
             self._update_help_text(is_left_focused)
         except Exception as e:
             logger.error(f"Failed to update panel focus: {e}")
-            pass
     
     def action_select_segment(self) -> None:
         """Handle S key shortcut for Settings - works from any panel."""
@@ -2101,8 +2104,8 @@ class MainMenuScreen(Screen):
                 first_button = self.query_one(f"#segment-{self.SEGMENTS[0]['id']}", Button)
                 first_button.focus()
                 self._update_panel_focus(is_left_focused=True)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"聚焦第一个按钮失败: {e}")
             return
             
         # Check if focus is in the left panel
@@ -2119,8 +2122,8 @@ class MainMenuScreen(Screen):
                     is_in_left = True
                     break
                 current = current.parent
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"检查焦点所在面板失败: {e}")
         
         if is_in_left:
             # Move focus to the right panel - focus the scrollable container
@@ -2147,9 +2150,9 @@ class MainMenuScreen(Screen):
                 else:
                     # Panel focus change will be handled by watch_current_panel_focus
                     pass
-            except:
+            except Exception as e:
                 # If right panel doesn't have focusable elements, stay in left
-                pass
+                logger.debug(f"切换到右侧面板失败: {e}")
         else:
             # Move focus back to the left panel - focus the selected segment button
             # First, clear right panel arrows if we're in package manager section
@@ -2165,8 +2168,9 @@ class MainMenuScreen(Screen):
                 selected_button.focus()
                 self._update_panel_focus(is_left_focused=True)
                 # Arrow will be updated by watch_current_panel_focus
-            except:
+            except Exception as e:
                 # Try to focus the first available segment button
+                logger.debug(f"切换到左侧面板失败，尝试聚焦第一个分段: {e}")
                 for segment in self.SEGMENTS:
                     try:
                         button = self.query_one(f"#segment-{segment['id']}", Button)
@@ -2174,7 +2178,8 @@ class MainMenuScreen(Screen):
                         self._update_panel_focus(is_left_focused=True)
                         # Arrow will be updated by watch_current_panel_focus
                         break
-                    except:
+                    except Exception as e:
+                        logger.debug(f"聚焦分段 {segment['id']} 失败: {e}")
                         continue
     
     
@@ -2199,8 +2204,9 @@ class MainMenuScreen(Screen):
             selected_button.focus()
             self._update_panel_focus(is_left_focused=True)
             # Arrow will be updated by watch_current_panel_focus
-        except:
+        except Exception as e:
             # Try to focus the first available segment button
+            logger.debug(f"执行 action_left 失败，尝试聚焦第一个分段: {e}")
             for segment in self.SEGMENTS:
                 try:
                     button = self.query_one(f"#segment-{segment['id']}", Button)
@@ -2208,7 +2214,8 @@ class MainMenuScreen(Screen):
                     self._update_panel_focus(is_left_focused=True)
                     # Arrow will be updated by watch_current_panel_focus
                     break
-                except:
+                except Exception as e:
+                    logger.debug(f"聚焦分段 {segment['id']} 失败: {e}")
                     continue
     
     def action_nav_down(self) -> None:
@@ -2236,8 +2243,8 @@ class MainMenuScreen(Screen):
                 try:
                     scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
                     scroll_container.scroll_down()
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"向下滚动失败: {e}")
     
     def action_nav_up(self) -> None:
         """Navigate up (k key) - move to previous item in current panel."""
@@ -2264,8 +2271,8 @@ class MainMenuScreen(Screen):
                 try:
                     scroll_container = self.query_one("#settings-scroll", ScrollableContainer)
                     scroll_container.scroll_up()
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"向上滚动失败: {e}")
     
     def action_nav_right(self) -> None:
         """Navigate right (l key) - switch to right panel."""
@@ -2302,8 +2309,8 @@ class MainMenuScreen(Screen):
                     pass
             # If already in right panel, just update focus without reinitializing arrows
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"处理焦点进入右侧面板失败: {e}")
     
     def _is_focus_in_left_panel(self) -> bool:
         """Check if current focus is in the left panel."""
@@ -2355,8 +2362,8 @@ class MainMenuScreen(Screen):
                 # Directly update the selected segment and trigger all updates
                 self.selected_segment = next_segment['id']
                 # No need to call _handle_focus_change since watch_selected_segment will handle it
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"选择下一个分段失败: {e}")
     
     def _navigate_segments_up(self) -> None:
         """Navigate up through segment buttons."""
@@ -2375,8 +2382,8 @@ class MainMenuScreen(Screen):
                 # Directly update the selected segment and trigger all updates
                 self.selected_segment = prev_segment['id']
                 # No need to call _handle_focus_change since watch_selected_segment will handle it
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"选择上一个分段失败: {e}")
     
     def _check_and_update_panel_focus(self) -> None:
         """Check which panel has focus and update the visual indicators."""
@@ -2443,7 +2450,7 @@ class MainMenuScreen(Screen):
                 self._display_package_manager()
         except Exception as e:
             # Silently fail to avoid disrupting the UI
-            pass
+            logger.debug(f"watch_selected_segment 执行失败: {e}")
 
     def refresh_package_manager_page(self) -> None:
         """Public method to refresh package manager page after mirror changes."""
@@ -2480,8 +2487,8 @@ class MainMenuScreen(Screen):
                                 right_container = self.query_one("#settings-scroll", ScrollableContainer)
                                 right_container.focus()
                                 self._update_panel_focus(is_left_focused=False)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"恢复右侧面板焦点失败: {e}")
 
                             # Update focus indicators to show the restored focus
                             self._update_pm_focus_indicators(clear_left_arrows=True)
@@ -2493,7 +2500,7 @@ class MainMenuScreen(Screen):
 
         except Exception as e:
             # Silently fail to avoid disrupting the UI
-            pass
+            logger.debug(f"watch_app_install_cache 执行失败: {e}")
 
     def refresh_app_install_page(self) -> None:
         """Public method to refresh application install page to update status."""
@@ -2529,8 +2536,8 @@ class MainMenuScreen(Screen):
                                 right_container = self.query_one("#settings-scroll", ScrollableContainer)
                                 right_container.focus()
                                 self._update_panel_focus(is_left_focused=False)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"恢复右侧面板焦点失败: {e}")
 
                             # Update focus indicators to show the restored focus
                             self._update_app_focus_indicators()
@@ -2608,9 +2615,9 @@ class MainMenuScreen(Screen):
             
             # Reset title after a delay
             self.set_timer(3.0, lambda: title_widget.update("🖥️ Linux System Initializer"))
-        except Exception:
+        except Exception as e:
             # Silently fail if title widget is not found
-            pass
+            logger.debug(f"显示消息失败: {e}")
 
     def _update_help_text(self, is_left_focused: bool = None) -> None:
         """Update the main menu help text based on current segment and panel focus."""

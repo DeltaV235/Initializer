@@ -9,11 +9,12 @@ from textual.events import Key
 from typing import Callable, Optional, List
 
 from ...modules.package_manager import PackageManagerDetector
+from ...utils.logger import get_ui_logger
 
 
 class PackageMirrorPicker(ModalScreen):
     """Screen for selecting package manager mirror source."""
-    
+
     BINDINGS = [
         ("escape", "dismiss", "Cancel"),
     ]
@@ -146,10 +147,13 @@ class PackageMirrorPicker(ModalScreen):
         self.callback = callback
         self.detector = PackageManagerDetector(config_manager)
         self.available_mirrors = self.detector.get_available_mirrors(package_manager.name)
+        self.logger = get_ui_logger("mirror_picker")
 
         # State management
         self.mirror_list = []  # List of (name, url, is_current) tuples
         self.selected_index = 0  # Currently selected mirror index (only selectable mirrors)
+
+        self.logger.info(f"镜像选择器初始化: {package_manager.name}, {len(self.available_mirrors)} 个可用镜像")
 
         # Prepare mirror list
         current_source_url = (self.package_manager.current_source or "").strip().rstrip('/')
@@ -170,6 +174,8 @@ class PackageMirrorPicker(ModalScreen):
             # If no non-current item found, default to first item
             if self.selected_index >= len(self.mirror_list):
                 self.selected_index = 0
+
+            self.logger.debug(f"初始选中镜像索引: {self.selected_index}")
 
     def _normalize_url(self, url: str) -> str:
         """Normalize URL for comparison."""
@@ -222,9 +228,11 @@ class PackageMirrorPicker(ModalScreen):
             if hasattr(self.app, '_screen_stack'):
                 # Ensure this modal is at the top of the screen stack
                 pass
+
+            self.logger.debug("镜像选择器挂载完成")
         except Exception as e:
             # Prevent any mounting errors from showing confusing messages
-            pass
+            self.logger.error(f"镜像选择器挂载失败: {e}")
     
     def can_focus(self) -> bool:
         """Return True to allow this modal to receive focus."""
@@ -321,19 +329,20 @@ class PackageMirrorPicker(ModalScreen):
                     text = f"{arrow}{name.title()}: {display_url}"
                     
                     mirror_item.update(text)
-                
+
         except Exception as e:
             # If specific item not found, try to recreate selectable items only
+            self.logger.warning(f"更新镜像显示失败，尝试重建: {e}")
             try:
                 mirror_list_container = self.query_one("#mirror-list", Vertical)
-                
+
                 # Clear existing selectable items
                 for child in list(mirror_list_container.children):
                     child.remove()
-                
+
                 # Recreate selectable sources only
                 selectable_sources = [(i, name, url) for i, (name, url, is_current) in enumerate(self.mirror_list) if not is_current]
-                
+
                 for i, name, url in selectable_sources:
                     display_url = url
                     if len(display_url) > 60:
@@ -342,8 +351,8 @@ class PackageMirrorPicker(ModalScreen):
                     text = f"{arrow}{name.title()}: {display_url}"
                     mirror_item = Static(text, id=f"mirror-item-{i}", classes="mirror-item")
                     mirror_list_container.mount(mirror_item)
-            except Exception:
-                pass
+            except Exception as e2:
+                self.logger.error(f"重建镜像项也失败: {e2}")
     
     def _get_selected_source(self) -> Optional[str]:
         """Get the currently selected source URL."""
@@ -393,22 +402,25 @@ class PackageMirrorPicker(ModalScreen):
     def action_select_current(self) -> None:
         """Select current item."""
         selected_source = self._get_selected_source()
-        
+
         if selected_source:
+            source_name = next((name for name, url, _ in self.mirror_list if url == selected_source), "Unknown")
+            self.logger.info(f"用户选择镜像源: {source_name} ({selected_source[:50]}...)")
             self.callback(selected_source)
             self.dismiss()
         else:
+            self.logger.warning("没有可选择的镜像源")
             self._show_error("No mirror selected")
-    
+
     def _scroll_to_current(self) -> None:
         """Scroll to current item using Textual's built-in VerticalScroll behavior."""
         try:
             # With VerticalScroll, we just need to scroll the selected item into view
             current_item = self.query_one(f"#mirror-item-{self.selected_index}", Static)
             current_item.scroll_visible(animate=False)
-        except Exception:
+        except Exception as e:
             # If item not found, ignore silently
-            pass
+            self.logger.debug(f"滚动到选中项失败: {e}")
 
     def _show_error(self, message: str) -> None:
         """Show error message in the modal title."""
@@ -431,8 +443,8 @@ class PackageMirrorPicker(ModalScreen):
             try:
                 title_widget = self.query_one("#modal-title", Static)
                 title_widget.update(f"Select Mirror Source for {self.package_manager.name.upper()}")
-            except:
-                pass
+            except Exception as e:
+                self.logger.debug(f"备用标题设置也失败: {e}")
 
     def _reset_title(self) -> None:
         """Reset title to original state."""
@@ -464,9 +476,9 @@ class PackageMirrorPicker(ModalScreen):
             else:
                 counter_widget.update("")
 
-        except Exception:
+        except Exception as e:
             # If counter widget not found, ignore silently
-            pass
+            self.logger.debug(f"更新选择计数器失败: {e}")
     
     def action_dismiss(self) -> None:
         """Dismiss the modal."""

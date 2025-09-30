@@ -15,6 +15,7 @@ from typing import Callable, List
 from ...modules.package_manager import PackageManagerDetector
 from .package_mirror_updater import PackageMirrorUpdater
 from .package_update_log import PackageUpdateLog
+from ...utils.logger import get_ui_logger
 
 
 class PackageMirrorConfirm(ModalScreen):
@@ -124,9 +125,12 @@ class PackageMirrorConfirm(ModalScreen):
         self.detector = PackageManagerDetector(config_manager)
         self.source_modal = source_modal  # Reference to the source selection modal
         self.main_menu_ref = main_menu_ref  # Reference to the main menu for refreshing
+        self.logger = get_ui_logger("mirror_confirm")
 
         # State management
         self.is_executing = False
+
+        self.logger.info(f"镜像确认器初始化: {package_manager.name} -> {new_source[:50]}...")
 
         # Initialize APT mirror processor for complete handling
         if self.package_manager.name == "apt":
@@ -221,7 +225,8 @@ class PackageMirrorConfirm(ModalScreen):
                                         content = f.read()
                                     if self.mirror_updater._contains_ubuntu_sources(content):
                                         ubuntu_files_count += 1
-                                except:
+                                except Exception as e:
+                                    self.logger.debug(f"读取Ubuntu源文件失败 {filename}: {e}")
                                     continue
                             
                             if ubuntu_files_count > 0:
@@ -294,9 +299,10 @@ class PackageMirrorConfirm(ModalScreen):
             if self.source_modal and hasattr(self.source_modal, 'dismiss'):
                 try:
                     self.source_modal.dismiss()
+                    self.logger.debug("通过直接引用关闭源选择modal")
                     return
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.warning(f"直接关闭源选择modal失败: {e}")
 
             # Method 2: Search through screen stack as fallback
             stack_copy = list(self.app.screen_stack)
@@ -304,21 +310,24 @@ class PackageMirrorConfirm(ModalScreen):
                 if screen.__class__.__name__ == 'PackageMirrorPicker':
                     try:
                         screen.dismiss()
+                        self.logger.debug("通过屏幕栈关闭源选择modal")
                         break
-                    except Exception:
+                    except Exception as e:
                         # If dismiss fails, try removing from stack
+                        self.logger.warning(f"关闭源选择modal失败，尝试从栈中移除: {e}")
                         try:
                             if screen in self.app.screen_stack:
                                 self.app.screen_stack.remove(screen)
-                        except Exception:
-                            pass
+                        except Exception as e2:
+                            self.logger.error(f"从屏幕栈移除modal也失败: {e2}")
                     break
 
-        except Exception:
-            pass
-    
+        except Exception as e:
+            self.logger.error(f"关闭源选择modal过程出错: {e}")
+
     def action_cancel_operation(self) -> None:
         """Cancel the operation."""
+        self.logger.info("用户取消镜像源更新操作")
         self._cancel_operation()
     
     def action_scroll_down(self) -> None:

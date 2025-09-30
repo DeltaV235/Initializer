@@ -7,11 +7,12 @@ from textual.screen import Screen
 from textual.widgets import Button, Static, Rule, Markdown
 
 from ...config_manager import ConfigManager
+from ...utils.logger import get_ui_logger
 
 
 class HelpScreen(Screen):
     """Help screen with usage information."""
-    
+
     BINDINGS = [
         ("escape", "back", "Back"),
         ("q", "back", "Back"),
@@ -22,11 +23,17 @@ class HelpScreen(Screen):
         ("k", "nav_up", "Up"),
         ("l", "nav_right", "Right"),
     ]
-    
+
     def __init__(self, config_manager: ConfigManager):
         super().__init__()
         self.config_manager = config_manager
         self.app_config = config_manager.get_app_config()
+        self.logger = get_ui_logger("help")
+        self.logger.info("帮助界面初始化")
+
+    def on_mount(self) -> None:
+        """Mount the help screen."""
+        self.logger.info("帮助界面已加载")
         
     def compose(self) -> ComposeResult:
         """Compose the help interface."""
@@ -97,6 +104,7 @@ Version {self.app_config.version}
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:
         """Go back to main menu."""
+        self.logger.info("用户从帮助页面返回主菜单")
         self.app.pop_screen()
     
     # Vim-like navigation actions

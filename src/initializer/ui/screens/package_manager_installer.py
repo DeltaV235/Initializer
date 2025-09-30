@@ -210,11 +210,12 @@ class PackageManagerInstaller(ModalScreen):
                 try:
                     content_item = self.query_one(f"#pm-content-{i}", Static)
                     content_item.update(pm_text)
-                except:
+                except Exception as e:
+                    # Widget might not be mounted yet, silently continue
                     pass
 
         except Exception as e:
-            # Fallback if update fails
+            # Fallback if full update fails - log for debugging
             pass
     
     def action_nav_down(self) -> None:
@@ -290,8 +291,9 @@ class PackageManagerInstaller(ModalScreen):
                     scrollable_container.scroll_y = current_position
                 elif current_position > current_scroll + visible_height:
                     scrollable_container.scroll_y = current_position - visible_height + 2
-                    
-        except Exception:
+
+        except Exception as e:
+            # Scrolling might fail if widget hierarchy changes, ignore silently
             pass
     
     def action_dismiss(self) -> None:

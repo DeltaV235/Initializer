@@ -8,6 +8,8 @@ from textual.widgets import Button, Static, Input, Label
 from textual.events import Key
 from typing import Optional
 
+from ...utils.logger import get_ui_logger
+
 
 class SudoPrompt(ModalScreen[Optional[str]]):
     """Sudo password prompt - provides secure password input interface."""
@@ -113,9 +115,12 @@ class SudoPrompt(ModalScreen[Optional[str]]):
         self.retry_count = retry_count
         self.max_retries = max_retries
         self.error_message = error_message
+        self.logger = get_ui_logger("sudo_prompt")
+        self.logger.info(f"Sudo密码提示框初始化: 重试={retry_count}/{max_retries}")
 
     def on_mount(self) -> None:
         """初始化屏幕，自动聚焦到密码输入框."""
+        self.logger.debug("Sudo密码提示框已挂载")
         self.focus()
         # 延迟聚焦到密码输入框，确保组件已经完全渲染
         self.call_after_refresh(self._focus_password_input)
@@ -125,8 +130,9 @@ class SudoPrompt(ModalScreen[Optional[str]]):
         try:
             password_input = self.query_one("#password-input", Input)
             password_input.focus()
-        except:
-            pass  # 如果找不到组件就忽略
+            self.logger.debug("密码输入框已聚焦")
+        except Exception as e:
+            self.logger.warning(f"无法聚焦到密码输入框: {e}")
 
     def can_focus(self) -> bool:
         """允许Modal接收焦点."""
@@ -202,18 +208,22 @@ class SudoPrompt(ModalScreen[Optional[str]]):
 
             if not password:
                 # 显示错误信息
+                self.logger.warning("用户尝试提交空密码")
                 self._show_error("密码不能为空")
                 password_input.focus()
                 return
 
             # 返回密码
+            self.logger.info("用户确认密码输入")
             self.dismiss(password)
 
         except Exception as e:
+            self.logger.error(f"获取密码时出错: {e}")
             self._show_error(f"获取密码时出错: {str(e)}")
 
     def action_cancel_modal(self) -> None:
         """取消密码输入."""
+        self.logger.info("用户取消密码输入")
         self.dismiss(None)
 
     def _show_error(self, message: str) -> None:
@@ -222,27 +232,29 @@ class SudoPrompt(ModalScreen[Optional[str]]):
         Args:
             message: 错误信息
         """
+        self.logger.debug(f"显示错误信息: {message}")
         try:
             # 尝试更新现有的错误信息组件
             error_widget = self.query_one("#error-message", Static)
             error_widget.update(f"❌ {message}")
-        except:
+        except Exception as e:
             # 如果错误信息组件不存在，创建临时提示
+            self.logger.debug(f"错误组件不存在，使用placeholder显示: {e}")
             try:
                 password_input = self.query_one("#password-input", Input)
                 password_input.placeholder = f"错误: {message}"
                 # 短暂延迟后恢复原始placeholder
                 self.call_later(self._reset_placeholder)
-            except:
-                pass  # 忽略所有异常
+            except Exception as e2:
+                self.logger.warning(f"无法显示错误信息: {e2}")
 
     def _reset_placeholder(self) -> None:
         """重置密码输入框的placeholder."""
         try:
             password_input = self.query_one("#password-input", Input)
             password_input.placeholder = "请输入密码..."
-        except:
-            pass
+        except Exception as e:
+            self.logger.debug(f"重置placeholder失败: {e}")
 
 
 class SudoRetry(ModalScreen[bool]):
