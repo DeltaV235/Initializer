@@ -46,8 +46,11 @@ def cleanup_terminal_state():
         # Reset colors and attributes
         sys.stdout.write('\033[0m')
 
-        # Clear any remaining escape sequences and reset terminal
-        sys.stdout.write('\033c')
+        # REMOVED: Clear screen command - keep terminal content visible
+        # sys.stdout.write('\033c')
+
+        # Move cursor to a new line for cleanliness
+        sys.stdout.write('\n')
 
         # Force immediate flush
         sys.stdout.flush()
@@ -174,6 +177,34 @@ class InitializerApp(App):
         
     def on_mount(self) -> None:
         """Called when app starts."""
+        # Setup global exception handler
+        import sys
+        import traceback
+
+        def handle_exception(exc_type, exc_value, exc_traceback):
+            """Global exception handler to log all uncaught exceptions."""
+            if issubclass(exc_type, KeyboardInterrupt):
+                # Let KeyboardInterrupt pass through
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+
+            # Log the full exception with traceback
+            self.logger.critical("=" * 80)
+            self.logger.critical("UNCAUGHT EXCEPTION - Application crashed!")
+            self.logger.critical("=" * 80)
+            self.logger.critical(f"Exception Type: {exc_type.__name__}")
+            self.logger.critical(f"Exception Value: {exc_value}")
+            self.logger.critical("Traceback:")
+            for line in traceback.format_tb(exc_traceback):
+                self.logger.critical(line.strip())
+            self.logger.critical("=" * 80)
+
+            # Also call original handler
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+        # Install global exception handler
+        sys.excepthook = handle_exception
+
         # Push the main screen
         from .ui.screens.main_menu import MainMenuScreen
         self.push_screen(MainMenuScreen(self.config_manager))
