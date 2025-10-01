@@ -350,3 +350,5 @@ tools/check-test-environment.sh --exit-code-only
 - **Comprehensive navigation**: Tab, hjkl, Enter, 1-5 shortcuts, q for quit
 - **Automated tools**: Installation, deployment, environment detection
 - **用户测试**: 用户手动运行 run.sh 测试应用程序，测试完成后按 Q 正常退出程序。
+- 在添加 CSS 前，先检查项目中的公用CSS(style.css)中是否已存在相同的样式，如果存在则复用。
+- 项目的 log 都使用英文记录。
