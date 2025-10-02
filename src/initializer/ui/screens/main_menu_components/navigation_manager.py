@@ -10,16 +10,42 @@ class NavigationManager:
     @staticmethod
     def navigate_segments_down(screen) -> None:
         """Navigate down through segments."""
+        from ....utils.logger import get_ui_logger
+        logger = get_ui_logger("navigation_manager")
+
         current_index = next((i for i, seg in enumerate(screen.SEGMENTS) if seg["id"] == screen.selected_segment), 0)
         if current_index < len(screen.SEGMENTS) - 1:
-            screen.selected_segment = screen.SEGMENTS[current_index + 1]["id"]
+            new_segment_id = screen.SEGMENTS[current_index + 1]["id"]
+            screen.selected_segment = new_segment_id
+
+            # Update Textual focus to match selected segment
+            try:
+                button_id = f"#segment-{new_segment_id}"
+                button = screen.query_one(button_id)
+                button.focus()
+                logger.debug(f"Navigate down: focused button {button_id}")
+            except Exception as e:
+                logger.error(f"Failed to focus button on navigate down: {e}")
 
     @staticmethod
     def navigate_segments_up(screen) -> None:
         """Navigate up through segments."""
+        from ....utils.logger import get_ui_logger
+        logger = get_ui_logger("navigation_manager")
+
         current_index = next((i for i, seg in enumerate(screen.SEGMENTS) if seg["id"] == screen.selected_segment), 0)
         if current_index > 0:
-            screen.selected_segment = screen.SEGMENTS[current_index - 1]["id"]
+            new_segment_id = screen.SEGMENTS[current_index - 1]["id"]
+            screen.selected_segment = new_segment_id
+
+            # Update Textual focus to match selected segment
+            try:
+                button_id = f"#segment-{new_segment_id}"
+                button = screen.query_one(button_id)
+                button.focus()
+                logger.debug(f"Navigate up: focused button {button_id}")
+            except Exception as e:
+                logger.error(f"Failed to focus button on navigate up: {e}")
 
 
 class RefreshManager:
