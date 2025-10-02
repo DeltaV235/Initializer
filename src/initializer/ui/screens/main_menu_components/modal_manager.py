@@ -51,16 +51,19 @@ class ModalManager:
             """Callback when user confirms or cancels."""
             if confirmed:
                 from ..app_install_progress import AppInstallProgress
-                # Pass sudo_manager from callback, not config_manager
+                # Pass sudo_manager from callback and main menu reference
                 progress_screen = AppInstallProgress(
-                    actions, screen.app_installer, sudo_manager
+                    actions,
+                    screen.app_installer,
+                    sudo_manager,
+                    main_menu_ref=screen  # Pass main menu reference for page refresh
                 )
                 screen.app.push_screen(progress_screen, screen._on_install_complete)
 
         try:
             from ..app_install_confirm import AppInstallConfirm
-            modal = AppInstallConfirm(actions, on_confirm_callback, screen.app_installer)
-            screen.app.push_screen(modal)
+            confirm_modal = AppInstallConfirm(actions, on_confirm_callback, screen.app_installer)
+            screen.app.push_screen(confirm_modal)
         except Exception as e:
             from ....utils.logger import get_ui_logger
             logger = get_ui_logger("main_menu")

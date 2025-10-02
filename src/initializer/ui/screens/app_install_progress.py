@@ -154,7 +154,7 @@ class AppInstallProgress(ModalScreen):
     _is_aborting = False  # Flag to indicate user requested abort
     _is_paused = False  # Flag to indicate processes are paused
     
-    def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None):
+    def __init__(self, actions: List[Dict], app_installer, sudo_manager: Optional[SudoManager] = None, main_menu_ref=None):
         try:
             super().__init__()
             print(f"DEBUG: AppInstallProgress __init__ called with {len(actions)} actions")
@@ -164,6 +164,7 @@ class AppInstallProgress(ModalScreen):
             self.actions = actions
             self.app_installer = app_installer
             self.sudo_manager = sudo_manager  # Optional sudo manager
+            self._main_menu_ref = main_menu_ref  # Reference to main menu for refreshing
 
             # Add log lines tracking like APT modal
             self.log_lines = []
@@ -886,7 +887,7 @@ class AppInstallProgress(ModalScreen):
         # All tasks completed
         self.all_completed = True
         self._enable_close_button()
-        
+
         # Log completion
         timestamp = datetime.now().strftime("%H:%M:%S")
         successful = sum(1 for t in self.tasks if t["status"] == "success")
@@ -894,7 +895,7 @@ class AppInstallProgress(ModalScreen):
 
         self._append_log(None,"")
         self._log_control(f"📊 Installation completed: {successful} successful, {failed} failed")
-        
+
         if failed == 0:
             self._log_control("🎉 All tasks completed successfully!")
         else:

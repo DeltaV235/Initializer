@@ -79,20 +79,11 @@ class AppInstallConfirm(ModalScreen):
         self.logger = get_module_logger("app_install_confirmation_modal")
         self.sudo_manager = SudoManager()
 
-        # 防止立即确认的标志
-        self._just_opened = True
-
         self.logger.info(f"AppInstallConfirm initialized with {len(actions)} actions")
-    
+
     def on_mount(self) -> None:
         """Initialize the screen."""
         self.focus()
-        # 延迟一小段时间后允许键盘确认，防止立即触发
-        self.set_timer(0.5, self._enable_keyboard_confirm)
-    
-    def _enable_keyboard_confirm(self) -> None:
-        """Enable keyboard confirmation after a short delay."""
-        self._just_opened = False
 
     def can_focus(self) -> bool:
         """Return True to allow this modal to receive focus."""
@@ -107,12 +98,6 @@ class AppInstallConfirm(ModalScreen):
     def handle_key_event(self, event: Key) -> None:
         """Handle key events using @on decorator for reliable event processing."""
         if event.key == "enter":
-            # 防止立即确认（刚打开对话框时）
-            if self._just_opened:
-                self.logger.debug("Ignoring Enter key - dialog just opened")
-                event.prevent_default()
-                event.stop()
-                return
             self.action_confirm_change()
             event.prevent_default()
             event.stop()
@@ -121,12 +106,6 @@ class AppInstallConfirm(ModalScreen):
             event.prevent_default()
             event.stop()
         elif event.key == "y":
-            # Y键也需要检查延迟
-            if self._just_opened:
-                self.logger.debug("Ignoring Y key - dialog just opened")
-                event.prevent_default()
-                event.stop()
-                return
             self.action_confirm_change()
             event.prevent_default()
             event.stop()
@@ -209,9 +188,10 @@ class AppInstallConfirm(ModalScreen):
             self.logger.info("_start_confirmation_process() call completed")
         except Exception as e:
             self.logger.error(f"Exception in action_confirm_change: {e}", exc_info=True)
-            # 确保出错时也调用callback
-            self.callback(False, None)
+            # 确保出错时也 dismiss 然后调用 callback
+            # IMPORTANT: Dismiss first, then callback
             self.dismiss()
+            self.callback(False, None)
 
     @work(exclusive=True)
     async def _start_confirmation_process(self) -> None:
@@ -247,37 +227,45 @@ class AppInstallConfirm(ModalScreen):
                 if success:
                     # sudo验证成功，继续操作
                     self.logger.info("=== Sudo verification successful, calling callback ===")
-                    self.logger.info(f"About to call callback with (True, {self.sudo_manager})")
-                    self.callback(True, self.sudo_manager)
-                    self.logger.info("Callback called successfully, about to dismiss modal")
+                    self.logger.info("About to dismiss modal first, then call callback")
+                    # IMPORTANT: Dismiss first, then callback (which pushes progress screen)
                     self.dismiss()
                     self.logger.info("Modal dismissed successfully")
+                    self.logger.info(f"About to call callback with (True, {self.sudo_manager})")
+                    self.callback(True, self.sudo_manager)
+                    self.logger.info("Callback called successfully")
                 else:
                     # sudo验证失败，取消操作
                     self.logger.warning("=== Sudo verification failed, cancelling operation ===")
-                    self.logger.info("About to call callback with (False, None)")
-                    self.callback(False, None)
-                    self.logger.info("Callback called, about to dismiss modal")
+                    self.logger.info("About to dismiss modal first, then call callback")
+                    # IMPORTANT: Dismiss first, then callback
                     self.dismiss()
                     self.logger.info("Modal dismissed")
+                    self.logger.info("About to call callback with (False, None)")
+                    self.callback(False, None)
+                    self.logger.info("Callback called")
             else:
                 # 不需要sudo权限，直接继续
                 self.logger.info("=== No sudo required, proceeding without sudo ===")
-                self.logger.info("About to call callback with (True, None)")
-                self.callback(True, None)
-                self.logger.info("Callback called successfully, about to dismiss modal")
+                self.logger.info("About to dismiss modal first, then call callback")
+                # IMPORTANT: Dismiss first, then callback (which pushes progress screen)
                 self.dismiss()
                 self.logger.info("Modal dismissed successfully")
+                self.logger.info("About to call callback with (True, None)")
+                self.callback(True, None)
+                self.logger.info("Callback called successfully")
 
         except Exception as e:
             self.logger.error(f"=== CRITICAL ERROR in confirmation process: {e} ===", exc_info=True)
             # 出错时取消操作
             try:
-                self.logger.info("About to call callback with (False, None) due to error")
-                self.callback(False, None)
-                self.logger.info("Error callback called successfully, about to dismiss")
+                self.logger.info("About to dismiss modal first due to error")
+                # IMPORTANT: Dismiss first, then callback
                 self.dismiss()
                 self.logger.info("Modal dismissed after error")
+                self.logger.info("About to call callback with (False, None) due to error")
+                self.callback(False, None)
+                self.logger.info("Error callback called successfully")
             except Exception as callback_error:
                 self.logger.error(f"Error in error handling callback: {callback_error}", exc_info=True)
 
