@@ -39,7 +39,7 @@ class Application(SoftwareItem):
     category: str = ""
     post_install: str = ""
     tags: List[str] = field(default_factory=list)
-    recommended: bool = False
+    install_recommends: bool = None  # None means use global config, True/False overrides
     installed: bool = False
     type: str = "standalone"  # "standalone" or "component"
 
