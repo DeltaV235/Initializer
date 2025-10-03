@@ -7,6 +7,8 @@ from textual.containers import ScrollableContainer
 from textual.widgets import Label
 
 
+from ..vim_management import VimManagementPanel
+
 class UIBuilders:
     """Builds UI panels for different segments."""
 
@@ -79,6 +81,16 @@ class UIBuilders:
             screen.segment_states.start_loading("user_management")
             container.mount(Label("Loading...", classes="loading-text"))
             screen._load_user_management_info()
+
+    @staticmethod
+    def build_vim_management_settings(screen, container: ScrollableContainer) -> None:
+        """构建 Vim 管理设置面板。"""
+        container.styles.scrollbar_size = 1
+        panel = VimManagementPanel(screen.config_manager)
+        screen.vim_management_panel = panel
+        container.mount(panel)
+        if screen.current_panel_focus == "right":
+            panel.refresh_action_labels()
 
     @staticmethod
     def build_app_settings(screen, container: ScrollableContainer) -> None:

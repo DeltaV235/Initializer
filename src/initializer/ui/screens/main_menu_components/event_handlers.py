@@ -97,6 +97,10 @@ class EventHandlers:
                 screen.app_manager.navigate_items("down")
             elif screen.selected_segment == "package_manager":
                 screen.pm_interaction.navigate_items("down")
+            elif screen.selected_segment == "vim_management":
+                panel = getattr(screen, "vim_management_panel", None)
+                if panel:
+                    panel.navigate("down")
             else:
                 # For other segments (system_info, etc.), scroll the content
                 try:
@@ -117,6 +121,10 @@ class EventHandlers:
                 screen.app_manager.navigate_items("up")
             elif screen.selected_segment == "package_manager":
                 screen.pm_interaction.navigate_items("up")
+            elif screen.selected_segment == "vim_management":
+                panel = getattr(screen, "vim_management_panel", None)
+                if panel:
+                    panel.navigate("up")
             else:
                 # For other segments (system_info, etc.), scroll the content
                 try:
@@ -137,6 +145,10 @@ class EventHandlers:
                 screen.app_manager.handle_enter_key()
             elif screen.selected_segment == "package_manager":
                 screen.pm_interaction.handle_item_selection()
+            elif screen.selected_segment == "vim_management":
+                panel = getattr(screen, "vim_management_panel", None)
+                if panel:
+                    panel.handle_enter()
 
     @staticmethod
     def action_select_segment(screen) -> None:
@@ -157,6 +169,10 @@ class EventHandlers:
             RefreshManager.refresh_app_install_page(screen)
         elif screen.selected_segment == "homebrew":
             RefreshManager.refresh_homebrew_page(screen)
+        elif screen.selected_segment == "vim_management":
+            panel = getattr(screen, "vim_management_panel", None)
+            if panel:
+                panel.action_refresh()
 
     @staticmethod
     def action_homebrew(screen) -> None:

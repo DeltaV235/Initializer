@@ -67,6 +67,7 @@ class MainMenuScreen(Screen):
         {"id": "package_manager", "name": "Package Manager"},
         {"id": "app_install", "name": "Application Manager"},
         {"id": "homebrew", "name": "Homebrew"},
+        {"id": "vim_management", "name": "Vim Management"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},
     ]
@@ -88,6 +89,7 @@ class MainMenuScreen(Screen):
         self.pm_interaction = PackageManagerInteractionManager(self)
         self.app_interaction = AppInstallInteractionManager(self)
         self.app_manager = AppInstallManager(self)
+        self.vim_management_panel = None
 
         # Initialize app install specific attributes
         self.app_expanded_suites = set()  # Track which suites are expanded
@@ -141,6 +143,11 @@ class MainMenuScreen(Screen):
                         # Clear arrows even if data not loaded
                         if hasattr(self, '_app_unique_suffix') and self._app_unique_suffix:
                             self.app_manager.clear_focus_indicators()
+                    elif self.selected_segment == "vim_management":
+                        panel = getattr(self, "vim_management_panel", None)
+                        if panel:
+                            logger.debug("Clearing Vim management focus indicators")
+                            panel.refresh_action_labels()
                 elif new_value == "right":
                     # When switching to right panel, initialize/update arrows based on segment
                     logger.debug(f"Right panel focused, segment: {self.selected_segment}")
@@ -171,6 +178,12 @@ class MainMenuScreen(Screen):
                             self.app_manager.update_focus_indicators()
                         else:
                             logger.debug("App install data not yet loaded, skipping arrow update")
+                    elif self.selected_segment == "vim_management":
+                        panel = getattr(self, "vim_management_panel", None)
+                        if panel:
+                            if panel.focus_index is None and panel.action_entries:
+                                panel.focus_index = 0
+                            panel.refresh_action_labels()
                     else:
                         logger.debug(f"Segment {self.selected_segment} has no interactive items")
                     # Note: system_info and other segments don't have interactive items with arrows
@@ -296,6 +309,9 @@ class MainMenuScreen(Screen):
             # Force a refresh to ensure widgets are fully cleared
             self.refresh()
 
+            if self.selected_segment != "vim_management":
+                self.vim_management_panel = None
+
             # Add content based on selected segment
             if self.selected_segment == "system_info":
                 self._build_system_info_settings(settings_container)
@@ -305,6 +321,8 @@ class MainMenuScreen(Screen):
                 self._build_package_manager_settings(settings_container)
             elif self.selected_segment == "app_install":
                 self._build_app_install_settings(settings_container)
+            elif self.selected_segment == "vim_management":
+                self._build_vim_management_settings(settings_container)
             elif self.selected_segment == "user_management":
                 self._build_user_management_settings(settings_container)
             elif self.selected_segment == "settings":
@@ -760,6 +778,10 @@ class MainMenuScreen(Screen):
         """Delegate to UIBuilders."""
         UIBuilders.build_user_management_settings(self, container)
 
+    def _build_vim_management_settings(self, container: ScrollableContainer) -> None:
+        """构建 Vim 管理面板。"""
+        UIBuilders.build_vim_management_settings(self, container)
+
     def _build_app_settings(self, container: ScrollableContainer) -> None:
         """Delegate to UIBuilders."""
         UIBuilders.build_app_settings(self, container)
@@ -944,6 +966,7 @@ class MainMenuScreen(Screen):
                 "package_manager": "Package Manager",
                 "app_install": "Application Manager",
                 "homebrew": "Homebrew",
+                "vim_management": "Vim Management",
                 "user_management": "User Management", 
                 "settings": "Settings",
                 "help": "Help"
@@ -1281,6 +1304,12 @@ class MainMenuScreen(Screen):
                         help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Space=Toggle | Enter=Apply Changes | Q=Quit"
                 elif self.selected_segment == "homebrew":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Scroll | Q=Quit"
+                elif self.selected_segment == "vim_management":
+                    panel = getattr(self, "vim_management_panel", None)
+                    if panel:
+                        help_text = panel.get_help_text()
+                    else:
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | I=Install | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "user_management":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "settings":
