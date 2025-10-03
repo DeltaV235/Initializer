@@ -390,6 +390,25 @@ class BatchPackageChecker:
         try:
             if self.pm_type in ["apt", "apt-get"]:
                 cmd = ["dpkg", "-l", package]
+
+                # Execute command
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+
+                # APT/dpkg special handling: check package status not just return code
+                # Only "ii" (installed) status means truly installed
+                # "rc" (removed, config-files) means uninstalled but config remains
+                output = stdout.decode('utf-8', errors='ignore')
+                for line in output.splitlines():
+                    if line.startswith("ii") and package in line:
+                        return True
+                return False
+
             elif self.pm_type == "brew":
                 # Try both formula and cask
                 formula_cmd = ["brew", "list", package]

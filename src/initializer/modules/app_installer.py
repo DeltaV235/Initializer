@@ -229,6 +229,9 @@ class AppInstaller:
         # 处理不同包管理器的包名字段
         package_name = self._get_package_name_for_manager(app_data)
 
+        # 读取 install_recommends 配置（None表示使用全局配置）
+        install_recommends = app_data.get("install_recommends", None)
+
         app = Application(
             name=app_data.get("name", ""),
             package=package_name,
@@ -237,7 +240,7 @@ class AppInstaller:
             category=app_data.get("category", ""),
             post_install=app_data.get("post_install", ""),
             tags=app_data.get("tags", []),
-            recommended=app_data.get("recommended", False),
+            install_recommends=install_recommends,
             type=app_type
         )
 
@@ -533,10 +536,32 @@ class AppInstaller:
 
             return False
 
+        # APT/dpkg 特殊处理：检查包状态而不仅仅是返回码
+        if self.package_manager in ["apt", "apt-get"]:
+            try:
+                result = subprocess.run(
+                    ["dpkg", "-l", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                # dpkg -l 输出格式：状态码在每行开头
+                # ii = installed (真正已安装)
+                # rc = removed, config-files remaining (已卸载但保留配置)
+                # un = unknown (未安装)
+                # 只有 ii 状态才算已安装
+                for line in result.stdout.splitlines():
+                    if line.startswith("ii") and package in line:
+                        return True
+
+                return False
+
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                return False
+
         # 其他包管理器保持原有逻辑
         check_commands = {
-            "apt": ["dpkg", "-l", package],
-            "apt-get": ["dpkg", "-l", package],
             "yum": ["rpm", "-q", package],
             "dnf": ["rpm", "-q", package],
             "pacman": ["pacman", "-Q", package],
@@ -590,7 +615,13 @@ class AppInstaller:
         # 获取配置参数
         config = self._get_package_manager_config()
         auto_yes = config.get("auto_yes", True)
-        install_recommends = config.get("install_recommends", True)
+
+        # 应用级别的 install_recommends 优先于全局配置
+        if app.install_recommends is not None:
+            install_recommends = app.install_recommends
+        else:
+            install_recommends = config.get("install_recommends", True)
+
         install_suggests = config.get("install_suggests", False)
 
         # 构建 APT 命令参数

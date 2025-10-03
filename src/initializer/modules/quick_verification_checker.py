@@ -299,6 +299,7 @@ class QuickVerificationChecker:
 
     def _check_package_specific_files(self, package: str) -> bool:
         """Check for package-specific files and directories."""
+        # Docker 卸载后常遗留 /var/lib/docker 等目录，不能作为安装判断依据，因此不在 specific_checks 中配置 Docker，避免误判。
         specific_checks = {
             # Python packages
             "python3": ["/usr/lib/python3*", "/usr/local/lib/python3*"],
@@ -306,10 +307,6 @@ class QuickVerificationChecker:
 
             # Node.js
             "nodejs": ["/usr/lib/node_modules", "/usr/local/lib/node_modules"],
-
-            # Docker
-            "docker": ["/var/lib/docker", "/etc/docker"],
-            "docker.io": ["/var/lib/docker", "/etc/docker"],
 
             # Database services
             "mysql-server": ["/var/lib/mysql", "/etc/mysql"],

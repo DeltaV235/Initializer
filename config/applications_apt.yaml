@@ -39,17 +39,16 @@ applications:
         description: Development headers and libraries for compiling Python extensions
     post_install: pip3 install --upgrade pip setuptools wheel
     tags: [python, development, pip]
-    recommended: true
 
   - name: Docker
     type: standalone
     description: Container runtime and orchestration
     category: development
-    package: docker.io docker-compose
-    executables: [docker, docker-compose]
+    package: docker.io
+    executables: [docker]
     post_install: usermod -aG docker $USER && systemctl enable docker
     tags: [container, devops, docker]
-    recommended: true
+    install_recommends: true
 
   - name: Node.js
     type: standalone
@@ -59,7 +58,6 @@ applications:
     executables: [node, nodejs, npm]
     post_install: npm install -g yarn
     tags: [javascript, nodejs, runtime, npm]
-    recommended: true
 
   - name: Network Tools Suite
     type: suite
@@ -76,7 +74,6 @@ applications:
         executables: [wget]
         description: Network downloader for retrieving files via HTTP/HTTPS/FTP
     tags: [network, utilities, diagnostic]
-    recommended: true
 
   - name: Git
     type: standalone
@@ -86,7 +83,6 @@ applications:
     executables: [git]
     post_install: null
     tags: [git, vcs, version-control]
-    recommended: true
 
   - name: System Monitor
     type: standalone
@@ -96,7 +92,6 @@ applications:
     executables: [htop]
     post_install: null
     tags: [monitoring, system]
-    recommended: true
 
   - name: Neovim
     type: standalone
@@ -106,7 +101,6 @@ applications:
     executables: [nvim]
     post_install: null
     tags: [editor, terminal, vim]
-    recommended: true
 
 
 # 分类定义
