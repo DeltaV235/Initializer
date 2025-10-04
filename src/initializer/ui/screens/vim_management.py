@@ -129,12 +129,13 @@ class VimManagementPanel(Widget):
         self._register_action_entries([])
 
     def _notify_help_update(self) -> None:
-        screen = getattr(self, "screen", None)
-        if screen and hasattr(screen, "_update_help_text"):
-            try:
+        """通知屏幕更新帮助文本。"""
+        try:
+            screen = self.app.screen if hasattr(self, 'app') and self.app else None
+            if screen and hasattr(screen, "_update_help_text"):
                 screen._update_help_text()
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(f"Failed to notify help update: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Failed to notify help update: {exc}")
 
     def _register_action_entries(self, entries: list[dict]) -> None:
         """记录可交互的操作条目并刷新指示。"""
@@ -153,13 +154,32 @@ class VimManagementPanel(Widget):
             widget.update(f"{prefix}{entry['label']}")
 
     def _is_active(self) -> bool:
-        screen = getattr(self, "screen", None)
-        if not screen:
+        """检查当前面板是否处于激活状态。"""
+        try:
+            # Try to get screen from app
+            screen = self.app.screen if hasattr(self, 'app') and self.app else None
+            if not screen:
+                logger.debug("Cannot determine screen from app")
+                return False
+
+            # Check if this is a MainMenuScreen with the required attributes
+            has_segment = hasattr(screen, 'selected_segment')
+            has_focus = hasattr(screen, 'current_panel_focus')
+
+            if not (has_segment and has_focus):
+                logger.debug(f"Screen missing required attributes: has_segment={has_segment}, has_focus={has_focus}")
+                return False
+
+            is_active = (
+                screen.selected_segment == "vim_management"
+                and screen.current_panel_focus == "right"
+            )
+            logger.debug(f"_is_active: segment={screen.selected_segment}, "
+                        f"focus={screen.current_panel_focus}, result={is_active}")
+            return is_active
+        except Exception as e:
+            logger.debug(f"Error in _is_active: {e}")
             return False
-        return (
-            screen.selected_segment == "vim_management"
-            and screen.current_panel_focus == "right"
-        )
 
     def refresh_action_labels(self) -> None:
         """供外部调用以刷新箭头状态。"""
@@ -190,9 +210,16 @@ class VimManagementPanel(Widget):
 
     def handle_enter(self) -> None:
         """处理回车键，执行当前选中操作。"""
+        logger.debug(f"handle_enter called: focus_index={self.focus_index}, "
+                    f"action_entries count={len(self.action_entries)}, "
+                    f"is_loading={self.is_loading}")
+
         entry = self._current_action_entry()
         if not entry:
+            logger.warning(f"No action entry found at focus_index={self.focus_index}")
             return
+
+        logger.info(f"Triggering action: {entry.get('action')} - {entry.get('label')}")
         self._trigger_action(entry.get("action"))
 
     def _trigger_action(self, action: Optional[str]) -> None:

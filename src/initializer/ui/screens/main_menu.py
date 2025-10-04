@@ -1021,6 +1021,8 @@ class MainMenuScreen(Screen):
 
     def on_key(self, event) -> bool:
         """Handle key events, including 1-6 shortcuts and two-level Esc exit."""
+        logger.debug(f"on_key: key={event.key}, panel_focus={self.current_panel_focus}, segment={self.selected_segment}")
+
         # Handle Esc key with two-level exit behavior
         if event.key == "escape":
             if self.current_panel_focus == "right":
@@ -1069,6 +1071,17 @@ class MainMenuScreen(Screen):
                     event.prevent_default()
                     event.stop()
                     return True
+                elif self.selected_segment == "vim_management":
+                    logger.info("[ENTER] Handling enter in vim_management segment")
+                    panel = getattr(self, "vim_management_panel", None)
+                    if panel:
+                        logger.info("[ENTER] Calling panel.handle_enter()")
+                        panel.handle_enter()
+                        event.prevent_default()
+                        event.stop()
+                        return True
+                    else:
+                        logger.warning("[ENTER] vim_management_panel is None!")
                 else:
                     # For other segments (system_info, etc.), prevent enter from triggering buttons
                     logger.debug(f"Preventing enter default behavior in {self.selected_segment} segment")

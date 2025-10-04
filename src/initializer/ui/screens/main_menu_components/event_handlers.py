@@ -137,18 +137,34 @@ class EventHandlers:
     @staticmethod
     def action_select_item(screen) -> None:
         """Select current item (Enter key)."""
+        from ....utils.logger import get_ui_logger
+        logger = get_ui_logger("event_handlers")
+
+        logger.info(f"[ENTER KEY] action_select_item: panel_focus={screen.current_panel_focus}, "
+                    f"segment={screen.selected_segment}")
+
         if screen.current_panel_focus == "left":
             # Do nothing on left panel Enter
+            logger.debug("Left panel focused, ignoring Enter key")
             pass
         elif screen.current_panel_focus == "right":
+            logger.info(f"[ENTER KEY] Right panel focused, segment={screen.selected_segment}")
             if screen.selected_segment == "app_install":
+                logger.debug("Calling app_manager.handle_enter_key()")
                 screen.app_manager.handle_enter_key()
             elif screen.selected_segment == "package_manager":
+                logger.debug("Calling pm_interaction.handle_item_selection()")
                 screen.pm_interaction.handle_item_selection()
             elif screen.selected_segment == "vim_management":
                 panel = getattr(screen, "vim_management_panel", None)
+                logger.info(f"[ENTER KEY] vim_management segment: panel exists={panel is not None}")
                 if panel:
+                    logger.info("[ENTER KEY] Calling panel.handle_enter()")
                     panel.handle_enter()
+                else:
+                    logger.error("[ENTER KEY] vim_management_panel is None!")
+        else:
+            logger.warning(f"Unknown panel focus state: {screen.current_panel_focus}")
 
     @staticmethod
     def action_select_segment(screen) -> None:
