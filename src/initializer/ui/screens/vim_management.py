@@ -347,12 +347,36 @@ class VimManagementPanel(Widget):
             container.mount(Label("LazyVim Status", classes="section-header"))
             if self.lazyvim_info:
                 if self.lazyvim_info.installed:
-                    container.mount(
-                        Static(
-                            "• Status: [bold green]Installed[/bold green]",
-                            classes="vim-info-line",
+                    # Status with version display
+                    if self.lazyvim_info.version:
+                        container.mount(
+                            Static(
+                                f"• Status: [bold green]Installed[/bold green]",
+                                classes="vim-info-line",
+                            )
                         )
-                    )
+                        if self.lazyvim_info.version == "Not initialized":
+                            container.mount(
+                                Static(
+                                    f"• Version: [bold yellow]{self.lazyvim_info.version}[/bold yellow] (run 'nvim' to initialize)",
+                                    classes="vim-info-line",
+                                )
+                            )
+                        else:
+                            container.mount(
+                                Static(
+                                    f"• Version: [bold cyan]{self.lazyvim_info.version}[/bold cyan]",
+                                    classes="vim-info-line",
+                                )
+                            )
+                    else:
+                        container.mount(
+                            Static(
+                                "• Status: [bold green]Installed[/bold green]",
+                                classes="vim-info-line",
+                            )
+                        )
+
                     if self.lazyvim_info.config_path:
                         container.mount(
                             Static(
@@ -360,6 +384,30 @@ class VimManagementPanel(Widget):
                                 classes="vim-info-line",
                             )
                         )
+
+                    # Runtime status check
+                    if self.lazyvim_info.can_run:
+                        container.mount(
+                            Static(
+                                "• Runtime: [bold green]Ready to run[/bold green]",
+                                classes="vim-info-line",
+                            )
+                        )
+                    else:
+                        if not self.lazyvim_info.nvim_compatible:
+                            container.mount(
+                                Static(
+                                    f"• Runtime: [bold red]Cannot run - NeoVim >= {VimManager.MIN_NVIM_VERSION} required[/bold red]",
+                                    classes="vim-info-line",
+                                )
+                            )
+                        else:
+                            container.mount(
+                                Static(
+                                    "• Runtime: [bold yellow]NeoVim not detected[/bold yellow]",
+                                    classes="vim-info-line",
+                                )
+                            )
                 else:
                     container.mount(
                         Static(
