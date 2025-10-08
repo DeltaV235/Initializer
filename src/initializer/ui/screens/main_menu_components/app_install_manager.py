@@ -254,20 +254,20 @@ class AppInstallManager:
                 f"[APP_INSTALL] Toggling suite '{item.name}' components to {target_state} (all_selected={all_selected})"
             )
 
-            expanded = item.name in self.screen.app_expanded_suites
-            visible_component_indices = []
-            if expanded:
-                for idx in range(self.screen.app_focused_index + 1, len(display_items)):
-                    sub_type, sub_item, _, is_visible = self._unpack_display_item(display_items[idx])
-                    if sub_type != "component":
-                        break
-                    if sub_item in components and is_visible:
-                        visible_component_indices.append((idx, sub_item))
+            # Collect all component indices (both visible and hidden)
+            component_indices = []
+            for idx in range(self.screen.app_focused_index + 1, len(display_items)):
+                sub_type, sub_item, _, _ = self._unpack_display_item(display_items[idx])
+                if sub_type != "component":
+                    break
+                if sub_item in components:
+                    component_indices.append((idx, sub_item))
 
             for component in components:
                 self.screen.app_selection_state[component.name] = target_state
 
-            for idx, component in visible_component_indices:
+            # Update all components (including hidden ones) to refresh cached status
+            for idx, component in component_indices:
                 self._update_single_item_status(idx, component, target_state)
 
             # 更新组合应用包自身的状态显示
