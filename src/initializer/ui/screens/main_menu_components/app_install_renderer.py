@@ -34,25 +34,39 @@ class AppInstallRenderer:
         unique_suffix = str(int(time.time() * 1000))[-6:]
         screen._app_unique_suffix = unique_suffix
 
-        # Build display list based on expansion state
+        # Build display list - always include all components (even if collapsed)
+        # We'll control visibility via CSS instead of DOM insertion/removal
         display_items = []
         for item in software_items:
             display_items.append(("suite_or_app", item, 0))
 
-            # If it's an expanded suite, add its components
-            if isinstance(item, ApplicationSuite) and item.name in screen.app_expanded_suites:
+            # Always add components, we'll hide them with CSS if collapsed
+            if isinstance(item, ApplicationSuite):
                 for component in item.components:
-                    display_items.append(("component", component, 1))
+                    is_expanded = item.name in screen.app_expanded_suites
+                    display_items.append(("component", component, 1, item.name, is_expanded))
 
         # Display each item
-        for i, (item_type, item, indent_level) in enumerate(display_items):
+        for i, item_data in enumerate(display_items):
+            # Unpack based on item type
+            if len(item_data) == 3:
+                item_type, item, indent_level = item_data
+                suite_name = None
+                is_visible = True
+            else:  # len == 5, it's a component
+                item_type, item, indent_level, suite_name, is_visible = item_data
+
             is_right_focused = (screen.current_panel_focus == "right")
-            arrow = "[#7dd3fc]▶[/#7dd3fc] " if (i == screen.app_focused_index and is_right_focused) else "  "
+            arrow = "[#7dd3fc]\u25b6[/#7dd3fc] " if (i == screen.app_focused_index and is_right_focused) else "  "
             indent = "  " * indent_level
 
             if item_type == "suite_or_app" and isinstance(item, ApplicationSuite):
                 status_display, content_text = AppInstallRenderer._render_suite(
-                    item, screen.app_expanded_suites, arrow, indent
+                    item,
+                    screen.app_selection_state,
+                    screen.app_expanded_suites,
+                    arrow,
+                    indent,
                 )
             elif item_type == "component":
                 status_display, content_text = AppInstallRenderer._render_component(
@@ -65,14 +79,21 @@ class AppInstallRenderer:
 
             # Create horizontal container
             app_container = Horizontal(classes="app-item-container", id=f"app-container-{i}-{unique_suffix}")
+
+            # Add suite name as data attribute for components
+            if suite_name:
+                app_container.add_class(f"suite-{suite_name.replace(' ', '-')}")
+                if not is_visible:
+                    app_container.styles.display = "none"
+
             status_widget = Static(status_display, classes="app-item-status")
             content_widget = Static(content_text, classes="app-item-content")
 
             # Store the text without arrow for later updates
             # status_display format: "{arrow}{indent}{status_text}"
             # Extract text after arrow (first 2 or ~20 chars)
-            if status_display.startswith("[#7dd3fc]▶[/#7dd3fc] "):
-                text_without_arrow = status_display[len("[#7dd3fc]▶[/#7dd3fc] "):]
+            if status_display.startswith("[#7dd3fc]\u25b6[/#7dd3fc] "):
+                text_without_arrow = status_display[len("[#7dd3fc]\u25b6[/#7dd3fc] "):]
             elif status_display.startswith("  "):
                 text_without_arrow = status_display[2:]
             else:
@@ -87,20 +108,49 @@ class AppInstallRenderer:
         container.mount(Static("", classes="bottom-spacer"))
 
     @staticmethod
-    def _render_suite(item: ApplicationSuite, expanded_suites: set, arrow: str, indent: str) -> tuple:
-        """Render a suite item."""
-        expansion_icon = "▼" if item.name in expanded_suites else "▶"
+    def _render_suite(
+        item: ApplicationSuite,
+        selection_state: dict,
+        expanded_suites: set,
+        arrow: str,
+        indent: str,
+    ) -> tuple:
+        """Render a suite item, reflecting pending install/uninstall actions."""
+        expansion_icon = "\u25bc" if item.name in expanded_suites else "\u25b6"
         suite_name = f"{expansion_icon} {item.name}"
 
-        installed_count = sum(1 for c in item.components if c.installed)
-        total_count = len(item.components)
+        components = list(getattr(item, "components", []) or [])
+        selection_state = selection_state or {}
 
-        if installed_count == 0:
-            status_text = f"[bright_black]○ {installed_count}/{total_count}[/bright_black]"
-        elif installed_count == total_count:
-            status_text = f"[green]● {installed_count}/{total_count}[/green]"
+        total_count = len(components)
+        installed_count = 0
+        install_targets = 0
+        uninstall_targets = 0
+
+        for component in components:
+            if getattr(component, "installed", False):
+                installed_count += 1
+            selected = selection_state.get(component.name, component.installed)
+            if component.installed and not selected:
+                uninstall_targets += 1
+            elif not component.installed and selected:
+                install_targets += 1
+
+        if install_targets > 0 and uninstall_targets == 0:
+            status_text = "[yellow]+ Install All[/yellow]"
+        elif uninstall_targets > 0 and install_targets == 0:
+            status_text = "[red]- Uninstall All[/red]"
+        elif install_targets > 0 and uninstall_targets > 0:
+            status_text = "[magenta]* Mixed Suite Changes[/magenta]"
         else:
-            status_text = f"[yellow]◐ {installed_count}/{total_count}[/yellow]"
+            if total_count == 0:
+                status_text = "[bright_black]\u25cb 0/0[/bright_black]"
+            elif installed_count == total_count:
+                status_text = f"[green]\u25cf {total_count}/{total_count}[/green]"
+            elif installed_count == 0:
+                status_text = f"[bright_black]\u25cb {installed_count}/{total_count}[/bright_black]"
+            else:
+                status_text = f"[yellow]\u25d0 {installed_count}/{total_count}[/yellow]"
 
         status_display = f"{arrow}{indent}{status_text}"
         content_text = f"{suite_name}"
