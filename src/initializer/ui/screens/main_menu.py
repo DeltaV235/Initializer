@@ -1034,24 +1034,43 @@ class MainMenuScreen(Screen):
                 self.app.exit()
                 return True
 
-        # Handle space key for app install section
+        # Handle space key for app install section (selection toggle)
         if event.key == "space" and self.selected_segment == "app_install":
-            # Only handle space key when in right panel (app list)
             is_left = self._is_focus_in_left_panel()
-            logger.debug(f"Space pressed - is_left_by_focus: {is_left}, current_panel_focus: {self.current_panel_focus}")
+            logger.debug(
+                f"Space pressed - is_left_by_focus: {is_left}, current_panel_focus: {self.current_panel_focus}"
+            )
             if not is_left:
-                logger.info("Triggering toggle_current_item")
+                logger.info("Toggling app selection via space key")
                 self.app_manager.toggle_current_item()
-                return True  # Consume the event
+                event.prevent_default()
+                event.stop()
+                return True
+            logger.debug("Space pressed but in left panel, ignoring")
+
+        # Handle L key for suite expansion/collapse
+        if event.key in ("l", "L") and self.selected_segment == "app_install":
+            is_left = self._is_focus_in_left_panel()
+            logger.debug(
+                f"L pressed - is_left_by_focus: {is_left}, current_panel_focus: {self.current_panel_focus}"
+            )
+            if not is_left:
+                handled = self.app_manager.toggle_current_suite_expansion()
+                if handled:
+                    event.prevent_default()
+                    event.stop()
+                    return True
             else:
-                logger.debug("Space pressed but in left panel, ignoring")
+                logger.debug("L pressed but in left panel, ignoring")
 
         # Handle enter key based on current segment and panel focus
         if event.key == "enter":
             # Check both reactive state and actual focus position
             is_left_by_reactive = (self.current_panel_focus == "left")
             is_left_by_focus = self._is_focus_in_left_panel()
-            logger.info(f"[ENTER] Enter pressed - reactive: {self.current_panel_focus}, is_left_by_focus: {is_left_by_focus}, focused_widget: {self.focused}, segment: {self.selected_segment}")
+            logger.info(
+                f"[ENTER] Enter pressed - reactive: {self.current_panel_focus}, is_left_by_focus: {is_left_by_focus}, focused_widget: {self.focused}, segment: {self.selected_segment}"
+            )
 
             # Only handle enter in right panel to prevent triggering left panel buttons
             if not is_left_by_focus:
@@ -1080,8 +1099,7 @@ class MainMenuScreen(Screen):
                         event.prevent_default()
                         event.stop()
                         return True
-                    else:
-                        logger.warning("[ENTER] vim_management_panel is None!")
+                    logger.warning("[ENTER] vim_management_panel is None!")
                 else:
                     # For other segments (system_info, etc.), prevent enter from triggering buttons
                     logger.debug(f"Preventing enter default behavior in {self.selected_segment} segment")
@@ -1312,9 +1330,9 @@ class MainMenuScreen(Screen):
                     changes = self._calculate_app_changes()
                     logger.debug(f"App changes calculated: install={len(changes['install'])}, uninstall={len(changes['uninstall'])}")
                     if changes["install"] or changes["uninstall"]:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Space=Toggle | Enter=Apply Changes | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Space=Select | L=Expand | Enter=Apply Changes | Q=Quit"
                     else:
-                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Space=Toggle | Enter=Apply Changes | Q=Quit"
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Space=Select | L=Expand | Enter=Apply Changes | Q=Quit"
                 elif self.selected_segment == "homebrew":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "vim_management":
