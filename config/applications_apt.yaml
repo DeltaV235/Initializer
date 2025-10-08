@@ -40,15 +40,22 @@ applications:
     post_install: pip3 install --upgrade pip setuptools wheel
     tags: [python, development, pip]
 
-  - name: Docker
-    type: standalone
-    description: Container runtime and orchestration
+  - name: Docker Suite
+    type: suite
+    description: Complete Docker container platform with Compose V2 support
     category: development
-    package: docker.io
-    executables: [docker]
+    components:
+      - name: Docker Engine
+        package: docker.io
+        executables: [docker]
+        description: Docker container runtime and CLI
+
+      - name: Docker Compose V2
+        package: docker-compose-v2
+        executables: []
+        description: Multi-container orchestration (docker compose command)
     post_install: usermod -aG docker $USER && systemctl enable docker
-    tags: [container, devops, docker]
-    install_recommends: true
+    tags: [container, devops, docker, compose]
 
   - name: Node.js
     type: standalone
