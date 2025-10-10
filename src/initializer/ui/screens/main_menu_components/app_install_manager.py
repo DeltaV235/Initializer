@@ -471,23 +471,58 @@ class AppInstallManager:
             return f"[yellow]\u25d0 {installed_components}/{total_components}[/yellow]"
 
     def handle_enter_key(self) -> bool:
-        """Handle Enter key in app install section."""
+        """Handle Enter key in app install section - collect all selected packages."""
         from ....utils.logger import get_ui_logger
         logger = get_ui_logger("app_install")
 
-        display_items = self._build_display_items()
-        logger.info(f"[APP_INSTALL] handle_enter_key: display_items={len(display_items)}, focused_index={self.screen.app_focused_index}")
+        logger.info(f"[APP_INSTALL] handle_enter_key: collecting all selected packages")
 
-        if not display_items or self.screen.app_focused_index >= len(display_items):
-            logger.warning("[APP_INSTALL] Invalid state in handle_enter_key")
-            return False
-
-        item_type, item, _, _ = self._unpack_display_item(display_items[self.screen.app_focused_index])
-        item_name = getattr(item, "name", str(item))
-        logger.info(f"[APP_INSTALL] Enter pressed on item_type={item_type}, item={item_name}")
-
-        self.apply_single_change()
+        # Collect all pending changes from selection state
+        self.apply_all_changes()
         return True
+
+    def apply_all_changes(self) -> None:
+        """Collect all selected packages and show confirmation modal.
+
+        This method scans all items in the cache and collects packages
+        whose selection state differs from their installation status.
+        """
+        from ....utils.logger import get_ui_logger
+        logger = get_ui_logger("app_install")
+
+        actions = []
+
+        # Iterate through all items in cache
+        for item in self.screen.app_install_cache:
+            if isinstance(item, ApplicationSuite):
+                # For suites, collect all component changes
+                for component in item.components:
+                    is_selected = self.screen.app_selection_state.get(component.name, component.installed)
+                    if component.installed and not is_selected:
+                        actions.append({"action": "uninstall", "application": component})
+                        logger.info(f"[APP_INSTALL] Collected uninstall: {component.name}")
+                    elif not component.installed and is_selected:
+                        actions.append({"action": "install", "application": component})
+                        logger.info(f"[APP_INSTALL] Collected install: {component.name}")
+            else:
+                # For standalone apps, check selection state
+                is_selected = self.screen.app_selection_state.get(item.name, item.installed)
+                if item.installed and not is_selected:
+                    actions.append({"action": "uninstall", "application": item})
+                    logger.info(f"[APP_INSTALL] Collected uninstall: {item.name}")
+                elif not item.installed and is_selected:
+                    actions.append({"action": "install", "application": item})
+                    logger.info(f"[APP_INSTALL] Collected install: {item.name}")
+
+        if not actions:
+            logger.info("[APP_INSTALL] No pending changes to apply")
+            return
+
+        logger.info(f"[APP_INSTALL] Collected {len(actions)} total actions for confirmation")
+
+        # Show confirmation modal with all collected actions
+        from .modal_manager import ModalManager
+        ModalManager.show_single_app_confirmation(self.screen, actions)
 
     def apply_single_change(self) -> None:
         """Apply change for single focused item or suite."""
