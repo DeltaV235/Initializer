@@ -129,19 +129,28 @@ class AppInstallConfirm(ModalScreen):
                     yield Label("Applications to Install:", classes="action-header")
                     for action in install_actions:
                         app = action["application"]
-                        yield Static(f"• {app.name} - {app.description}", 
+                        is_batch = action.get('is_batch', False)
+
+                        yield Static(f"• {app.name} - {app.description}",
                                    classes="action-item")
-                        
-                        # Show install command
-                        command = self.app_installer.get_install_command(app)
+
+                        # Show install command - handle batch install differently
+                        if is_batch:
+                            # Batch install: use packages list
+                            packages = action.get('packages', [])
+                            command = self.app_installer.get_batch_install_command(packages)
+                        else:
+                            # Single install: use application object
+                            command = self.app_installer.get_install_command(app)
+
                         if command:
                             yield Label("  Command:", classes="action-item")
                             # Truncate long commands for display
                             display_cmd = command if len(command) < 100 else command[:97] + "..."
                             yield Static(f"  {display_cmd}", classes="command-display")
-                        
-                        # Show post-install command if any
-                        if app.post_install:
+
+                        # Show post-install command if any (only for non-batch installs)
+                        if not is_batch and hasattr(app, 'post_install') and app.post_install:
                             yield Label("  Post-install Configuration:", classes="action-item")
                             display_post = app.post_install if len(app.post_install) < 100 else app.post_install[:97] + "..."
                             yield Static(f"  {display_post}", classes="command-display")
@@ -285,9 +294,16 @@ class AppInstallConfirm(ModalScreen):
 
             for action in self.actions:
                 app = action["application"]
+                is_batch = action.get('is_batch', False)
 
                 if action["action"] == "install":
-                    command = self.app_installer.get_install_command(app)
+                    if is_batch:
+                        # Batch install: use packages list
+                        packages = action.get('packages', [])
+                        command = self.app_installer.get_batch_install_command(packages)
+                    else:
+                        # Single install: use application object
+                        command = self.app_installer.get_install_command(app)
                     self.logger.debug(f"Install command for {app.name}: {command}")
                 else:  # uninstall
                     command = self.app_installer.get_uninstall_command(app)

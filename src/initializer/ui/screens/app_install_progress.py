@@ -685,121 +685,249 @@ class AppInstallProgress(ModalScreen):
 
             try:
                 if action["action"] == "install":
-                    # Get install command
-                    command = self.app_installer.get_install_command(app)
-                    if command:
-                        # Check if this specific command needs sudo
-                        if self._command_needs_sudo_for_task(task):
-                            self._log_user("⚠️ Administrator privileges required for installation command")
+                    # 检查是否为批量安装（中文注释：批量安装是新功能，优先检查）
+                    is_batch = action.get('is_batch', False)
 
-                        self._log_control(f"Executing command: {command}")
+                    if is_batch:
+                        # 批量安装路径（中文注释：Suite 级别批量安装）
+                        packages = action.get('packages', [])
+                        suite = action['application']  # ApplicationSuite 对象
+                        components = action.get('components', [])
 
-                        # Execute installation
-                        initial_progress = 40
-                        task["progress"] = initial_progress
-                        self._update_progress(i, initial_progress)
+                        # 显示批量安装标题（中文注释：使用分隔线和格式化标题提升可读性）
+                        self._append_log(None, "")
+                        self._log_control(f"[bold blue]═══ Batch Installation ═══[/bold blue]")
+                        self._log_control(f"[bold]{suite.name}[/bold]")
+                        self._log_control(f"[dim]Mode: Batch (all packages in one command)[/dim]")
+                        self._log_control(f"[dim]Packages: {len(packages)} items[/dim]")
+                        self._append_log(None, "")
 
-                        # Create progress callback for this task
-                        def update_install_progress(percentage):
-                            # Map command progress to task progress range (40-70%)
-                            task_progress = initial_progress + int((percentage / 100) * 30)
+                        # 显示包列表（中文注释：使用编号列表便于阅读）
+                        self._log_control(f"[bold]Package list:[/bold]")
+                        for idx, pkg in enumerate(packages, 1):
+                            self._log_control(f"  {idx}. {pkg}")
+                        self._append_log(None, "")
+
+                        # 生成批量安装命令
+                        command = self.app_installer.get_batch_install_command(packages)
+                        if not command:
+                            task["status"] = "failed"
+                            task["message"] = "Failed to generate batch install command"
+                            self._log_error(f"❌ Failed to generate batch install command")
+                            continue
+
+                        self._log_control(f"[dim]Command: {command}[/dim]")
+                        self._append_log(None, "")
+
+                        # 执行批量安装（中文注释：进度 40-70%）
+                        task["progress"] = 40
+                        self._update_progress(i, 40)
+
+                        def update_batch_progress(percentage):
+                            task_progress = 40 + int((percentage / 100) * 30)
                             task["progress"] = min(task_progress, 70)
                             self._update_progress(i, task["progress"])
 
-                        success, output = await self._execute_command_with_sudo_support(command, "log_widget", update_install_progress)
-                        
+                        success, output = await self._execute_command_with_sudo_support(
+                            command, "log_widget", update_batch_progress
+                        )
+
                         if success:
+                            # 批量安装成功（中文注释：更新所有组件的安装状态）
                             task["progress"] = 70
-                            self._update_progress(i, task["progress"])
+                            self._update_progress(i, 70)
 
-                            # Execute post-install if any
-                            if app.post_install:
-                                self._log_control(f"Executing post-install configuration: {app.post_install}")
-
-                                # Create progress callback for post-install (70-100%)
-                                def update_postinstall_progress(percentage):
-                                    task_progress = 70 + int((percentage / 100) * 30)
-                                    task["progress"] = min(task_progress, 100)
-                                    self._update_progress(i, task["progress"])
-
-                                post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, "log_widget", update_postinstall_progress)
-                                if not post_success:
-                                    self._log_error(f"⚠️ Post-install configuration failed: {post_output}")
+                            for component in components:
+                                if self.app_installer.save_installation_status(component.name, True):
+                                    self._log_process(f"📝 Saved installation status for {component.name}")
 
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._log_control(f"✅ {app.name} installed successfully")
+                            self._append_log(None, "")
+                            self._log_control(f"[green]✅ Batch installation completed successfully[/green]")
+                            self._log_control(f"[dim]  All {len(packages)} packages installed for '{suite.name}'[/dim]")
 
-                            # Log successful installation
+                            # 记录批量安装成功日志
                             self.app_installer.log_installation_event(
                                 LogLevel.SUCCESS,
-                                f"{app.name} installed successfully",
-                                application=app.name,
-                                action="install",
+                                f"Batch installed {len(packages)} packages for {suite.name}",
+                                application=suite.name,
+                                action="batch_install",
                                 command=command,
                                 output=output
                             )
 
-                            # Save installation status to persist state
-                            if self.app_installer.save_installation_status(app.name, True):
-                                self._log_process(f"📝 Saved installation status for {app.name}")
-                            else:
-                                self._log_error(f"⚠️ Failed to save installation status for {app.name}")
+                            # 刷新主菜单
+                            self._refresh_main_menu_app_page(f"{suite.name} batch installation successful")
 
-                            # Immediately refresh main menu app page after successful installation
-                            self._refresh_main_menu_app_page(f"{app.name} installed successfully")
                         else:
-                            task["status"] = "failed"
-                            task["message"] = output
+                            # 批量安装失败，启动降级策略（中文注释：逐个重试以定位失败包）
+                            self._append_log(None, "")
+                            self._log_error(f"[red]❌ Batch installation failed[/red]")
+                            self._log_control(f"[yellow]⚙️  Retrying individually to identify failed packages...[/yellow]")
+                            self._append_log(None, "")
 
-                            # Log failed installation
-                            self.app_installer.log_installation_event(
-                                LogLevel.ERROR,
-                                f"{app.name} installation failed",
-                                application=app.name,
-                                action="install",
-                                command=command,
-                                error=output
-                            )
+                            failed_components = []
+                            success_components = []
 
-                            # Generate user-friendly error analysis
-                            friendly_error = self.app_installer.analyze_error_and_suggest_solution(
-                                output, command, app.name
-                            )
+                            for component in components:
+                                self._log_control(f"[blue]→[/blue] Retrying: {component.name}")
 
-                            self._log_error(f"❌ {app.name} installation failed")
-                            self._append_log(None,"")
+                                # 生成单个安装命令
+                                single_cmd = self.app_installer.get_install_command(component)
+                                if not single_cmd:
+                                    failed_components.append(component.name)
+                                    self._log_error(f"  [red]❌ Failed to generate command for {component.name}[/red]")
+                                    continue
 
-                            # Show raw error output first for debugging
-                            if output and len(output.strip()) > 0:
-                                self._append_log(None,"[red]🔍 Raw error output:[/red]")
-                                for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
-                                    if line.strip():
-                                        self._append_log(None,f"[dim]  {line}[/dim]")
+                                # 执行单个安装
+                                comp_success, comp_output = await self._execute_command_with_sudo_support(
+                                    single_cmd, "log_widget"
+                                )
+
+                                if comp_success:
+                                    success_components.append(component.name)
+                                    self.app_installer.save_installation_status(component.name, True)
+                                    self._log_control(f"  [green]✅ {component.name} installed successfully[/green]")
+                                else:
+                                    failed_components.append(component.name)
+                                    self._log_error(f"  [red]❌ {component.name} installation failed[/red]")
+                                    # 显示简短的错误信息
+                                    if comp_output:
+                                        error_preview = comp_output.strip().split('\n')[-1][:100]
+                                        self._log_error(f"  [dim]Error: {error_preview}[/dim]")
+
+                            self._append_log(None, "")
+
+                            # 根据降级结果决定最终状态
+                            if not failed_components:
+                                task["status"] = "success"
+                                task["progress"] = 100
+                                task["message"] = f"All packages installed (after individual retry)"
+                                self._log_control(f"[green]✅ All {len(success_components)} packages successfully installed after individual retry[/green]")
+
+                                # 刷新主菜单
+                                self._refresh_main_menu_app_page(f"{suite.name} installation successful (after retry)")
+                            else:
+                                task["status"] = "failed"
+                                task["progress"] = 100
+                                task["message"] = f"Failed packages: {', '.join(failed_components)}"
+                                self._log_error(f"[red]❌ Installation failed for: {', '.join(failed_components)}[/red]")
+                                if success_components:
+                                    self._log_control(f"[dim]Successfully installed: {', '.join(success_components)}[/dim]")
+
+                    else:
+                        # 单个安装路径（中文注释：保持原有逻辑不变）
+                        # Get install command
+                        command = self.app_installer.get_install_command(app)
+                        if command:
+                            # Check if this specific command needs sudo
+                            if self._command_needs_sudo_for_task(task):
+                                self._log_user("⚠️ Administrator privileges required for installation command")
+
+                            self._log_control(f"Executing command: {command}")
+
+                            # Execute installation
+                            initial_progress = 40
+                            task["progress"] = initial_progress
+                            self._update_progress(i, initial_progress)
+
+                            # Create progress callback for this task
+                            def update_install_progress(percentage):
+                                # Map command progress to task progress range (40-70%)
+                                task_progress = initial_progress + int((percentage / 100) * 30)
+                                task["progress"] = min(task_progress, 70)
+                                self._update_progress(i, task["progress"])
+
+                            success, output = await self._execute_command_with_sudo_support(command, "log_widget", update_install_progress)
+
+                            if success:
+                                task["progress"] = 70
+                                self._update_progress(i, task["progress"])
+
+                                # Execute post-install if any
+                                if app.post_install:
+                                    self._log_control(f"Executing post-install configuration: {app.post_install}")
+
+                                    # Create progress callback for post-install (70-100%)
+                                    def update_postinstall_progress(percentage):
+                                        task_progress = 70 + int((percentage / 100) * 30)
+                                        task["progress"] = min(task_progress, 100)
+                                        self._update_progress(i, task["progress"])
+
+                                    post_success, post_output = await self._execute_command_with_sudo_support(app.post_install, "log_widget", update_postinstall_progress)
+                                    if not post_success:
+                                        self._log_error(f"⚠️ Post-install configuration failed: {post_output}")
+
+                                task["status"] = "success"
+                                task["progress"] = 100
+                                self._log_control(f"✅ {app.name} installed successfully")
+
+                                # Log successful installation
+                                self.app_installer.log_installation_event(
+                                    LogLevel.SUCCESS,
+                                    f"{app.name} installed successfully",
+                                    application=app.name,
+                                    action="install",
+                                    command=command,
+                                    output=output
+                                )
+
+                                # Save installation status to persist state
+                                if self.app_installer.save_installation_status(app.name, True):
+                                    self._log_process(f"📝 Saved installation status for {app.name}")
+                                else:
+                                    self._log_error(f"⚠️ Failed to save installation status for {app.name}")
+
+                                # Immediately refresh main menu app page after successful installation
+                                self._refresh_main_menu_app_page(f"{app.name} installed successfully")
+                            else:
+                                task["status"] = "failed"
+                                task["message"] = output
+
+                                # Log failed installation
+                                self.app_installer.log_installation_event(
+                                    LogLevel.ERROR,
+                                    f"{app.name} installation failed",
+                                    application=app.name,
+                                    action="install",
+                                    command=command,
+                                    error=output
+                                )
+
+                                # Generate user-friendly error analysis
+                                friendly_error = self.app_installer.analyze_error_and_suggest_solution(
+                                    output, command, app.name
+                                )
+
+                                self._log_error(f"❌ {app.name} installation failed")
                                 self._append_log(None,"")
 
-                            # Generate user-friendly error analysis
-                            friendly_error = self.app_installer.analyze_error_and_suggest_solution(
-                                output, command, app.name
-                            )
+                                # Show raw error output first for debugging
+                                if output and len(output.strip()) > 0:
+                                    self._append_log(None,"[red]🔍 Raw error output:[/red]")
+                                    for line in output.split('\n')[-5:]:  # Last 5 lines of raw output
+                                        if line.strip():
+                                            self._append_log(None,f"[dim]  {line}[/dim]")
+                                    self._append_log(None,"")
 
-                            # Display friendly error with proper formatting
-                            for line in friendly_error.split('\n'):
-                                if line.strip():
-                                    if line.startswith('❌'):
-                                        self._append_log(None,f"[red]{line}[/red]")
-                                    elif line.startswith('📋'):
-                                        self._append_log(None,f"[blue]{line}[/blue]")
-                                    elif line.startswith('🔍'):
-                                        self._append_log(None,f"[dim]{line}[/dim]")
-                                    elif line.startswith('  •'):
-                                        self._append_log(None,f"[yellow]{line}[/yellow]")
-                                    else:
-                                        self._append_log(None,line)
-                    else:
-                        task["status"] = "failed"
-                        task["message"] = "Cannot get installation command"
-                        self._append_log(None,f"[red]Error: Cannot get installation command for {app.name}[/red]")
+                                # Display friendly error with proper formatting
+                                for line in friendly_error.split('\n'):
+                                    if line.strip():
+                                        if line.startswith('❌'):
+                                            self._append_log(None,f"[red]{line}[/red]")
+                                        elif line.startswith('📋'):
+                                            self._append_log(None,f"[blue]{line}[/blue]")
+                                        elif line.startswith('🔍'):
+                                            self._append_log(None,f"[dim]{line}[/dim]")
+                                        elif line.startswith('  •'):
+                                            self._append_log(None,f"[yellow]{line}[/yellow]")
+                                        else:
+                                            self._append_log(None,line)
+                        else:
+                            task["status"] = "failed"
+                            task["message"] = "Cannot get installation command"
+                            self._append_log(None,f"[red]Error: Cannot get installation command for {app.name}[/red]")
                 
                 else:  # uninstall
                     # Get uninstall command
@@ -926,9 +1054,16 @@ class AppInstallProgress(ModalScreen):
         """
         action = task["action"]
         app = action["application"]
+        is_batch = action.get('is_batch', False)
 
         if action["action"] == "install":
-            command = self.app_installer.get_install_command(app)
+            if is_batch:
+                # Batch install: use packages list
+                packages = action.get('packages', [])
+                command = self.app_installer.get_batch_install_command(packages)
+            else:
+                # Single install: use application object
+                command = self.app_installer.get_install_command(app)
         else:  # uninstall
             command = self.app_installer.get_uninstall_command(app)
 
@@ -945,9 +1080,16 @@ class AppInstallProgress(ModalScreen):
         """
         action = task["action"]
         app = action["application"]
+        is_batch = action.get('is_batch', False)
 
         if action["action"] == "install":
-            command = self.app_installer.get_install_command(app)
+            if is_batch:
+                # Batch install: use packages list
+                packages = action.get('packages', [])
+                command = self.app_installer.get_batch_install_command(packages)
+            else:
+                # Single install: use application object
+                command = self.app_installer.get_install_command(app)
         else:  # uninstall
             command = self.app_installer.get_uninstall_command(app)
 
@@ -1520,6 +1662,7 @@ class AppInstallProgress(ModalScreen):
             # Get the action and application
             action = task["action"]
             app = action["application"]
+            is_batch = action.get('is_batch', False)
 
             # Reset progress
             task["progress"] = 20
@@ -1527,8 +1670,14 @@ class AppInstallProgress(ModalScreen):
 
             try:
                 if action["action"] == "install":
-                    # Get install command
-                    command = self.app_installer.get_install_command(app)
+                    # Get install command - handle batch install differently
+                    if is_batch:
+                        # Batch install: use packages list
+                        packages = action.get('packages', [])
+                        command = self.app_installer.get_batch_install_command(packages)
+                    else:
+                        # Single install: use application object
+                        command = self.app_installer.get_install_command(app)
                     if command:
                         # Check if this specific command needs sudo
                         if self._command_needs_sudo_for_task(task):
