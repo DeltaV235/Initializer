@@ -656,6 +656,70 @@ class AppInstaller:
 
         return install_commands.get(self.package_manager)
 
+    def get_batch_install_command(self, packages: List[str]) -> str:
+        """生成批量安装命令（中文注释：用于一次性安装多个包）
+
+        Args:
+            packages: 包名列表，例如 ['python3', 'python3-pip', 'python3-venv']
+
+        Returns:
+            批量安装命令字符串，如果包列表为空则返回空字符串
+
+        Example:
+            >>> installer.get_batch_install_command(['docker.io', 'docker-compose-v2'])
+            'sudo apt-get install -y --no-install-recommends docker.io docker-compose-v2'
+        """
+        if not packages:
+            return ""
+
+        if not self.package_manager:
+            return ""
+
+        # 获取配置参数（中文注释：复用现有配置读取逻辑）
+        config = self._get_package_manager_config()
+        auto_yes = config.get("auto_yes", True)
+        install_recommends = config.get("install_recommends", False)
+        install_suggests = config.get("install_suggests", False)
+
+        # 构建 APT 批量安装命令（中文注释：遵循与单个安装相同的选项逻辑）
+        if self.package_manager in ["apt", "apt-get"]:
+            cmd_parts = ["sudo apt-get install"]
+
+            # 添加自动确认参数
+            if auto_yes:
+                cmd_parts.append("-y")
+
+            # 添加推荐包参数
+            if not install_recommends:
+                cmd_parts.append("--no-install-recommends")
+
+            # 添加建议包参数
+            if install_suggests:
+                cmd_parts.append("--install-suggests")
+            elif not install_suggests:
+                cmd_parts.append("--no-install-suggests")
+
+            # 添加所有包名（中文注释：批量安装的核心逻辑）
+            cmd_parts.extend(packages)
+            return " ".join(cmd_parts)
+
+        # 其他包管理器的批量安装（中文注释：保持扩展性）
+        packages_str = " ".join(packages)
+        if self.package_manager == "brew":
+            return f"brew install {packages_str}"
+        elif self.package_manager == "yum":
+            return f"sudo yum install {'-y' if auto_yes else ''} {packages_str}"
+        elif self.package_manager == "dnf":
+            return f"sudo dnf install {'-y' if auto_yes else ''} {packages_str}"
+        elif self.package_manager == "pacman":
+            return f"sudo pacman -S {'--noconfirm' if auto_yes else ''} {packages_str}"
+        elif self.package_manager == "zypper":
+            return f"sudo zypper install {'-y' if auto_yes else ''} {packages_str}"
+        elif self.package_manager == "apk":
+            return f"sudo apk add {packages_str}"
+
+        return ""
+
     def needs_apt_update(self) -> bool:
         """检查是否需要执行apt update。
 
@@ -715,26 +779,34 @@ class AppInstaller:
                     with open(config_path, 'r', encoding='utf-8') as f:
                         config_data = yaml.safe_load(f)
 
-                    # Return the package manager configuration section
-                    if self.package_manager in ["apt", "apt-get"]:
-                        return config_data.get('apt_config', {})
-                    elif self.package_manager == "brew":
-                        return config_data.get('brew_config', {})
-                    else:
-                        # For other package managers, use pm_config or default to apt_config structure
-                        return config_data.get(f'{self.package_manager}_config',
-                                             config_data.get('apt_config', {}))
+                    # 优先读取新格式 package_manager_config.{pm}（中文注释：支持统一的配置结构）
+                    pm_config_root = config_data.get('package_manager_config', {})
+
+                    # 标准化包管理器名称（中文注释：apt-get 统一使用 apt 配置）
+                    pm_key = 'apt' if self.package_manager == 'apt-get' else self.package_manager
+
+                    if pm_config_root and pm_key in pm_config_root:
+                        return pm_config_root[pm_key]
+
+                    # 回退到旧格式 {pm}_config（中文注释：向后兼容现有配置文件）
+                    legacy_key = f'{pm_key}_config'
+                    if legacy_key in config_data:
+                        return config_data[legacy_key]
+
+                    # 都不存在时返回空字典，由后续默认配置处理（中文注释：避免配置缺失）
+                    return {}
 
             # Fallback to general app_install config
             return self.app_config.get('apt_config', {})
 
         except Exception as e:
             self.logger.warning(f"Failed to load package manager config: {str(e)}")
-            # Return sensible defaults
+            # Return sensible defaults（中文注释：提供安全的默认配置）
             return {
                 "auto_yes": True,
-                "install_recommends": True,
-                "install_suggests": False
+                "install_recommends": False,
+                "install_suggests": False,
+                "batch_supported": False  # 默认禁用批量安装
             }
 
     def _get_apt_config(self) -> Dict[str, Any]:

@@ -486,32 +486,82 @@ class AppInstallManager:
 
         This method scans all items in the cache and collects packages
         whose selection state differs from their installation status.
+
+        支持批量安装：当 batch_supported=True 时，Suite 内的多个包会合并为一个批量 action
         """
         from ....utils.logger import get_ui_logger
         logger = get_ui_logger("app_install")
 
         actions = []
 
+        # 获取批量安装配置（中文注释：决定是否聚合 Suite 的安装动作）
+        config = self.screen.app_installer._get_package_manager_config()
+        batch_supported = config.get('batch_supported', False)
+
         # Iterate through all items in cache
         for item in self.screen.app_install_cache:
             if isinstance(item, ApplicationSuite):
-                # For suites, collect all component changes
+                # 收集 Suite 的待安装和待卸载组件（中文注释：分别处理以支持批量安装）
+                install_comps = []
+                uninstall_comps = []
+
                 for component in item.components:
                     is_selected = self.screen.app_selection_state.get(component.name, component.installed)
                     if component.installed and not is_selected:
-                        actions.append({"action": "uninstall", "application": component})
-                        logger.info(f"[APP_INSTALL] Collected uninstall: {component.name}")
+                        uninstall_comps.append(component)
                     elif not component.installed and is_selected:
-                        actions.append({"action": "install", "application": component})
+                        install_comps.append(component)
+
+                # 批量安装模式：聚合所有待安装组件为单个 action（中文注释：提升安装效率）
+                if batch_supported and install_comps:
+                    packages = []
+                    for comp in install_comps:
+                        packages.extend(comp.get_package_list())
+
+                    actions.append({
+                        "action": "install",
+                        "application": item,  # Suite 对象，用于显示
+                        "packages": packages,  # 包名列表，用于批量安装
+                        "components": install_comps,  # 组件列表，用于状态更新
+                        "is_batch": True  # 批量安装标记
+                    })
+                    logger.info(f"[APP_INSTALL] Collected batch install for suite '{item.name}': {len(packages)} packages")
+
+                # 非批量模式：逐个生成 action（中文注释：向后兼容或批量安装禁用时使用）
+                elif install_comps:
+                    for component in install_comps:
+                        actions.append({
+                            "action": "install",
+                            "application": component,
+                            "is_batch": False
+                        })
                         logger.info(f"[APP_INSTALL] Collected install: {component.name}")
+
+                # 卸载始终逐个处理（中文注释：降低批量卸载的风险）
+                for component in uninstall_comps:
+                    actions.append({
+                        "action": "uninstall",
+                        "application": component,
+                        "is_batch": False
+                    })
+                    logger.info(f"[APP_INSTALL] Collected uninstall: {component.name}")
+
             else:
-                # For standalone apps, check selection state
+                # Standalone 应用保持原有逻辑（中文注释：不受批量安装影响）
                 is_selected = self.screen.app_selection_state.get(item.name, item.installed)
                 if item.installed and not is_selected:
-                    actions.append({"action": "uninstall", "application": item})
+                    actions.append({
+                        "action": "uninstall",
+                        "application": item,
+                        "is_batch": False
+                    })
                     logger.info(f"[APP_INSTALL] Collected uninstall: {item.name}")
                 elif not item.installed and is_selected:
-                    actions.append({"action": "install", "application": item})
+                    actions.append({
+                        "action": "install",
+                        "application": item,
+                        "is_batch": False
+                    })
                     logger.info(f"[APP_INSTALL] Collected install: {item.name}")
 
         if not actions:
