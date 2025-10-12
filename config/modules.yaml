@@ -84,6 +84,49 @@ modules:
       version_too_old: "NeoVim version {version} is too old. LazyVim requires >= 0.9.0. Please upgrade manually."
       install_success: "LazyVim installed successfully! Run 'nvim' to complete plugin setup."
       backup_created: "Existing config backed up to: {backup_path}"
+  zsh_management:
+    enabled: true
+    description: "Zsh and Oh-my-zsh installation and management"
+    zsh:
+      install_method: "system"
+    ohmyzsh:
+      install_url: "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
+      mirror_urls:
+        - "https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh"
+        - "https://raw.fastgit.org/ohmyzsh/ohmyzsh/master/tools/install.sh"
+      config_path: "~/.oh-my-zsh"
+      uninstall_command: "rm -rf ~/.oh-my-zsh ~/.zshrc*"
+    plugins:
+      - name: "zsh-autosuggestions"
+        description: "Fish-like autosuggestions for Zsh"
+        repo_url: "https://github.com/zsh-users/zsh-autosuggestions"
+      - name: "zsh-syntax-highlighting"
+        description: "Syntax highlighting for commands as you type"
+        repo_url: "https://github.com/zsh-users/zsh-syntax-highlighting"
+      - name: "zsh-completions"
+        description: "Additional completion definitions for Zsh"
+        repo_url: "https://github.com/zsh-users/zsh-completions"
+      - name: "autojump"
+        description: "Fast directory navigation tool"
+        repo_url: "https://github.com/wting/autojump"
+        install_method: "package_manager"
+    dependencies:
+      required:
+        - git
+        - curl
+      optional:
+        - wget
+    messages:
+      zsh_install_success: "Zsh installed successfully!"
+      zsh_uninstall_success: "Zsh uninstalled successfully."
+      ohmyzsh_install_success: "Oh-my-zsh installed successfully! Run 'zsh' to start using it."
+      ohmyzsh_uninstall_success: "Oh-my-zsh uninstalled successfully."
+      plugin_install_success: "Plugin '{name}' installed successfully!"
+      plugin_uninstall_success: "Plugin '{name}' uninstalled successfully."
+      shell_change_prompt: "Would you like to set Zsh as your default shell?"
+      shell_change_success: "Default shell changed to Zsh. Please log out and log back in."
+      shell_change_failed: "Failed to change default shell: {error}"
+      dependencies_missing: "Required dependencies missing: {deps}. Please install them first."
   package_manager:
     enabled: true
     supported:

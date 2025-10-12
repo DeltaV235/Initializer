@@ -101,6 +101,10 @@ class EventHandlers:
                 panel = getattr(screen, "vim_management_panel", None)
                 if panel:
                     panel.navigate("down")
+            elif screen.selected_segment == "zsh_management":
+                panel = getattr(screen, "zsh_management_panel", None)
+                if panel:
+                    panel.navigate("down")
             else:
                 # For other segments (system_info, etc.), scroll the content
                 try:
@@ -123,6 +127,10 @@ class EventHandlers:
                 screen.pm_interaction.navigate_items("up")
             elif screen.selected_segment == "vim_management":
                 panel = getattr(screen, "vim_management_panel", None)
+                if panel:
+                    panel.navigate("up")
+            elif screen.selected_segment == "zsh_management":
+                panel = getattr(screen, "zsh_management_panel", None)
                 if panel:
                     panel.navigate("up")
             else:
@@ -163,6 +171,14 @@ class EventHandlers:
                     panel.handle_enter()
                 else:
                     logger.error("[ENTER KEY] vim_management_panel is None!")
+            elif screen.selected_segment == "zsh_management":
+                panel = getattr(screen, "zsh_management_panel", None)
+                logger.info(f"[ENTER KEY] zsh_management segment: panel exists={panel is not None}")
+                if panel:
+                    logger.info("[ENTER KEY] Calling panel.handle_enter()")
+                    panel.handle_enter()
+                else:
+                    logger.error("[ENTER KEY] zsh_management_panel is None!")
         else:
             logger.warning(f"Unknown panel focus state: {screen.current_panel_focus}")
 
@@ -187,6 +203,10 @@ class EventHandlers:
             RefreshManager.refresh_homebrew_page(screen)
         elif screen.selected_segment == "vim_management":
             panel = getattr(screen, "vim_management_panel", None)
+            if panel:
+                panel.action_refresh()
+        elif screen.selected_segment == "zsh_management":
+            panel = getattr(screen, "zsh_management_panel", None)
             if panel:
                 panel.action_refresh()
 

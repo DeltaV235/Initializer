@@ -93,6 +93,18 @@ class UIBuilders:
             panel.refresh_action_labels()
 
     @staticmethod
+    def build_zsh_management_settings(screen, container: ScrollableContainer) -> None:
+        """构建 Zsh 管理设置面板。"""
+        from ..zsh_manager import ZshManagementPanel
+
+        container.styles.scrollbar_size = 1
+        panel = ZshManagementPanel(screen.config_manager)
+        screen.zsh_management_panel = panel
+        container.mount(panel)
+        if screen.current_panel_focus == "right":
+            panel.refresh_action_labels()
+
+    @staticmethod
     def build_app_settings(screen, container: ScrollableContainer) -> None:
         """Build application settings panel."""
         from ..main_menu_components import SegmentDisplayRenderer
