@@ -35,8 +35,30 @@ class AppInstallConfirm(ModalScreen):
 
     .action-header {
         text-style: bold;
-        color: $text;
+        color: $primary;
         margin: 1 0 0 0;
+        height: auto;
+        min-height: 1;
+    }
+
+    .section-separator {
+        color: $primary-darken-2;
+        margin: 0 0 1 0;
+        height: auto;
+        min-height: 1;
+    }
+
+    .app-name {
+        text-style: bold;
+        color: $text;
+        margin: 1 0 0 2;
+        height: auto;
+        min-height: 1;
+    }
+
+    .app-description {
+        color: $text-muted;
+        margin: 0 0 0 2;
         height: auto;
         min-height: 1;
     }
@@ -57,6 +79,9 @@ class AppInstallConfirm(ModalScreen):
         color: $text;
         height: auto;
         min-height: 1;
+        text-style: none;
+        overflow-x: hidden;
+        content-align: left top;
     }
 
     .warning-text {
@@ -127,12 +152,13 @@ class AppInstallConfirm(ModalScreen):
                 
                 if install_actions:
                     yield Label("Applications to Install:", classes="action-header")
-                    for action in install_actions:
+                    yield Static("─" * 50, classes="section-separator")
+                    for idx, action in enumerate(install_actions, 1):
                         app = action["application"]
                         is_batch = action.get('is_batch', False)
 
-                        yield Static(f"• {app.name} - {app.description}",
-                                   classes="action-item")
+                        yield Static(f"[{idx}] {app.name}", classes="app-name")
+                        yield Static(f"    {app.description}", classes="app-description")
 
                         # Show install command - handle batch install differently
                         if is_batch:
@@ -145,32 +171,31 @@ class AppInstallConfirm(ModalScreen):
 
                         if command:
                             yield Label("  Command:", classes="action-item")
-                            # Truncate long commands for display
-                            display_cmd = command if len(command) < 100 else command[:97] + "..."
-                            yield Static(f"  {display_cmd}", classes="command-display")
+                            # Display full command with word wrapping (no truncation)
+                            yield Static(f"  {command}", classes="command-display")
 
                         # Show post-install command if any (only for non-batch installs)
                         if not is_batch and hasattr(app, 'post_install') and app.post_install:
                             yield Label("  Post-install Configuration:", classes="action-item")
-                            display_post = app.post_install if len(app.post_install) < 100 else app.post_install[:97] + "..."
-                            yield Static(f"  {display_post}", classes="command-display")
+                            # Display full post-install command with word wrapping
+                            yield Static(f"  {app.post_install}", classes="command-display")
                 
                 if uninstall_actions:
                     if install_actions:
                         yield Static("")  # Spacer
                     yield Label("Applications to Uninstall:", classes="action-header")
-                    for action in uninstall_actions:
+                    yield Static("─" * 50, classes="section-separator")
+                    for idx, action in enumerate(uninstall_actions, 1):
                         app = action["application"]
-                        yield Static(f"• {app.name} - {app.description}", 
-                                   classes="action-item")
+                        yield Static(f"[{idx}] {app.name}", classes="app-name")
+                        yield Static(f"    {app.description}", classes="app-description")
                         
                         # Show uninstall command
                         command = self.app_installer.get_uninstall_command(app)
                         if command:
                             yield Label("  Command:", classes="action-item")
-                            # Truncate long commands for display
-                            display_cmd = command if len(command) < 100 else command[:97] + "..."
-                            yield Static(f"  {display_cmd}", classes="command-display")
+                            # Display full command with word wrapping (no truncation)
+                            yield Static(f"  {command}", classes="command-display")
                 
                 # Warning message
                 yield Static("")  # Spacer

@@ -672,8 +672,12 @@ class AppInstallProgress(ModalScreen):
             task["status"] = "running"
             self._update_task_display(i)
 
-            # Log start with categorized logging
-            self._log_control(f"🚀 Starting: {task['name']}")
+            # Log start with categorized logging and task progress indicator
+            task_progress_marker = f"[Task {i+1}/{len(self.tasks)}]"
+            self._log_control(f"")
+            self._log_control(f"{'=' * 60}")
+            self._log_control(f"{task_progress_marker} 🚀 Starting: {task['name']}")
+            self._log_control(f"{'=' * 60}")
 
             # Get the action and application
             action = task["action"]
@@ -744,8 +748,9 @@ class AppInstallProgress(ModalScreen):
                             task["status"] = "success"
                             task["progress"] = 100
                             self._append_log(None, "")
-                            self._log_control(f"[green]✅ Batch installation completed successfully[/green]")
+                            self._log_control(f"[green]✅ [Task {i+1}/{len(self.tasks)}] Batch installation completed successfully[/green]")
                             self._log_control(f"[dim]  All {len(packages)} packages installed for '{suite.name}'[/dim]")
+                            self._log_control(f"{'─' * 60}")
 
                             # 记录批量安装成功日志
                             self.app_installer.log_installation_event(
@@ -861,7 +866,9 @@ class AppInstallProgress(ModalScreen):
 
                                 task["status"] = "success"
                                 task["progress"] = 100
-                                self._log_control(f"✅ {app.name} installed successfully")
+                                self._append_log(None, "")
+                                self._log_control(f"[green]✅ [Task {i+1}/{len(self.tasks)}] {app.name} installed successfully[/green]")
+                                self._log_control(f"{'─' * 60}")
 
                                 # Log successful installation
                                 self.app_installer.log_installation_event(
@@ -956,7 +963,9 @@ class AppInstallProgress(ModalScreen):
                         if success:
                             task["status"] = "success"
                             task["progress"] = 100
-                            self._log_control(f"✅ {app.name} uninstalled successfully")
+                            self._append_log(None, "")
+                            self._log_control(f"[green]✅ [Task {i+1}/{len(self.tasks)}] {app.name} uninstalled successfully[/green]")
+                            self._log_control(f"{'─' * 60}")
 
                             # Save uninstallation status to persist state
                             if self.app_installer.save_installation_status(app.name, False):
