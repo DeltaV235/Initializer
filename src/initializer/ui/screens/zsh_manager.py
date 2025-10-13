@@ -312,13 +312,8 @@ class ZshManagementPanel(Widget):
             logger.debug(f"Unknown Zsh action: {action}")
 
     def get_help_text(self) -> str:
-        base_prefix = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Move"
-        entry = self._current_action_entry()
-        if entry:
-            enter_hint = f"Enter={entry['label']}"
-        else:
-            enter_hint = "Enter=Select"
-        return f"{base_prefix} | {enter_hint} | Q=Quit"
+        """Generate help text for the panel."""
+        return "ESC/TAB/H=Back | R=Refresh | J/K=Navigate | Enter=Select | Q=Quit"
 
     def _find_plugin_by_name(self, name: str) -> Optional[dict]:
         """根据名称查找插件配置。"""
@@ -349,14 +344,14 @@ class ZshManagementPanel(Widget):
                 widget = Static("", classes="zsh-action")
                 container.mount(widget)
                 action_entries.append({
-                    "label": f"• Default Shell: {self.current_shell} (Enter to change)",
+                    "label": f"Default Shell: {self.current_shell} (Enter to change)",
                     "action": "change_shell",
                     "widget": widget
                 })
             else:
                 # 无可用 shell，仅显示状态
                 container.mount(
-                    Static(f"• Default Shell: {self.current_shell}", classes="zsh-info-line")
+                    Static(f"Default Shell: {self.current_shell}", classes="zsh-info-line")
                 )
 
             container.mount(Rule())
@@ -370,13 +365,13 @@ class ZshManagementPanel(Widget):
                     )
                     container.mount(
                         Static(
-                            f"• Status: [bold green]Installed[/bold green] ({version_info})",
+                            f"Status: [bold green]Installed[/bold green] ({version_info})",
                             classes="zsh-info-line",
                         )
                     )
                     if self.zsh_info.path:
                         container.mount(
-                            Static(f"• Path: {self.zsh_info.path}", classes="zsh-info-line")
+                            Static(f"Path: {self.zsh_info.path}", classes="zsh-info-line")
                         )
 
                     widget = Static("", classes="zsh-action")
@@ -387,7 +382,7 @@ class ZshManagementPanel(Widget):
                 else:
                     container.mount(
                         Static(
-                            "• Status: [bold yellow]Not Installed[/bold yellow]",
+                            "Status: [bold yellow]Not Installed[/bold yellow]",
                             classes="zsh-info-line",
                         )
                     )
@@ -402,7 +397,7 @@ class ZshManagementPanel(Widget):
                     )
             else:
                 container.mount(
-                    Static("• Status: [red]Error checking status[/red]", classes="zsh-info-line")
+                    Static("Status: [red]Error checking status[/red]", classes="zsh-info-line")
                 )
 
             container.mount(Rule())
@@ -412,19 +407,19 @@ class ZshManagementPanel(Widget):
             if self.ohmyzsh_info:
                 if self.ohmyzsh_info.installed:
                     container.mount(
-                        Static("• Status: [bold green]Installed[/bold green]", classes="zsh-info-line")
+                        Static("Status: [bold green]Installed[/bold green]", classes="zsh-info-line")
                     )
                     if self.ohmyzsh_info.version:
                         container.mount(
                             Static(
-                                f"• Version: [bold cyan]{self.ohmyzsh_info.version}[/bold cyan]",
+                                f"Version: [bold cyan]{self.ohmyzsh_info.version}[/bold cyan]",
                                 classes="zsh-info-line",
                             )
                         )
                     if self.ohmyzsh_info.config_path:
                         container.mount(
                             Static(
-                                f"• Config: {self.ohmyzsh_info.config_path}",
+                                f"Config: {self.ohmyzsh_info.config_path}",
                                 classes="zsh-info-line",
                             )
                         )
@@ -441,7 +436,7 @@ class ZshManagementPanel(Widget):
                 else:
                     container.mount(
                         Static(
-                            "• Status: [bold yellow]Not Installed[/bold yellow]",
+                            "Status: [bold yellow]Not Installed[/bold yellow]",
                             classes="zsh-info-line",
                         )
                     )
@@ -456,7 +451,7 @@ class ZshManagementPanel(Widget):
                     )
             else:
                 container.mount(
-                    Static("• Status: [red]Error checking status[/red]", classes="zsh-info-line")
+                    Static("Status: [red]Error checking status[/red]", classes="zsh-info-line")
                 )
 
             container.mount(Rule())
@@ -484,7 +479,7 @@ class ZshManagementPanel(Widget):
                     widget = Static("", classes="zsh-action")
                     container.mount(widget)
                     action_entries.append({
-                        "label": f"• {plugin_info.name}: {status_text} (Enter to {action_hint})",
+                        "label": f"{plugin_info.name}: {status_text} (Enter to {action_hint})",
                         "action": f"manage_plugin:{plugin_info.name}",
                         "widget": widget
                     })
@@ -507,7 +502,6 @@ class ZshManagementPanel(Widget):
     def _open_shell_selection_modal(self) -> None:
         """打开 shell 选择 modal。"""
         from .shell_selection_modal import ShellSelectionModal
-        from .zsh_install_progress import ZshInstallProgress
 
         logger.info("Opening shell selection modal")
 
@@ -519,33 +513,8 @@ class ZshManagementPanel(Widget):
 
             logger.info(f"User selected shell: {selected_shell}")
 
-            def handle_completion(result: dict) -> None:
-                """处理 shell 切换完成。"""
-                if result and result.get("success"):
-                    logger.info(f"Shell changed successfully to {selected_shell}")
-                    self.app.notify(
-                        f"Shell changed to {selected_shell}",
-                        severity="information",
-                        timeout=3,
-                    )
-                    self.action_refresh()
-                else:
-                    error = result.get("error", "Unknown error") if result else "Unknown error"
-                    logger.error(f"Shell change failed: {error}")
-                    self.app.notify(
-                        f"Failed to change shell: {error}",
-                        severity="error",
-                        timeout=5,
-                    )
-
-            # 打开 progress modal 执行切换
-            progress_modal = ZshInstallProgress(
-                target="shell",
-                operation="change",
-                zsh_manager=self.zsh_manager,
-                shell_path=selected_shell,
-            )
-            self.app.push_screen(progress_modal, handle_completion)
+            # 直接执行 shell 更新（异步后台执行）
+            self._execute_shell_change(selected_shell)
 
         # 打开选择 modal
         selection_modal = ShellSelectionModal(
@@ -754,6 +723,83 @@ class ZshManagementPanel(Widget):
                 self._change_shell_directly(zsh_path)
 
         self.app.push_screen(ShellChangePrompt(), handle_prompt)
+
+
+    @work(exclusive=True, thread=True)
+    async def _execute_shell_change(self, selected_shell: str) -> None:
+        """在后台线程执行 shell 更新操作。
+
+        Args:
+            selected_shell: 目标 shell 的完整路径
+        """
+        from .shell_change_error_modal import ShellChangeErrorModal
+
+        logger.info(f"Executing shell change to: {selected_shell}")
+
+        try:
+            # 调用 ZshManager 更新 shell（传入空回调避免显示 progress）
+            result = await self.zsh_manager.change_default_shell(
+                selected_shell,
+                progress_callback=lambda msg: logger.debug(
+                    f"Shell change progress: {msg}"
+                ),
+            )
+
+            # 成功：在后台线程重新确认 shell（不阻塞 UI）
+            if result and result.get("success"):
+                logger.info(f"Shell changed successfully to {selected_shell}")
+                logger.info(f"Shell update successful: {selected_shell}")
+
+                def update_ui_on_complete():
+                    """UI 更新回调（在主线程执行）。"""
+                    # 更新 reactive 属性
+                    self.current_shell = selected_shell
+                    logger.debug(f"Updated current_shell to: {selected_shell}")
+
+                    # 刷新内容显示
+                    self._update_content_display()
+
+                    # 刷新帮助文本
+                    self._notify_help_update()
+
+                    # 显示成功通知
+                    self.app.notify(
+                        f"Shell changed to {selected_shell}. Please log out and log back in.",
+                        severity="information",
+                        timeout=5,
+                    )
+                    logger.debug("UI refresh completed after shell change")
+
+                # 在主线程更新 UI
+                self.app.call_from_thread(update_ui_on_complete)
+            else:
+                # 失败：显示错误 modal
+                error_message = (
+                    result.get("error", "Unknown error")
+                    if result
+                    else "Unknown error"
+                )
+                logger.error(f"Shell change failed: {error_message}")
+
+                def update_ui_on_error():
+                    error_modal = ShellChangeErrorModal(
+                        error_message=error_message, shell_path=selected_shell
+                    )
+                    self.app.push_screen(error_modal)
+
+                # 在主线程显示错误 modal
+                self.app.call_from_thread(update_ui_on_error)
+
+        except Exception as exc:
+            logger.error(f"Exception during shell change: {exc}", exc_info=True)
+
+            def update_ui_on_error():
+                error_modal = ShellChangeErrorModal(
+                    error_message=str(exc), shell_path=selected_shell
+                )
+                self.app.push_screen(error_modal)
+
+            self.app.call_from_thread(update_ui_on_error)
 
     def action_refresh(self) -> None:
         """手动刷新检测状态。"""
