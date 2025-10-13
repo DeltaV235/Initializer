@@ -534,6 +534,7 @@ class ZshManagementPanel(Widget):
                 self.app.notify(
                     "Shell changed successfully. Please log out and log back in.",
                     severity="information",
+                    timeout=5,
                 )
             else:
                 self.app.notify(
