@@ -797,3 +797,13 @@ Rule {
     text-style: bold;
 }
 
+/* Toast notification positioning - position at top right */
+ToastRack {
+    dock: top;
+    align-horizontal: right;
+    align-vertical: top;
+    layer: overlay;
+    width: auto;
+    height: auto;
+}
+

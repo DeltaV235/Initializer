@@ -130,8 +130,20 @@ class ShellSelectionModal(ModalScreen[Optional[str]]):
     def on_mount(self) -> None:
         """Handle mount event to set initial selection."""
         try:
-            self.selected_index = 0
-            self.call_after_refresh(self._update_shell_display)
+            # Set initial selection to current shell if found, otherwise default to first
+            try:
+                self.selected_index = self.available_shells.index(self.current_shell)
+                logger.debug(f"Initial selection set to current shell at index {self.selected_index}")
+            except ValueError:
+                self.selected_index = 0
+                logger.debug(f"Current shell not in list, defaulting to index 0")
+
+            # Update display and scroll to current selection
+            def update_and_scroll():
+                self._update_shell_display()
+                self._scroll_to_current()
+
+            self.call_after_refresh(update_and_scroll)
             logger.debug("Shell selection modal mounted")
         except Exception as e:
             logger.debug(f"Failed to initialize shell selection modal: {e}")

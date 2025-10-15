@@ -43,6 +43,8 @@ class PluginInfo:
     installed: bool
     repo_url: str
     install_path: str
+    description: str = ""
+    install_method: str = "git"
 
 
 class ZshManager:
@@ -258,6 +260,7 @@ class ZshManager:
             name = plugin.get("name", "")
             repo_url = plugin.get("repo_url", "")
             install_method = plugin.get("install_method", "git")
+            description = plugin.get("description", "")
 
             if install_method == "package_manager":
                 # 检查系统包管理器是否安装了该工具
@@ -284,6 +287,8 @@ class ZshManager:
                     installed=installed,
                     repo_url=repo_url,
                     install_path=install_path,
+                    description=description,
+                    install_method=install_method,
                 )
             )
 

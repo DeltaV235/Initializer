@@ -277,7 +277,7 @@ class ZshInstallConfirm(ModalScreen[bool]):
                             )
                         else:
                             # Display git clone command
-                            repo_url = self.plugin.get("repo", "") if self.plugin else ""
+                            repo_url = self.plugin.get("repo_url", "") if self.plugin else ""
                             if repo_url:
                                 yield Static(
                                     f"Command: git clone {repo_url} ~/.oh-my-zsh/custom/plugins/{plugin_name}",
