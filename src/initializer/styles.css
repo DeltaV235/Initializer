@@ -807,3 +807,7 @@ ToastRack {
     height: auto;
 }
 
+Toast {
+    padding: 1;
+}
+

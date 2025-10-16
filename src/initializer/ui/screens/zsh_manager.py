@@ -6,7 +6,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, ScrollableContainer
 from textual.reactive import reactive
-from textual.screen import ModalScreen, Screen
+from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Button, Label, Rule, Static
 
@@ -685,78 +685,7 @@ class ZshManagementPanel(Widget):
 
     def _prompt_shell_change(self) -> None:
         """提示用户是否切换默认 shell。"""
-
-        class ShellChangePrompt(ModalScreen[bool]):
-            selected_option: reactive[int] = reactive(0)
-
-            CSS = """
-            ShellChangePrompt {
-                align: center middle;
-            }
-
-            .info-text {
-                color: $text;
-                margin: 1;
-                text-align: center;
-            }
-
-            #option-container {
-                height: auto;
-                margin: 1 0 0 0;
-            }
-            """
-
-            def compose(self) -> ComposeResult:
-                from textual.widgets import Label, Rule
-
-                with Container(classes="modal-container-xs"):
-                    yield Static("Set Zsh as default shell?", classes="info-text")
-                    yield Rule()
-
-                    with Vertical(id="option-container"):
-                        yield Static("", id="yes-option", classes="option-item")
-                        yield Static("", id="no-option", classes="option-item")
-
-                    with Container(id="help-box"):
-                        yield Label("J/K=Navigate | Enter=Select | ESC=Cancel", classes="help-text")
-
-            def on_mount(self) -> None:
-                """Initialize selection state."""
-                self.selected_option = 0
-                self.call_after_refresh(self._update_option_display)
-
-            def watch_selected_option(self, old_value: int, new_value: int) -> None:
-                """Update display when selection changes."""
-                self._update_option_display()
-
-            def _update_option_display(self) -> None:
-                """Update option display with arrow indicators."""
-                try:
-                    yes_option = self.query_one("#yes-option", Static)
-                    no_option = self.query_one("#no-option", Static)
-
-                    yes_arrow = "▶ " if self.selected_option == 0 else "  "
-                    no_arrow = "▶ " if self.selected_option == 1 else "  "
-
-                    yes_option.update(f"{yes_arrow}✓ Yes")
-                    no_option.update(f"{no_arrow}✗ No")
-                except Exception as e:
-                    logger.debug(f"Failed to update option display: {e}")
-
-            def on_key(self, event: events.Key) -> None:
-                """Handle keyboard navigation."""
-                if event.key in ("j", "down"):
-                    self.selected_option = min(1, self.selected_option + 1)
-                    event.prevent_default()
-                elif event.key in ("k", "up"):
-                    self.selected_option = max(0, self.selected_option - 1)
-                    event.prevent_default()
-                elif event.key == "enter":
-                    self.dismiss(self.selected_option == 0)
-                    event.prevent_default()
-                elif event.key == "escape":
-                    self.dismiss(False)
-                    event.prevent_default()
+        from .shell_change_confirm import ShellChangeConfirm
 
         def handle_prompt(change: bool) -> None:
             if change:
@@ -767,7 +696,7 @@ class ZshManagementPanel(Widget):
                 )
                 self._change_shell_directly(zsh_path)
 
-        self.app.push_screen(ShellChangePrompt(), handle_prompt)
+        self.app.push_screen(ShellChangeConfirm(), handle_prompt)
 
 
     @work(exclusive=True, thread=True)

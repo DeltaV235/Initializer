@@ -2,9 +2,10 @@
 
 from typing import Optional
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
-from textual.reactive import reactive
+from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Label, Rule, Static
 
@@ -16,6 +17,13 @@ logger = get_ui_logger("zsh_install_confirm")
 
 class ZshInstallConfirm(ModalScreen[bool]):
     """Confirmation modal for Zsh install/uninstall operations."""
+
+    BINDINGS = [
+        ("y", "confirm", "Yes"),
+        ("n", "cancel", "No"),
+        ("enter", "confirm", "Confirm"),
+        ("escape", "cancel", "Cancel"),
+    ]
 
     CSS = """
     ZshInstallConfirm {
@@ -58,19 +66,6 @@ class ZshInstallConfirm(ModalScreen[bool]):
         border: solid $warning;
     }
 
-    #option-container {
-        height: auto;
-        align: center middle;
-        margin: 1 0 0 0;
-        padding: 1 0;
-    }
-
-    .option-item {
-        text-align: center;
-        color: $text;
-        margin: 0 0 1 0;
-    }
-
     #help-box {
         dock: bottom;
         width: 100%;
@@ -89,8 +84,6 @@ class ZshInstallConfirm(ModalScreen[bool]):
         color: $text-muted;
     }
     """
-
-    selected_option: reactive[int] = reactive(0)  # 0=Confirm, 1=Cancel
 
     def __init__(
         self,
@@ -303,58 +296,35 @@ class ZshInstallConfirm(ModalScreen[bool]):
                             classes="note-text",
                         )
 
-            yield Rule()
-
-            with Vertical(id="option-container"):
-                yield Static("", id="confirm-option", classes="option-item")
-                yield Static("", id="cancel-option", classes="option-item")
-
             with Container(id="help-box"):
-                yield Label("J/K=Navigate | Enter=Select | ESC=Cancel", classes="help-text")
+                yield Label("Y/Enter=Confirm | N/ESC=Cancel", classes="help-text")
 
     def on_mount(self) -> None:
-        """Handle mount event to set initial selection."""
+        """Handle mount event and set focus."""
         try:
-            self.selected_option = 0
-            self.call_after_refresh(self._update_option_display)
-            logger.debug("Zsh install confirm modal mounted")
+            self.focus()
+            logger.debug("Zsh install confirm modal mounted and focused")
         except Exception as e:
             logger.debug(f"Failed to initialize modal: {e}")
 
-    def watch_selected_option(self, old_value: int, new_value: int) -> None:
-        """Watch for changes to selected_option and update display."""
-        self._update_option_display()
+    def action_confirm(self) -> None:
+        """Confirm action."""
+        logger.info(f"User confirmed {self.target} {self.operation}")
+        self.dismiss(True)
 
-    def _update_option_display(self) -> None:
-        """Update option display with arrow indicators."""
-        try:
-            confirm_option = self.query_one("#confirm-option", Static)
-            cancel_option = self.query_one("#cancel-option", Static)
+    def action_cancel(self) -> None:
+        """Cancel action."""
+        logger.info(f"User cancelled {self.target} {self.operation}")
+        self.dismiss(False)
 
-            confirm_arrow = "▶ " if self.selected_option == 0 else "  "
-            cancel_arrow = "▶ " if self.selected_option == 1 else "  "
-
-            confirm_option.update(f"{confirm_arrow}✓ Confirm")
-            cancel_option.update(f"{cancel_arrow}✗ Cancel")
-        except Exception as e:
-            logger.debug(f"Failed to update option display: {e}")
-
-    def on_key(self, event) -> None:  # type: ignore[override]
-        """Handle key events."""
-        if event.key == "escape":
-            logger.debug("User pressed ESC to cancel")
-            self.dismiss(False)
-        elif event.key == "enter":
-            logger.debug("User pressed Enter to select")
-            result = (self.selected_option == 0)
-            action = "confirmed" if result else "cancelled"
-            logger.info(f"User {action} {self.target} {self.operation}")
-            self.dismiss(result)
-        elif event.key == "j":
-            self.selected_option = (self.selected_option + 1) % 2
+    @on(Key)
+    def handle_key_event(self, event: Key) -> None:
+        """Handle keyboard shortcuts."""
+        if event.key in ("y", "enter"):
+            self.action_confirm()
             event.prevent_default()
             event.stop()
-        elif event.key == "k":
-            self.selected_option = (self.selected_option - 1) % 2
+        elif event.key in ("n", "escape"):
+            self.action_cancel()
             event.prevent_default()
             event.stop()
