@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Label, Rule, Static
+from textual.widgets import Label, Static
 
 from ...utils.logger import get_ui_logger
 
@@ -32,15 +32,9 @@ class ShellSelectionModal(ModalScreen[Optional[str]]):
         text-align: center;
     }
 
-    .shell-modal-description {
-        color: $text-muted;
-        margin: 0 0 1 0;
-        text-align: center;
-    }
-
     #shell-scroll {
         height: 15;
-        border: solid $primary;
+        border: round $primary;
         margin: 1 0;
     }
 
@@ -99,13 +93,6 @@ class ShellSelectionModal(ModalScreen[Optional[str]]):
         with Container(classes="modal-container-sm"):
             yield Static("Select Default Shell", id="shell-modal-title")
 
-            yield Static(
-                f"Current: {self.current_shell}",
-                classes="shell-modal-description",
-            )
-
-            yield Rule()
-
             # Shell list with scroll
             with VerticalScroll(id="shell-scroll"):
                 with Vertical(id="shell-list"):
@@ -121,8 +108,6 @@ class ShellSelectionModal(ModalScreen[Optional[str]]):
                             classes += " shell-current"
 
                         yield Static(display_text, classes=classes)
-
-            yield Rule()
 
             with Container(id="help-box"):
                 yield Label("J/K=Navigate | Enter=Select | ESC=Cancel", classes="help-text")
