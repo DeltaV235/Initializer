@@ -78,6 +78,7 @@ class ZshManagementPanel(Widget):
 
         self.action_entries: list[dict] = []
         self.focus_index: Optional[int] = None
+        self.pending_focus_action: Optional[str] = None
 
     def compose(self) -> ComposeResult:
         """构建 Zsh 管理面板布局。"""
@@ -172,7 +173,49 @@ class ZshManagementPanel(Widget):
     def _register_action_entries(self, entries: list[dict]) -> None:
         """记录可交互的操作条目并刷新指示。"""
         self.action_entries = entries
-        self.focus_index = 0 if entries else None
+
+        # 智能恢复焦点位置
+        if self.pending_focus_action and entries:
+            # Action 映射：install ↔ uninstall
+            action_map = {
+                'install_zsh': 'uninstall_zsh',
+                'uninstall_zsh': 'install_zsh',
+                'install_ohmyzsh': 'uninstall_ohmyzsh',
+                'uninstall_ohmyzsh': 'install_ohmyzsh'
+            }
+
+            # 首先尝试精确匹配
+            target_action = self.pending_focus_action
+            found_index = None
+
+            for idx, entry in enumerate(entries):
+                if entry.get('action') == target_action:
+                    found_index = idx
+                    break
+
+            # 如果精确匹配失败，尝试映射匹配
+            if found_index is None and target_action in action_map:
+                mapped_action = action_map[target_action]
+                for idx, entry in enumerate(entries):
+                    if entry.get('action') == mapped_action:
+                        found_index = idx
+                        logger.debug(f"Mapped {target_action} to {mapped_action} at index {idx}")
+                        break
+
+            # 设置焦点索引
+            if found_index is not None:
+                self.focus_index = found_index
+                logger.debug(f"Restored focus to index {found_index} (action: {entries[found_index].get('action')})")
+            else:
+                self.focus_index = 0
+                logger.debug(f"Could not find action '{target_action}', defaulting to index 0")
+
+            # 清空 pending action
+            self.pending_focus_action = None
+        else:
+            # 没有 pending action，默认为 0 或 None
+            self.focus_index = 0 if entries else None
+
         self._refresh_action_labels()
         self._notify_help_update()
 
@@ -530,6 +573,9 @@ class ZshManagementPanel(Widget):
 
         logger.info(f"Changing shell directly to: {shell_path}")
 
+        # 保存当前的 action
+        self._save_pending_action()
+
         def handle_completion(result: dict) -> None:
             if result.get("success"):
                 self.app.notify(
@@ -544,6 +590,8 @@ class ZshManagementPanel(Widget):
             self.is_loading = True
             self._show_loading()
             self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
 
         modal = ZshInstallProgress(
             target="shell",
@@ -615,11 +663,62 @@ class ZshManagementPanel(Widget):
         )
         self.app.push_screen(modal, handle_confirmation)
 
+    def _save_pending_action(self) -> None:
+        """保存当前焦点位置的 action，用于操作完成后恢复焦点。"""
+        if self.focus_index is not None and 0 <= self.focus_index < len(self.action_entries):
+            self.pending_focus_action = self.action_entries[self.focus_index].get('action')
+            logger.debug(f"Saved pending_focus_action: {self.pending_focus_action}")
+        else:
+            self.pending_focus_action = None
+            logger.debug("No valid focus to save, pending_focus_action set to None")
+
+    def _restore_panel_focus(self) -> None:
+        """恢复主界面右侧面板的焦点和箭头指示。
+
+        焦点恢复通过 pending_focus_action 机制自动处理。
+        """
+        try:
+            screen = getattr(self.app, "screen", None)
+            if not screen:
+                logger.debug("No screen available for focus restoration")
+                return
+
+            def restore():
+                try:
+                    # 1. 聚焦 Zsh 面板的 scrollable container
+                    container = screen.query_one("#zsh-panel-scroll", ScrollableContainer)
+                    container.focus()
+                    logger.debug("Focused #zsh-panel-scroll")
+
+                    # 2. 确保 current_panel_focus 为 "right"
+                    if hasattr(screen, "current_panel_focus"):
+                        screen.current_panel_focus = "right"
+                        logger.debug("Set current_panel_focus to 'right'")
+
+                    # 3. 刷新箭头指示器
+                    # 焦点恢复由 _register_action_entries() 中的 pending_focus_action 机制处理
+                    panel = getattr(screen, "zsh_management_panel", None)
+                    if panel:
+                        panel.refresh_action_labels()
+                        logger.debug("Refreshed action labels")
+                except Exception as e:
+                    logger.debug(f"Focus restore failed: {e}", exc_info=True)
+
+            # 使用 call_after_refresh 确保 UI 更新完成后再恢复焦点
+            screen.call_after_refresh(restore)
+            logger.debug("Focus restoration scheduled")
+
+        except Exception as e:
+            logger.error(f"Failed to schedule focus restoration: {e}", exc_info=True)
+
     def _execute_zsh_operation(self, operation: str) -> None:
         """打开 Zsh 安装/卸载进度弹窗并在完成后刷新状态。"""
         from .zsh_install_progress import ZshInstallProgress
 
         logger.info(f"Executing Zsh {operation}")
+
+        # 保存当前的 action
+        self._save_pending_action()
 
         def handle_completion(result: dict) -> None:
             logger.info(f"Zsh {operation} completed: {result}")
@@ -628,6 +727,8 @@ class ZshManagementPanel(Widget):
             self.is_loading = True
             self._show_loading()
             self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
 
         modal = ZshInstallProgress(
             target="zsh",
@@ -645,11 +746,16 @@ class ZshManagementPanel(Widget):
 
         logger.info(f"Executing Oh-my-zsh {operation}")
 
+        # 保存当前的 action
+        self._save_pending_action()
+
         def handle_completion(result: dict) -> None:
             logger.info(f"Oh-my-zsh {operation} completed: {result}")
             self.is_loading = True
             self._show_loading()
             self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
 
         modal = ZshInstallProgress(
             target="ohmyzsh",
@@ -667,11 +773,16 @@ class ZshManagementPanel(Widget):
 
         logger.info(f"Executing plugin {operation}: {plugin.get('name')}")
 
+        # 保存当前的 action
+        self._save_pending_action()
+
         def handle_completion(result: dict) -> None:
             logger.info(f"Plugin {operation} completed: {result}")
             self.is_loading = True
             self._show_loading()
             self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
 
         modal = ZshInstallProgress(
             target="plugin",
