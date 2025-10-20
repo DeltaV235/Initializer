@@ -173,13 +173,7 @@ class ZshManager:
             str: 当前默认 shell 的完整路径
         """
         try:
-            # 优先从环境变量获取
-            shell = os.environ.get("SHELL", "")
-            if shell:
-                logger.debug(f"Current shell from $SHELL: {shell}")
-                return shell
-
-            # 从 /etc/passwd 获取
+            # 优先从 /etc/passwd 获取（chsh 修改后立即生效）
             import pwd
 
             user_info = pwd.getpwuid(os.getuid())
@@ -188,8 +182,12 @@ class ZshManager:
             return shell
 
         except Exception as exc:
-            logger.error(f"Failed to get current shell: {exc}", exc_info=True)
-            return "/bin/bash"
+            logger.error(f"Failed to get current shell from /etc/passwd: {exc}", exc_info=True)
+
+            # 降级到环境变量
+            shell = os.environ.get("SHELL", "/bin/bash")
+            logger.debug(f"Fallback to $SHELL: {shell}")
+            return shell
 
     @staticmethod
     async def get_available_shells() -> List[str]:
