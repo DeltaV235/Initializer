@@ -811,7 +811,10 @@ class ZshManagementPanel(Widget):
                     if self.zsh_info and self.zsh_info.path
                     else "/usr/bin/zsh"
                 )
-                self._change_shell_directly(zsh_path)
+                # 保存当前焦点位置
+                self._save_pending_action()
+                # 直接执行 shell 切换，不显示 progress modal
+                self._execute_shell_change(zsh_path)
 
         self.app.push_screen(ShellChangeConfirm(), handle_prompt)
 
@@ -852,6 +855,9 @@ class ZshManagementPanel(Widget):
 
                     # 刷新帮助文本
                     self._notify_help_update()
+
+                    # 恢复焦点
+                    self._restore_panel_focus()
 
                     # 显示成功通知
                     self.app.notify(
