@@ -233,7 +233,11 @@ class ZshManagementPanel(Widget):
             widget.update(f"{prefix}{entry['label']}")
 
     def _is_active(self) -> bool:
-        """检查当前面板是否处于激活状态。"""
+        """检查当前面板是否处于激活状态。
+
+        在主菜单中，依赖宿主 Screen 的焦点属性判断。
+        在独立界面中，默认返回 True（兜底策略）。
+        """
         try:
             screen = self.app.screen if hasattr(self, "app") and self.app else None
             if not screen:
@@ -242,8 +246,10 @@ class ZshManagementPanel(Widget):
             has_segment = hasattr(screen, "selected_segment")
             has_focus = hasattr(screen, "current_panel_focus")
 
+            # 兜底策略：如果是独立界面（缺少焦点属性），默认显示光标
             if not (has_segment and has_focus):
-                return False
+                logger.debug("Screen missing panel attributes, assuming active (standalone mode)")
+                return True
 
             is_active = (
                 screen.selected_segment == "zsh_management"
@@ -913,7 +919,14 @@ class ZshManagementPanel(Widget):
 
 
 class ZshManagementScreen(Screen):
-    """Zsh 管理独立屏幕，复用共享面板组件。"""
+    """Zsh 管理独立屏幕，复用共享面板组件。
+
+    提供焦点管理属性以支持面板的光标显示逻辑。
+    """
+
+    # 焦点管理属性（与 MainMenuScreen 保持一致）
+    selected_segment: str = "zsh_management"
+    current_panel_focus = reactive("right")
 
     BINDINGS = [
         ("escape", "back", "Back"),
