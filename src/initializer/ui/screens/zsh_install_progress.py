@@ -3,7 +3,7 @@
 import asyncio
 from typing import Optional
 
-from textual import on, work
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.events import Key
@@ -19,6 +19,10 @@ logger = get_ui_logger("zsh_install_progress")
 
 class ZshInstallProgress(ModalScreen[dict]):
     """Progress modal for Zsh install/uninstall operations."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Close"),
+    ]
 
     # Reactive 变量用于状态管理
     is_running = reactive(False)
@@ -135,11 +139,13 @@ class ZshInstallProgress(ModalScreen[dict]):
         except Exception as exc:
             logger.debug(f"Failed to update help text: {exc}")
 
-    @on(Key)
-    def handle_key_event(self, event: Key) -> None:
-        """处理键盘事件，拦截 Esc 键。"""
+    def on_key(self, event: Key) -> None:
+        """处理键盘事件，仅在操作完成后允许关闭。"""
         if event.key == "escape":
-            self.action_dismiss()
+            if self.is_completed:
+                self.action_dismiss()
+            else:
+                logger.debug("Operation not completed, ignoring ESC")
             event.prevent_default()
             event.stop()
 
