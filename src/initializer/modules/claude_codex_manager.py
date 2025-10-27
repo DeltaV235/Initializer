@@ -53,7 +53,7 @@ class ClaudeCodexManager:
         # Step 1: Detect CLI tool
         installed, version, path = await CLIDetector.detect_cli_tool(
             "claude",
-            version_pattern=r'claude\s+v?(\d+\.\d+\.\d+)'
+            version_pattern=r'v?(\d+\.\d+(?:\.\d+)?)'
         )
 
         if not installed:
@@ -69,9 +69,33 @@ class ClaudeCodexManager:
             return ClaudeCodeInfo(installed=True, version=version)
 
         # Step 3: Read API Endpoint from settings.json
-        api_endpoint = ClaudeCodexManager._read_api_endpoint(
-            config_path / "settings.json"
-        )
+        api_endpoint = None
+        try:
+            settings_json_path = config_path / "settings.json"
+            if settings_json_path.exists():
+                with open(settings_json_path, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+
+                # Try to read from env section first (nested structure)
+                if "env" in settings and isinstance(settings["env"], dict):
+                    api_endpoint = ClaudeCodexManager._read_config_value(
+                        settings["env"],
+                        ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_URL", "apiEndpoint"],
+                        None
+                    )
+
+                # Fallback to top-level keys if not found in env
+                if not api_endpoint:
+                    api_endpoint = ClaudeCodexManager._read_config_value(
+                        settings,
+                        ["apiEndpoint", "api_endpoint", "endpoint"],
+                        "Not configured"
+                    )
+            else:
+                api_endpoint = "Not configured"
+        except Exception as e:
+            logger.warning(f"Failed to read Claude Code settings: {e}")
+            api_endpoint = "Parse error"
 
         # Step 4: Count configuration items
         mcp_count = ClaudeCodexManager._count_mcp_servers(config_path)
@@ -119,7 +143,7 @@ class ClaudeCodexManager:
         # Step 1: Detect CLI tool
         installed, version, path = await CLIDetector.detect_cli_tool(
             "codex",
-            version_pattern=r'codex\s+v?(\d+\.\d+\.\d+)'
+            version_pattern=r'v?(\d+\.\d+(?:\.\d+)?)'
         )
 
         if not installed:
@@ -158,14 +182,46 @@ class ClaudeCodexManager:
                     with open(config_toml_path, "rb") as f:
                         config = tomllib.load(f)
 
-                    # Extract API endpoint
-                    api_endpoint = config.get("api_endpoint", None)
-
                     # Extract current model
-                    current_model = config.get("model", None)
+                    current_model = ClaudeCodexManager._read_config_value(
+                        config,
+                        ["model", "default_model"],
+                        "Not configured"
+                    )
 
-                    # Extract reasoning effort
-                    reasoning_effort = config.get("reasoning_effort", None)
+                    # Extract reasoning effort (note: field name is model_reasoning_effort)
+                    reasoning_effort = ClaudeCodexManager._read_config_value(
+                        config,
+                        ["model_reasoning_effort", "reasoning_effort", "reasoningEffort"],
+                        "Not configured"
+                    )
+
+                    # Extract API endpoint from nested model_providers structure
+                    api_endpoint = None
+                    try:
+                        # Try to read from nested model_providers first
+                        model_provider = config.get("model_provider", None)
+                        if model_provider and "model_providers" in config:
+                            model_providers = config.get("model_providers", {})
+                            if isinstance(model_providers, dict) and model_provider in model_providers:
+                                provider_config = model_providers[model_provider]
+                                if isinstance(provider_config, dict):
+                                    api_endpoint = ClaudeCodexManager._read_config_value(
+                                        provider_config,
+                                        ["base_url", "baseUrl", "url"],
+                                        None
+                                    )
+
+                        # Fallback to top-level keys if not found in model_providers
+                        if not api_endpoint:
+                            api_endpoint = ClaudeCodexManager._read_config_value(
+                                config,
+                                ["api_endpoint", "apiEndpoint", "base_url", "endpoint"],
+                                "Not configured"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to extract Codex API endpoint: {e}")
+                        api_endpoint = "Parse error"
 
                     # Count MCP servers
                     mcp_servers = config.get("mcp_servers", {})
@@ -255,27 +311,25 @@ class ClaudeCodexManager:
             return 0
 
     @staticmethod
-    def _read_api_endpoint(settings_json_path: Path) -> Optional[str]:
-        """Read API endpoint from settings.json.
+    def _read_config_value(
+        config: dict,
+        possible_keys: list[str],
+        default: Optional[str] = None
+    ) -> Optional[str]:
+        """从配置字典中尝试多个可能的键名读取值。
 
         Args:
-            settings_json_path: Path to settings.json file
+            config: 配置字典
+            possible_keys: 按优先级排序的键名列表
+            default: 未找到时的默认值
 
         Returns:
-            API endpoint URL or None if not found
+            第一个找到的非空值，或 default
         """
-        try:
-            if not settings_json_path.exists():
-                return None
-
-            with open(settings_json_path, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-
-            return settings.get("apiEndpoint", None)
-
-        except Exception as e:
-            logger.warning(f"Failed to read API endpoint: {e}")
-            return None
+        for key in possible_keys:
+            if key in config and config[key]:
+                return str(config[key])
+        return default
 
     @staticmethod
     def _read_plugin_count(plugin_config_path: Path) -> int:

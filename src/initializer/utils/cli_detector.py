@@ -20,7 +20,7 @@ class CLIDetector:
     @staticmethod
     async def detect_cli_tool(
         tool_name: str,
-        version_pattern: str = r'v?(\d+\.\d+\.\d+)',
+        version_pattern: str = r'v?(\d+\.\d+(?:\.\d+)?)',
         timeout: int = 5
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """检测 CLI 工具的安装状态和版本。
@@ -63,7 +63,7 @@ class CLIDetector:
 
             # Step 3: 解析版本号
             if result.returncode == 0:
-                match = re.search(version_pattern, result.stdout)
+                match = re.search(version_pattern, result.stdout, re.IGNORECASE)
                 if match:
                     version = match.group(1)
                     logger.debug(f"{tool_name} version: {version}")

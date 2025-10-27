@@ -30,12 +30,6 @@ ClaudeCodexManagementPanel {
     padding: 1;
 }
 
-.tool-section-title {
-    color: $primary;
-    text-style: bold;
-    margin: 1 0 0 0;
-}
-
 .tool-info-line {
     color: $text;
     margin: 0 0 0 0;
