@@ -88,3 +88,21 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# AI工作目录和临时文件
+.claude/
+.serena/
+.shrimp/
+
+# 开发临时目录
+developer/
+docs/
+
+# Node.js 文件（Python项目不需要）
+package-lock.json
+package.json
+node_modules/
+
+# 调试和测试临时文件
+*_DEBUG.md
+test_*.py
