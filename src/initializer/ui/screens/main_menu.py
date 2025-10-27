@@ -69,6 +69,7 @@ class MainMenuScreen(Screen):
         {"id": "homebrew", "name": "Homebrew"},
         {"id": "vim_management", "name": "Vim Management"},
         {"id": "zsh_management", "name": "Zsh Manager"},
+        {"id": "claude_codex_management", "name": "Claude & Codex"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},
     ]
@@ -92,6 +93,7 @@ class MainMenuScreen(Screen):
         self.app_manager = AppInstallManager(self)
         self.vim_management_panel = None
         self.zsh_management_panel = None
+        self.claude_codex_management_panel = None
 
         # Initialize app install specific attributes
         self.app_expanded_suites = set()  # Track which suites are expanded
@@ -155,6 +157,11 @@ class MainMenuScreen(Screen):
                         if panel:
                             logger.debug("Clearing Zsh management focus indicators")
                             panel.refresh_action_labels()
+                    elif self.selected_segment == "claude_codex_management":
+                        panel = getattr(self, "claude_codex_management_panel", None)
+                        if panel:
+                            logger.debug("Clearing Claude Codex management focus indicators")
+                            panel.refresh_action_labels()
                 elif new_value == "right":
                     # When switching to right panel, initialize/update arrows based on segment
                     logger.debug(f"Right panel focused, segment: {self.selected_segment}")
@@ -193,6 +200,12 @@ class MainMenuScreen(Screen):
                             panel.refresh_action_labels()
                     elif self.selected_segment == "zsh_management":
                         panel = getattr(self, "zsh_management_panel", None)
+                        if panel:
+                            if panel.focus_index is None and panel.action_entries:
+                                panel.focus_index = 0
+                            panel.refresh_action_labels()
+                    elif self.selected_segment == "claude_codex_management":
+                        panel = getattr(self, "claude_codex_management_panel", None)
                         if panel:
                             if panel.focus_index is None and panel.action_entries:
                                 panel.focus_index = 0
@@ -328,6 +341,9 @@ class MainMenuScreen(Screen):
             if self.selected_segment != "zsh_management":
                 self.zsh_management_panel = None
 
+            if self.selected_segment != "claude_codex_management":
+                self.claude_codex_management_panel = None
+
             # Add content based on selected segment
             if self.selected_segment == "system_info":
                 self._build_system_info_settings(settings_container)
@@ -341,6 +357,8 @@ class MainMenuScreen(Screen):
                 self._build_vim_management_settings(settings_container)
             elif self.selected_segment == "zsh_management":
                 self._build_zsh_management_settings(settings_container)
+            elif self.selected_segment == "claude_codex_management":
+                self._build_claude_codex_management_settings(settings_container)
             elif self.selected_segment == "user_management":
                 self._build_user_management_settings(settings_container)
             elif self.selected_segment == "settings":
@@ -804,6 +822,10 @@ class MainMenuScreen(Screen):
         """构建 Zsh 管理面板。"""
         UIBuilders.build_zsh_management_settings(self, container)
 
+    def _build_claude_codex_management_settings(self, container: ScrollableContainer) -> None:
+        """构建 Claude Code & Codex 管理面板。"""
+        UIBuilders.build_claude_codex_management_settings(self, container)
+
     def _build_app_settings(self, container: ScrollableContainer) -> None:
         """Delegate to UIBuilders."""
         UIBuilders.build_app_settings(self, container)
@@ -989,7 +1011,9 @@ class MainMenuScreen(Screen):
                 "app_install": "Application Manager",
                 "homebrew": "Homebrew",
                 "vim_management": "Vim Management",
-                "user_management": "User Management", 
+                "zsh_management": "Zsh Manager",
+                "claude_codex_management": "Claude & Codex",
+                "user_management": "User Management",
                 "settings": "Settings",
                 "help": "Help"
             }
@@ -1132,6 +1156,16 @@ class MainMenuScreen(Screen):
                         event.stop()
                         return True
                     logger.warning("[ENTER] zsh_management_panel is None!")
+                elif self.selected_segment == "claude_codex_management":
+                    logger.info("[ENTER] Handling enter in claude_codex_management segment")
+                    panel = getattr(self, "claude_codex_management_panel", None)
+                    if panel:
+                        logger.info("[ENTER] Calling panel.handle_enter()")
+                        panel.handle_enter()
+                        event.prevent_default()
+                        event.stop()
+                        return True
+                    logger.warning("[ENTER] claude_codex_management_panel is None!")
                 else:
                     # For other segments (system_info, etc.), prevent enter from triggering buttons
                     logger.debug(f"Preventing enter default behavior in {self.selected_segment} segment")
@@ -1379,6 +1413,12 @@ class MainMenuScreen(Screen):
                         help_text = panel.get_help_text()
                     else:
                         help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Scroll | Q=Quit"
+                elif self.selected_segment == "claude_codex_management":
+                    panel = getattr(self, "claude_codex_management_panel", None)
+                    if panel:
+                        help_text = panel.get_help_text()
+                    else:
+                        help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Navigate | Enter=Select | Q=Quit"
                 elif self.selected_segment == "user_management":
                     help_text = "Esc=Back to Left Panel | TAB/H=Back to Left Panel | R=Refresh | J/K=Scroll | Q=Quit"
                 elif self.selected_segment == "settings":

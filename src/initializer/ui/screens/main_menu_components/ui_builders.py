@@ -105,6 +105,18 @@ class UIBuilders:
             panel.refresh_action_labels()
 
     @staticmethod
+    def build_claude_codex_management_settings(screen, container: ScrollableContainer) -> None:
+        """构建 Claude Code & Codex 管理设置面板。"""
+        from ..claude_codex_manager import ClaudeCodexManagementPanel
+
+        container.styles.scrollbar_size = 1
+        panel = ClaudeCodexManagementPanel(screen.config_manager)
+        screen.claude_codex_management_panel = panel
+        container.mount(panel)
+        if screen.current_panel_focus == "right":
+            panel.refresh_action_labels()
+
+    @staticmethod
     def build_app_settings(screen, container: ScrollableContainer) -> None:
         """Build application settings panel."""
         from ..main_menu_components import SegmentDisplayRenderer

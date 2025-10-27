@@ -105,6 +105,10 @@ class EventHandlers:
                 panel = getattr(screen, "zsh_management_panel", None)
                 if panel:
                     panel.navigate("down")
+            elif screen.selected_segment == "claude_codex_management":
+                panel = getattr(screen, "claude_codex_management_panel", None)
+                if panel:
+                    panel.navigate("down")
             else:
                 # For other segments (system_info, etc.), scroll the content
                 try:
@@ -131,6 +135,10 @@ class EventHandlers:
                     panel.navigate("up")
             elif screen.selected_segment == "zsh_management":
                 panel = getattr(screen, "zsh_management_panel", None)
+                if panel:
+                    panel.navigate("up")
+            elif screen.selected_segment == "claude_codex_management":
+                panel = getattr(screen, "claude_codex_management_panel", None)
                 if panel:
                     panel.navigate("up")
             else:
