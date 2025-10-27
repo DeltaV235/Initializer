@@ -195,7 +195,7 @@ class ZshManager:
         获取系统中可用的 shell 列表。
 
         Returns:
-            List[str]: 可用 shell 的完整路径列表
+            List[str]: 可用 shell 的完整路径列表（已去重）
         """
         try:
             shells_file = Path("/etc/shells")
@@ -210,8 +210,17 @@ class ZshManager:
                     if line.strip() and not line.strip().startswith("#")
                 ]
 
-            logger.debug(f"Available shells: {shells}")
-            return shells
+            # 使用 dict.fromkeys 进行去重，保持原始顺序
+            unique_shells = list(dict.fromkeys(shells))
+
+            # 记录去重信息
+            if len(unique_shells) != len(shells):
+                logger.debug(f"Filtered duplicate shells: {len(shells)} -> {len(unique_shells)}")
+                logger.debug(f"Original: {shells}")
+                logger.debug(f"Unique: {unique_shells}")
+
+            logger.debug(f"Available shells: {unique_shells}")
+            return unique_shells
 
         except Exception as exc:
             logger.error(f"Failed to read /etc/shells: {exc}", exc_info=True)
