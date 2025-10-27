@@ -631,6 +631,21 @@ DataTable > .datatable--even-row {
     scrollbar-gutter: stable;
 }
 
+/* Confirm Modal Container Style */
+.modal-container-confirm {
+    width: 50%;
+    min-width: 38;
+    max-width: 60;
+    height: auto;
+    max-height: 85vh;
+    background: $surface;
+    border: round #7dd3fc;
+    padding: 1 1 0 1;
+    layout: vertical;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
 /* Source Selection Modal Styles */
 #modal-container {
     layout: vertical;

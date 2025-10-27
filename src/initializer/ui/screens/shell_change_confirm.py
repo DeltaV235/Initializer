@@ -27,28 +27,38 @@ class ShellChangeConfirm(ModalScreen[bool]):
         align: center middle;
     }
 
+    #shell-confirm-container {
+        height: auto;
+        min-height: 0;
+        max-height: 30;
+    }
+
     #confirm-title {
         text-style: bold;
         color: $text;
-        margin: 0 0 1 0;
+        margin: 0;
         text-align: center;
+        height: auto;
     }
 
     .confirm-content {
-        padding: 1;
-        margin: 0 0 1 0;
+        padding: 0;
+        margin: 1 0;
+        height: auto;
     }
 
     .info-text {
         color: $text;
-        margin: 0 0 1 0;
+        margin: 0;
         text-align: center;
+        height: auto;
     }
 
     .action-list {
         color: $primary;
-        margin: 0 0 1 0;
+        margin: 0;
         text-align: center;
+        height: auto;
     }
 
     #help-box {
@@ -73,7 +83,7 @@ class ShellChangeConfirm(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         """Compose the confirmation modal."""
-        with Container(classes="modal-container-mini"):
+        with Container(classes="modal-container-xs", id="shell-confirm-container"):
             yield Static("⚠️ Change Default Shell?", id="confirm-title")
             yield Rule()
 

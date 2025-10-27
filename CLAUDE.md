@@ -226,10 +226,11 @@ Project provides a complete modal container size system for consistent UI:
 | Small | `.modal-container-sm` | 65% | 45 | 85 | Medium content |
 | Small Alt | `.modal-container-small` | 65% | 45 | 85 | Medium content (alternative name) |
 | Extra Small | `.modal-container-xs` | 55% | 40 | 70 | Selection/confirmation dialogs |
+| Confirm | `.modal-container-confirm` | 50% | 38 | 60 | Simple confirmation dialogs (with auto-height) |
 | Mini | `.modal-container-mini` | 45% | 35 | 55 | Compact prompts/alerts |
 
 **Usage**: `Container(classes="modal-container-xs")` - Select appropriate size based on content complexity.
-**Current Usage**: Source selection and confirmation modals use `modal-container-xs`.
+**Current Usage**: Source selection modals use `modal-container-xs`, simple confirmation dialogs use `modal-container-confirm`.
 
 #### Performance and Memory
 - Use reactive attributes with appropriate flags (`layout`, `repaint`)
