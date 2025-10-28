@@ -29,7 +29,7 @@ ClaudeCodexManagementPanel {
     height: 1fr;
     padding: 1;
     width: 100%;
-    scrollbar-size-vertical: 2;
+    scrollbar-size-vertical: 1;
 }
 
 .tool-info-line {
