@@ -85,3 +85,36 @@ task_marker: 20251027-FIX-REVIEW-002
 - 17:35 利用 Serena `find_symbol` 查看 `claude_codex_manager.py`、`cli_detector.py`、`claude_codex_manager.py`（UI 层）核心段落，核对 Endpoint 回退链、版本检测与错误分支。
 - 17:36 执行 `git status`、`TZ=Asia/Shanghai date` 获取改动范围与当前时间戳。
 - 17:37 使用 `apply_patch` 更新 `.claude/review-report.md`，同步评分与证据；记录当前任务缺少会话 ID，准备在回复中返回 `NOT_FOUND`。
+
+---
+date: 2025-10-28 15:29 (UTC+8)
+agent: Codex
+task_marker: 20251028-150000-REVIEW
+---
+
+- 15:29 调用 Serena `activate_project`/`check_onboarding_performed` 成功，随后多次 `serena__search_for_pattern` 与 `list_dir` 超时失效，依据降级矩阵改用 `shell rg/sed` 仅做只读检索。
+- 15:29 查阅 `.claude/codex-sessions.json` 未找到当前 `task_marker` 对应会话记录，本次响应将返回 `NOT_FOUND` 并提示缺失原因。
+
+---
+date: 2025-10-28 15:34 (UTC+8)
+agent: Codex
+task_marker: 20251028-151500-REVIEW2
+---
+
+- 15:34 使用 Sequential Thinking 明确本轮 CSS 审查要点与风险。
+- 15:35 通过 `shell rg`/`sed` 检索 `claude_codex_manager.py` 中 `.tool-info-line`、`.tool-action` 的使用上下文，仅执行只读分析。
+- 15:36 借助 Exa `web_search_exa` 获取 Textual `text-overflow`、`overflow`、`text-wrap` 官方文档并记录证据要点。
+- 15:37 确认 Textual `text-overflow: ellipsis` 需配合 `text-wrap: nowrap` 与非可滚动布局，否则不会生效。
+- 15:38 查阅 `.claude/codex-sessions.json` 仍未找到匹配的 `task_marker`，计划在结果中返回 `[CONVERSATION_ID]: NOT_FOUND`。
+
+---
+date: 2025-10-28 15:50 (UTC+8)
+agent: Codex
+task_marker: 20251028-152000-REVIEW3
+---
+
+- 15:50 调用 Serena `activate_project` 与 `check_onboarding_performed` 确认环境可用。
+- 15:51 使用 Sequential Thinking 明确 CSS 审查四项检查点。
+- 15:52 运行 `serena__search_for_pattern` 检索仓库 `.tcss` 文件，未发现 `overflow-x` / `text-overflow` 既有用例。
+- 15:54 通过 Context7 `get-library-docs` 获取 Textual 官方对 `overflow`、`text-overflow` 与 `fr` 单位支持的文档证据。
+- 15:55 查询 `.claude/codex-sessions.json` 无当前 `task_marker` 记录，按流程结果返回 `[CONVERSATION_ID]: NOT_FOUND`。

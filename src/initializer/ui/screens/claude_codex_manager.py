@@ -28,16 +28,21 @@ ClaudeCodexManagementPanel {
 #claude-codex-panel-scroll {
     height: 1fr;
     padding: 1;
+    width: 100%;
 }
 
 .tool-info-line {
     color: $text;
     margin: 0 0 0 0;
+    width: 100%;
+    text-wrap: wrap;
 }
 
 .tool-action {
     color: $text;
     margin: 0 0 0 0;
+    width: 100%;
+    text-wrap: wrap;
 }
 
 .loading-text {
