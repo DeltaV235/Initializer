@@ -139,9 +139,9 @@ class ClaudeCodexManagementPanel(Widget):
 
         # 版本信息（可操作）
         if self.claude_info.installed:
-            version_text = f"  Claude Code: v{self.claude_info.version} / Installed"
+            version_text = f"Claude Code: v{self.claude_info.version} / Installed"
         else:
-            version_text = "  Claude Code: Not Installed"
+            version_text = "Claude Code: Not Installed"
 
         version_label = Label(version_text, classes="tool-action")
         widgets.append(version_label)
@@ -153,7 +153,7 @@ class ClaudeCodexManagementPanel(Widget):
             widgets.append(Label(f"  API Endpoint: {api_endpoint}", classes="tool-info-line"))
 
             # MCP 配置（可展开）
-            mcp_text = f"  MCP Configurations: {self.claude_info.mcp_count} [Press Enter]"
+            mcp_text = f"MCP Configurations: {self.claude_info.mcp_count} [Press Enter]"
             mcp_label = Label(mcp_text, classes="tool-action")
             widgets.append(mcp_label)
             self._register_action("expand_mcp_claude", mcp_label, mcp_text)
@@ -178,7 +178,7 @@ class ClaudeCodexManagementPanel(Widget):
             widgets.append(Label(claude_md_text, classes="tool-info-line"))
 
             # Agents（可展开）
-            agent_text = f"  Agents: {self.claude_info.agent_count} [Press Enter]"
+            agent_text = f"Agents: {self.claude_info.agent_count} [Press Enter]"
             agent_label = Label(agent_text, classes="tool-action")
             widgets.append(agent_label)
             self._register_action("expand_agents_claude", agent_label, agent_text)
@@ -196,7 +196,7 @@ class ClaudeCodexManagementPanel(Widget):
                         widgets.append(Label(f"    - {agent['name']}: {agent['description']}", classes="tool-info-line"))
 
             # Commands（可展开）
-            command_text = f"  Commands: {self.claude_info.command_count} [Press Enter]"
+            command_text = f"Commands: {self.claude_info.command_count} [Press Enter]"
             command_label = Label(command_text, classes="tool-action")
             widgets.append(command_label)
             self._register_action("expand_commands_claude", command_label, command_text)
@@ -214,7 +214,7 @@ class ClaudeCodexManagementPanel(Widget):
                         widgets.append(Label(f"    - {cmd['name']}: {cmd['description']}", classes="tool-info-line"))
 
             # Output Styles（可展开）
-            output_style_text = f"  Output Styles: {self.claude_info.output_style_count} [Press Enter]"
+            output_style_text = f"Output Styles: {self.claude_info.output_style_count} [Press Enter]"
             output_style_label = Label(output_style_text, classes="tool-action")
             widgets.append(output_style_label)
             self._register_action("expand_output_styles_claude", output_style_label, output_style_text)
@@ -236,7 +236,7 @@ class ClaudeCodexManagementPanel(Widget):
             widgets.append(Label(plugin_text, classes="tool-info-line"))
 
             # Hooks（可展开）
-            hook_text = f"  Hooks: {self.claude_info.hook_count} [Press Enter]"
+            hook_text = f"Hooks: {self.claude_info.hook_count} [Press Enter]"
             hook_label = Label(hook_text, classes="tool-action")
             widgets.append(hook_label)
             self._register_action("expand_hooks_claude", hook_label, hook_text)
@@ -261,9 +261,9 @@ class ClaudeCodexManagementPanel(Widget):
 
         # 版本信息（可操作）
         if self.codex_info.installed:
-            codex_version_text = f"  Codex: v{self.codex_info.version} / Installed"
+            codex_version_text = f"Codex: v{self.codex_info.version} / Installed"
         else:
-            codex_version_text = "  Codex: Not Installed"
+            codex_version_text = "Codex: Not Installed"
 
         codex_version_label = Label(codex_version_text, classes="tool-action")
         widgets.append(codex_version_label)
@@ -275,7 +275,7 @@ class ClaudeCodexManagementPanel(Widget):
             widgets.append(Label(f"  API Endpoint: {codex_api_endpoint}", classes="tool-info-line"))
 
             # MCP 配置（可展开）
-            codex_mcp_text = f"  MCP Configurations: {self.codex_info.mcp_count} [Press Enter]"
+            codex_mcp_text = f"MCP Configurations: {self.codex_info.mcp_count} [Press Enter]"
             codex_mcp_label = Label(codex_mcp_text, classes="tool-action")
             widgets.append(codex_mcp_label)
             self._register_action("expand_mcp_codex", codex_mcp_label, codex_mcp_text)
@@ -331,11 +331,12 @@ class ClaudeCodexManagementPanel(Widget):
             if not widget:
                 continue
 
-            prefix = (
-                "[#7dd3fc]▶[/#7dd3fc] "
-                if (self._is_active() and self.focus_index == index)
-                else "  "
-            )
+            # 统一对齐：有焦点时箭头替换前导空格，无焦点时使用2个空格
+            if self._is_active() and self.focus_index == index:
+                prefix = "[#7dd3fc]▶[/#7dd3fc] "
+            else:
+                prefix = "  "
+
             widget.update(f"{prefix}{entry['label']}")
 
     def _is_active(self) -> bool:

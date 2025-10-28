@@ -1,0 +1,16 @@
+[
+  {
+    "task_marker": "20251017-143500-claude-codex-mgr",
+    "conversation_id": "CONV-20251017-1001",
+    "timestamp": "2025-10-17T22:36:00+08:00",
+    "description": "Claude Code & Codex Manager 模块上下文收集",
+    "status": "in_progress"
+  },
+  {
+    "task_marker": "20251021-claude-codex-review-v3",
+    "conversation_id": "CONV-20251021-1003",
+    "timestamp": "2025-10-21T21:30:00+08:00",
+    "description": "Claude Code & Codex Manager 最终审查",
+    "status": "in_progress"
+  }
+]
