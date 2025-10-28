@@ -22,6 +22,8 @@ class ZshInstallProgress(ModalScreen[dict]):
 
     BINDINGS = [
         ("escape", "dismiss", "Close"),
+        ("j", "scroll_down", "Scroll Down"),
+        ("k", "scroll_up", "Scroll Up"),
     ]
 
     # Reactive 变量用于状态管理
@@ -135,7 +137,7 @@ class ZshInstallProgress(ModalScreen[dict]):
             if new and not self.is_completed:
                 help_widget.update("Operation in progress, please wait...")
             elif self.is_completed:
-                help_widget.update("Press Esc to close")
+                help_widget.update("Esc=Close | J/K=Scroll")
         except Exception as exc:
             logger.debug(f"Failed to update help text: {exc}")
 
@@ -157,6 +159,32 @@ class ZshInstallProgress(ModalScreen[dict]):
 
         result = getattr(self, 'result', {})
         self.dismiss(result)
+
+    def action_scroll_down(self) -> None:
+        """向下滚动日志内容。"""
+        # 运行时不允许滚动
+        if self.is_running and not self.is_completed:
+            logger.debug("Scroll blocked: operation in progress")
+            return
+
+        try:
+            log_container = self.query_one("#log-container", ScrollableContainer)
+            log_container.scroll_down(animate=False)
+        except Exception as exc:
+            logger.warning(f"Failed to scroll down: {exc}")
+
+    def action_scroll_up(self) -> None:
+        """向上滚动日志内容。"""
+        # 运行时不允许滚动
+        if self.is_running and not self.is_completed:
+            logger.debug("Scroll blocked: operation in progress")
+            return
+
+        try:
+            log_container = self.query_one("#log-container", ScrollableContainer)
+            log_container.scroll_up(animate=False)
+        except Exception as exc:
+            logger.warning(f"Failed to scroll up: {exc}")
 
     @work(exclusive=True, thread=True)
     async def _execute_operation(self) -> None:
