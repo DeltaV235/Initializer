@@ -16,6 +16,7 @@ from ...modules.claude_codex_manager import (
     CodexInfo
 )
 from ...utils.logger import get_ui_logger
+from ...utils.text_utils import truncate_text_two_lines
 
 logger = get_ui_logger("claude_codex_management")
 
@@ -174,7 +175,9 @@ class ClaudeCodexManagementPanel(Widget):
                     widgets.append(Label("    (No MCP configurations found)", classes="tool-info-line"))
                 else:
                     for mcp in mcp_list:
-                        widgets.append(Label(f"    - {mcp['name']}: {mcp['command']}", classes="tool-info-line"))
+                        mcp_info = f"{mcp['name']}: {mcp['command']}"
+                        truncated_mcp_info = truncate_text_two_lines(mcp_info, max_line_length=70)
+                        widgets.append(Label(f"    - {truncated_mcp_info}", classes="tool-info-line"))
 
             # 全局记忆 (CLAUDE.md)
             if self.claude_info.global_memory_path:
@@ -199,7 +202,9 @@ class ClaudeCodexManagementPanel(Widget):
                     widgets.append(Label("    (No agents found)", classes="tool-info-line"))
                 else:
                     for agent in agents:
-                        widgets.append(Label(f"    - {agent['name']}: {agent['description']}", classes="tool-info-line"))
+                        agent_info = f"{agent['name']}: {agent['description']}"
+                        truncated_agent_info = truncate_text_two_lines(agent_info, max_line_length=70)
+                        widgets.append(Label(f"    - {truncated_agent_info}", classes="tool-info-line"))
 
             # Commands（可展开）
             command_text = f"Commands: {self.claude_info.command_count} [Press Enter]"
@@ -217,7 +222,9 @@ class ClaudeCodexManagementPanel(Widget):
                     widgets.append(Label("    (No commands found)", classes="tool-info-line"))
                 else:
                     for cmd in commands:
-                        widgets.append(Label(f"    - {cmd['name']}: {cmd['description']}", classes="tool-info-line"))
+                        command_info = f"{cmd['name']}: {cmd['description']}"
+                        truncated_command_info = truncate_text_two_lines(command_info, max_line_length=70)
+                        widgets.append(Label(f"    - {truncated_command_info}", classes="tool-info-line"))
 
             # Output Styles（可展开）
             output_style_text = f"Output Styles: {self.claude_info.output_style_count} [Press Enter]"
@@ -235,7 +242,9 @@ class ClaudeCodexManagementPanel(Widget):
                     widgets.append(Label("    (No output styles found)", classes="tool-info-line"))
                 else:
                     for style in output_styles:
-                        widgets.append(Label(f"    - {style['name']}: {style['description']}", classes="tool-info-line"))
+                        style_info = f"{style['name']}: {style['description']}"
+                        truncated_style_info = truncate_text_two_lines(style_info, max_line_length=70)
+                        widgets.append(Label(f"    - {truncated_style_info}", classes="tool-info-line"))
 
             # Plugins
             plugin_text = f"  Plugins: {self.claude_info.plugin_count}"
@@ -296,7 +305,9 @@ class ClaudeCodexManagementPanel(Widget):
                     widgets.append(Label("    (No MCP configurations found)", classes="tool-info-line"))
                 else:
                     for mcp in mcp_list:
-                        widgets.append(Label(f"    - {mcp['name']}: {mcp['command']}", classes="tool-info-line"))
+                        mcp_info = f"{mcp['name']}: {mcp['command']}"
+                        truncated_mcp_info = truncate_text_two_lines(mcp_info, max_line_length=70)
+                        widgets.append(Label(f"    - {truncated_mcp_info}", classes="tool-info-line"))
 
             # AGENTS.md
             if self.codex_info.agents_md_path:

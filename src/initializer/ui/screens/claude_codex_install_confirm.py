@@ -6,6 +6,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
 from ...utils.logger import get_ui_logger
+from ...utils.text_utils import truncate_command_for_display
 
 logger = get_ui_logger("claude_codex_install_confirm")
 
@@ -94,7 +95,8 @@ class ClaudeCodexInstallConfirm(ModalScreen[bool]):
 
                 with ScrollableContainer(classes="command-list"):
                     for cmd in self.commands:
-                        yield Label(f"  $ {cmd}")
+                        truncated_cmd = truncate_command_for_display(cmd, max_length=100)
+                        yield Label(f"  $ {truncated_cmd}")
 
             with Container(id="help-box"):
                 yield Static(

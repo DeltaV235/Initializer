@@ -8,6 +8,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
 from ...utils.logger import get_ui_logger
+from ...utils.text_utils import format_log_output
 
 logger = get_ui_logger("claude_codex_install_progress")
 
@@ -126,7 +127,8 @@ class ClaudeCodexInstallProgress(ModalScreen[bool]):
                             break
                         decoded_line = line.decode('utf-8', errors='replace').rstrip()
                         if decoded_line:
-                            self._append_log(f"  {decoded_line}")
+                            formatted_line = format_log_output(decoded_line, max_length=120)
+                            self._append_log(f"  {formatted_line}")
 
                     # Wait for process to complete
                     returncode = await process.wait()
@@ -143,7 +145,8 @@ class ClaudeCodexInstallProgress(ModalScreen[bool]):
                             self._append_log(f"  ✗ Error output:")
                             for line in stderr_text.split('\n'):
                                 if line.strip():
-                                    self._append_log(f"    {line}")
+                                    formatted_error_line = format_log_output(line, max_length=110)
+                                    self._append_log(f"    {formatted_error_line}")
                         self._append_log(f"  ✗ Command failed (exit code: {returncode})")
                         self._append_log("")
                         success = False
