@@ -292,7 +292,7 @@ class ZshInstallProgress(ModalScreen[dict]):
 
             # 挂载新 widget 到 Vertical 容器
             log_container = self.query_one("#log-output", Vertical)
-            log_container.mount(Static(log_line, classes=css_class))
+            log_container.mount(Static(log_line, classes=css_class, markup=False))
 
             # 限制日志行数（保留最近100行）
             if len(log_container.children) > 100:

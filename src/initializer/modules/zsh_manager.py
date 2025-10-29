@@ -457,11 +457,11 @@ class ZshManager:
             logger.info(f"Installing Oh-my-zsh from {install_url}")
             progress_callback("Downloading Oh-my-zsh installation script...")
 
-            # 使用 curl 下载并执行安装脚本
+            # 使用 curl 下载并执行安装脚本（管道方式）
             cmd = [
-                "sh",
+                "bash",
                 "-c",
-                f'$(curl -fsSL {install_url}) "" --unattended',
+                f"curl -fsSL {install_url} | bash -s -- --unattended",
             ]
 
             return await self._run_command(cmd, progress_callback, timeout=300)
@@ -640,8 +640,16 @@ class ZshManager:
             dict: {"success": bool, "error": str, "output": str}
         """
         try:
-            logger.debug(f"Running command: {' '.join(cmd)}")
-            progress_callback(f"Executing: {' '.join(cmd)}")
+            # 构造命令字符串，如果太长则简化显示
+            cmd_str = ' '.join(cmd)
+            if len(cmd_str) > 80:
+                # 简化长命令的显示
+                display_cmd = f"{cmd[0]} ..."
+            else:
+                display_cmd = cmd_str
+
+            logger.debug(f"Running command: {cmd_str}")
+            progress_callback(f"Executing: {display_cmd}")
 
             process = subprocess.Popen(
                 cmd,
@@ -674,9 +682,10 @@ class ZshManager:
                 return {"success": True, "error": "", "output": output}
             else:
                 logger.error(f"Command failed with code {process.returncode}")
+                error_detail = f'Command failed with exit code {process.returncode}. Output: {output}' if output.strip() else f'Command failed with exit code {process.returncode}'
                 return {
                     "success": False,
-                    "error": f"Command failed with exit code {process.returncode}",
+                    "error": error_detail,
                     "output": output,
                 }
 
