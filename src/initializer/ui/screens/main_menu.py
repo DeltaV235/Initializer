@@ -1175,8 +1175,8 @@ class MainMenuScreen(Screen):
             else:
                 logger.debug("Enter pressed in left panel - allowing default behavior")
 
-        # Handle 1-6 shortcuts only when focus is in left panel
-        if event.key in ["1", "2", "3", "4", "5", "6"] and self._is_focus_in_left_panel():
+        # Handle number shortcuts only when focus is in left panel
+        if event.key.isdecimal() and self._is_focus_in_left_panel():
             try:
                 segment_index = int(event.key) - 1
                 if 0 <= segment_index < len(self.SEGMENTS):
