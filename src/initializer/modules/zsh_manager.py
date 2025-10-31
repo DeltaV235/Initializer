@@ -65,7 +65,8 @@ class ZshManager:
 
     def __init__(self):
         """Initialize ZshManager."""
-        pass
+        from ..config_manager import ConfigManager
+        self.config_manager = ConfigManager()
 
     @staticmethod
     async def detect_zsh() -> ZshInfo:
@@ -593,6 +594,18 @@ class ZshManager:
             logger.info(f"Uninstalling Zsh via {pm_name}")
             progress_callback(f"Uninstalling Zsh using {pm_name}...")
 
+            # 检查当前 shell 并在需要时回退到 Bash（安全卸载）
+            revert_result = await self._ensure_bash_available(progress_callback)
+            if not revert_result["success"]:
+                logger.error("Shell revert failed, cannot safely uninstall Zsh")
+                return {
+                    "success": False,
+                    "error": f"Cannot safely uninstall Zsh: {revert_result.get('error', 'Shell revert failed')}",
+                    "output": ""
+                }
+
+            logger.info("Shell safety check passed, proceeding with Zsh uninstallation")
+
             # 构建卸载命令
             if pm_name == "apt":
                 cmd = ["sudo", "apt", "remove", "-y", "zsh"]
@@ -612,6 +625,116 @@ class ZshManager:
         except Exception as exc:
             logger.error(f"Failed to uninstall Zsh: {exc}", exc_info=True)
             return {"success": False, "error": str(exc), "output": ""}
+
+    async def _ensure_bash_available(self, progress_callback: Callable[[str], None]) -> dict:
+        """
+        确保 Bash shell 可用，并将默认 shell 切换到 Bash。
+
+        Args:
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str}
+        """
+        try:
+            modules_config = self.config_manager.get_modules_config()
+            zsh_config = modules_config["zsh_management"]
+            messages = zsh_config.settings["messages"]
+
+            progress_callback(messages["shell_revert_check"])
+            logger.info("Checking current shell for safe Zsh uninstall")
+
+            # 检查 /bin/bash 是否存在且可执行
+            bash_path = "/bin/bash"
+            if not os.path.exists(bash_path):
+                error_msg = messages["bash_not_available"]
+                logger.error(f"Bash not found at {bash_path}")
+                progress_callback(error_msg)  # 推送用户反馈
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "output": ""
+                }
+
+            if not os.access(bash_path, os.X_OK):
+                error_msg = messages["bash_not_available"]
+                logger.error(f"Bash at {bash_path} is not executable")
+                progress_callback(error_msg)  # 推送用户反馈
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "output": ""
+                }
+
+            # 检查 /bin/bash 是否列在 /etc/shells 中（chsh 要求）
+            etc_shells_path = "/etc/shells"
+            if os.path.exists(etc_shells_path):
+                try:
+                    with open(etc_shells_path, 'r') as f:
+                        valid_shells = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+
+                    if bash_path not in valid_shells:
+                        error_msg = f"Bash is not listed in {etc_shells_path}. Cannot change default shell."
+                        logger.error(f"Bash not in /etc/shells: {valid_shells}")
+                        progress_callback(error_msg)
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "output": ""
+                        }
+                    logger.debug(f"Bash is listed in /etc/shells: {valid_shells}")
+                except Exception as read_exc:
+                    logger.warning(f"Failed to read /etc/shells: {read_exc}, proceeding anyway")
+
+            # 获取当前 shell
+            current_shell = await self.get_current_shell()
+            logger.info(f"Current shell detected: {current_shell}")
+
+            # 如果当前 shell 不是 Zsh，无需切换
+            if "zsh" not in current_shell.lower():
+                no_revert_msg = "Current shell is not Zsh, no revert needed"
+                logger.info(no_revert_msg)
+                progress_callback(no_revert_msg)  # 推送用户反馈
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": no_revert_msg
+                }
+
+            # 切换到 Bash
+            progress_callback(messages["shell_revert_to_bash"])
+            logger.info(f"Reverting default shell from {current_shell} to Bash")
+
+            result = await self.change_default_shell(bash_path, progress_callback)
+
+            if result["success"]:
+                success_msg = messages["shell_revert_success"]
+                logger.info("Shell successfully reverted to Bash")
+                progress_callback(success_msg)  # 推送成功反馈
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": success_msg
+                }
+            else:
+                error_msg = messages["shell_revert_failed"].format(error=result.get("error", "Unknown error"))
+                logger.error(f"Failed to revert shell: {result.get('error')}")
+                progress_callback(error_msg)  # 推送失败反馈
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "output": ""
+                }
+
+        except Exception as exc:
+            logger.error(f"Failed to ensure Bash availability: {exc}", exc_info=True)
+            error_msg = f"Failed to ensure Bash availability: {str(exc)}"
+            progress_callback(error_msg)  # 推送异常反馈
+            return {
+                "success": False,
+                "error": error_msg,
+                "output": ""
+            }
 
     async def install_ohmyzsh(
         self, install_url: str, progress_callback: Callable[[str], None]

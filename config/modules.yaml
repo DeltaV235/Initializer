@@ -133,6 +133,11 @@ modules:
       config_backup_created: "Configuration backup created at: {backup_path}"
       config_rollback_info: "To rollback, restore from the backup file"
       config_no_tools_found: "No tool configurations found for migration"
+      shell_revert_check: "Checking current shell..."
+      shell_revert_to_bash: "Reverting default shell to Bash for safety..."
+      shell_revert_success: "Shell reverted to Bash successfully"
+      shell_revert_failed: "Failed to revert shell: {error}"
+      bash_not_available: "Bash is not available for shell revert. Cannot safely uninstall Zsh."
   package_manager:
     enabled: true
     supported:
