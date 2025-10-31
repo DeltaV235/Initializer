@@ -329,7 +329,7 @@ class ClaudeCodexManagementPanel(Widget):
             scroll_container.mount(widget)
 
         # 刷新箭头
-        self._refresh_action_labels()
+        self.refresh_action_labels()
 
         logger.debug(f"Panel refreshed with {len(self.action_entries)} action entries")
 
