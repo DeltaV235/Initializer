@@ -826,3 +826,49 @@ Toast {
     padding: 1;
 }
 
+/* Text Truncation Styles - Textual Compatible */
+.text-truncate-two-lines {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: wrap;
+    height: auto;
+    max-height: 2;
+}
+
+/* Enhanced truncation for Claude Code specific components */
+.tool-info-line {
+    color: $text;
+    margin: 0 0 0 0;
+    width: 100%;
+    text-wrap: wrap;
+    max-height: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-action {
+    color: $text;
+    margin: 0 0 0 0;
+    width: 100%;
+    text-wrap: wrap;
+    max-height: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.command-list {
+    color: $primary;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    max-height: 10;
+    overflow-y: auto;
+}
+
+.command-list Label {
+    text-wrap: wrap;
+    max-height: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 1;
+}
+

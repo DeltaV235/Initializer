@@ -138,6 +138,22 @@ modules:
       shell_revert_success: "Shell reverted to Bash successfully"
       shell_revert_failed: "Failed to revert shell: {error}"
       bash_not_available: "Bash is not available for shell revert. Cannot safely uninstall Zsh."
+  claude_codex_management:
+    enabled: true
+    description: "Claude Code and Codex CLI management"
+    claude_code:
+      config_path: "~/.claude"
+      version_command: "claude --version"
+      install_url: "https://docs.claude.ai/en/install"
+    codex:
+      config_path: "~/.codex"
+      version_command: "codex --version"
+      install_url: "https://github.com/anthropics/codex"
+    messages:
+      install_success: "{tool} installed successfully!"
+      uninstall_success: "{tool} uninstalled successfully."
+      install_failed: "Failed to install {tool}: {error}"
+      uninstall_failed: "Failed to uninstall {tool}: {error}"
   package_manager:
     enabled: true
     supported:
