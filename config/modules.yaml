@@ -127,6 +127,12 @@ modules:
       shell_change_success: "Default shell changed to Zsh. Please log out and log back in."
       shell_change_failed: "Failed to change default shell: {error}"
       dependencies_missing: "Required dependencies missing: {deps}. Please install them first."
+      config_detection_success: "Detected {tool_count} tool configuration(s) from your previous shell"
+      config_migration_success: "Successfully migrated {tools} to .zshrc"
+      config_migration_failed: "Configuration migration failed: {error}"
+      config_backup_created: "Configuration backup created at: {backup_path}"
+      config_rollback_info: "To rollback, restore from the backup file"
+      config_no_tools_found: "No tool configurations found for migration"
   package_manager:
     enabled: true
     supported:

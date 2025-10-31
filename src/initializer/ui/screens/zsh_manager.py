@@ -351,6 +351,10 @@ class ZshManagementPanel(Widget):
                 self._open_plugin_confirm(plugin_dict, operation)
             return
 
+        # 配置迁移
+        elif action == "migrate_config":
+            self._open_config_migration_flow()
+
         # 插件安装/卸载（旧逻辑，保留兼容）
         elif action.startswith("install_plugin:") or action.startswith("uninstall_plugin:"):
             operation, plugin_name = action.split(":", 1)
@@ -502,6 +506,22 @@ class ZshManagementPanel(Widget):
             else:
                 container.mount(
                     Static("Status: [red]Error checking status[/red]", classes="zsh-info-line")
+                )
+
+            # 配置迁移选项 - 仅在 Oh-my-zsh 已安装且当前 shell 不是 zsh 时显示
+            if (self.ohmyzsh_info and self.ohmyzsh_info.installed and
+                self.current_shell and "zsh" not in self.current_shell):
+                container.mount(Rule())
+                container.mount(Label("Shell 配置迁移", classes="section-header"))
+
+                widget = Static("", classes="zsh-action")
+                container.mount(widget)
+                action_entries.append(
+                    {
+                        "label": "迁移 Shell 配置 → Zsh",
+                        "action": "migrate_config",
+                        "widget": widget,
+                    }
                 )
 
             container.mount(Rule())
@@ -716,6 +736,107 @@ class ZshManagementPanel(Widget):
 
         except Exception as e:
             logger.error(f"Failed to schedule focus restoration: {e}", exc_info=True)
+
+    def _open_config_migration_flow(self) -> None:
+        """打开配置迁移流程。"""
+        from .config_migration_confirm import ConfigMigrationConfirm
+        from .zsh_install_progress import ZshInstallProgress
+        from ...modules.zsh_manager import ZshManager
+
+        logger.info("Starting configuration migration flow")
+
+        # 保存当前的 action
+        self._save_pending_action()
+
+        async def detect_configs():
+            """异步检测配置。"""
+            try:
+                return await ZshManager.detect_shell_configs(self.current_shell)
+            except Exception as exc:
+                logger.error(f"Failed to detect shell configs: {exc}", exc_info=True)
+                return []
+
+        # 在后台线程中执行配置检测
+        @work(exclusive=True, thread=True)
+        def detect_configs_worker():
+            """工作线程中检测配置。"""
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(detect_configs())
+                return result
+            finally:
+                loop.close()
+
+        # 启动配置检测
+        worker = detect_configs_worker()
+        worker.add_callback(self._handle_config_detection_result)
+
+    def _handle_config_detection_result(self, configs) -> None:
+        """处理配置检测结果。"""
+        try:
+            if not configs:
+                self._show_notification("未检测到可迁移的配置", "info")
+                return
+
+            logger.info(f"Detected {len(configs)} configurations for migration")
+
+            def handle_migration_selection(selected_configs) -> None:
+                """处理迁移选择结果。"""
+                if not selected_configs:
+                    logger.debug("User cancelled configuration migration")
+                    return
+
+                logger.info(f"User selected {len(selected_configs)} configs for migration")
+                self._execute_config_migration(selected_configs)
+
+            # 打开迁移确认 modal
+            from .config_migration_confirm import ConfigMigrationConfirm
+            migration_modal = ConfigMigrationConfirm(configs, self.current_shell)
+            self.app.push_screen(migration_modal, handle_migration_selection)
+
+        except Exception as exc:
+            logger.error(f"Failed to handle config detection result: {exc}", exc_info=True)
+            self._show_notification("配置迁移流程出错", "error")
+
+    def _execute_config_migration(self, configs) -> None:
+        """执行配置迁移。"""
+        from .zsh_install_progress import ZshInstallProgress
+        from ...modules.zsh_manager import ZshManager
+
+        logger.info(f"Executing migration for {len(configs)} configurations")
+
+        def handle_migration_result(result: dict) -> None:
+            """处理迁移完成结果。"""
+            try:
+                if result.get("success"):
+                    logger.info("Configuration migration completed successfully")
+                    self._show_notification(
+                        f"配置迁移完成！迁移了 {len(configs)} 个工具配置",
+                        "success"
+                    )
+                    if result.get("backup_path"):
+                        self._show_notification(
+                            f"备份文件: {result['backup_path']}",
+                            "info"
+                        )
+                else:
+                    error_msg = result.get("error", "Unknown error")
+                    logger.error(f"Configuration migration failed: {error_msg}")
+                    self._show_notification(f"配置迁移失败: {error_msg}", "error")
+            finally:
+                # 恢复焦点
+                self._restore_panel_focus()
+
+        # 打开进度 modal 执行迁移
+        progress_modal = ZshInstallProgress(
+            target="config_migration",
+            operation="migrate",
+            configs=configs,
+            completion_callback=handle_migration_result
+        )
+        self.app.push_screen(progress_modal)
 
     def _execute_zsh_operation(self, operation: str) -> None:
         """打开 Zsh 安装/卸载进度弹窗并在完成后刷新状态。"""

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +46,18 @@ class PluginInfo:
     install_path: str
     description: str = ""
     install_method: str = "git"
+
+
+@dataclass
+class ShellConfig:
+    """Shell configuration for migration."""
+
+    tool_name: str
+    config_lines: List[str]
+    source_file: str
+    description: str
+    priority: int
+    selected: bool = True
 
 
 class ZshManager:
@@ -249,6 +262,166 @@ class ZshManager:
 
         logger.debug(f"Dependencies check: {deps}")
         return deps
+
+    @staticmethod
+    async def detect_shell_configs(current_shell: str) -> List[ShellConfig]:
+        """
+        检测原有 shell 配置文件中的开发工具配置。
+
+        Args:
+            current_shell: 当前默认 shell 的完整路径
+
+        Returns:
+            List[ShellConfig]: 检测到的配置列表，按优先级排序
+        """
+        configs = []
+
+        # 确定要检查的配置文件
+        shell_name = Path(current_shell).name
+        config_files = []
+
+        if shell_name == "bash":
+            config_files = [
+                Path.home() / ".bashrc",
+                Path.home() / ".bash_profile",
+                Path.home() / ".profile"
+            ]
+        elif shell_name == "zsh":
+            config_files = [
+                Path.home() / ".zshrc"
+            ]
+        else:
+            # 其他 shell，检查通用配置文件
+            config_files = [
+                Path.home() / f".{shell_name}rc",
+                Path.home() / ".profile"
+            ]
+
+        # 工具配置模式定义
+        tool_patterns = [
+            {
+                "name": "uv",
+                "description": "Python 包管理和项目管理工具",
+                "priority": 1,
+                "patterns": [
+                    r'export\s+PATH=.*uv.*:?[\w/-]*',
+                    r'alias\s+uv=',
+                    r'source\s+.*uv',
+                    r'\.?\s+.*uv/env'
+                ]
+            },
+            {
+                "name": "nvm",
+                "description": "Node.js 版本管理器",
+                "priority": 2,
+                "patterns": [
+                    r'export\s+NVM_DIR=',
+                    r'source\s+.*nvm\.sh',
+                    r'\[?\s*-s\s+.*nvm',
+                    r'cargo\s+install\s+nvm'
+                ]
+            },
+            {
+                "name": "conda",
+                "description": "Anaconda/Miniconda Python 环境",
+                "priority": 3,
+                "patterns": [
+                    r'source\s+.*conda\.sh',
+                    r'conda\s+init',
+                    r'export\s+PATH=.*conda',
+                    r'__conda_setup'
+                ]
+            },
+            {
+                "name": "pyenv",
+                "description": "Python 版本管理器",
+                "priority": 4,
+                "patterns": [
+                    r'export\s+PYENV_ROOT=',
+                    r'eval\s+"\$\(pyenv\s+init\s-\)"',
+                    r'eval\s+"\$\(pyenv\s+virtualenv-init\s-\)"',
+                    r'export\s+PATH=.*pyenv'
+                ]
+            },
+            {
+                "name": "rbenv",
+                "description": "Ruby 版本管理器",
+                "priority": 5,
+                "patterns": [
+                    r'export\s+RBENV_ROOT=',
+                    r'eval\s+"\$\(rbenv\s+init\s-\)"',
+                    r'export\s+PATH=.*rbenv'
+                ]
+            },
+            {
+                "name": "goenv",
+                "description": "Go 版本管理器",
+                "priority": 6,
+                "patterns": [
+                    r'export\s+GOENV_ROOT=',
+                    r'eval\s+"\$\(goenv\s+init\s-\)"',
+                    r'export\s+PATH=.*goenv'
+                ]
+            },
+            {
+                "name": "docker",
+                "description": "Docker 容器环境",
+                "priority": 7,
+                "patterns": [
+                    r'export\s+DOCKER_',
+                    r'source\s+.*docker',
+                    r'alias\s+docker='
+                ]
+            }
+        ]
+
+        # 检查每个配置文件
+        for config_file in config_files:
+            if not config_file.exists():
+                logger.debug(f"Config file not found: {config_file}")
+                continue
+
+            try:
+                with open(config_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+
+                logger.debug(f"Analyzing config file: {config_file}")
+
+                # 为每个工具检查配置模式
+                for tool in tool_patterns:
+                    tool_config_lines = []
+
+                    for line_num, line in enumerate(lines, 1):
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+
+                        # 检查是否匹配任何模式
+                        for pattern in tool["patterns"]:
+                            if re.search(pattern, line, re.IGNORECASE):
+                                logger.debug(f"Found {tool['name']} config in {config_file}:{line_num}: {line}")
+                                tool_config_lines.append(line)
+                                break
+
+                    # 如果找到配置，创建 ShellConfig 对象
+                    if tool_config_lines:
+                        configs.append(ShellConfig(
+                            tool_name=tool["name"],
+                            config_lines=tool_config_lines,
+                            source_file=str(config_file),
+                            description=tool["description"],
+                            priority=tool["priority"]
+                        ))
+
+            except Exception as exc:
+                logger.error(f"Failed to read config file {config_file}: {exc}", exc_info=True)
+                continue
+
+        # 按优先级排序
+        configs.sort(key=lambda x: x.priority)
+
+        logger.info(f"Detected {len(configs)} shell configurations from {shell_name}")
+        return configs
 
     async def get_plugin_status(self, plugins: List[dict]) -> List[PluginInfo]:
         """
@@ -517,6 +690,195 @@ class ZshManager:
         except Exception as exc:
             logger.error(f"Failed to uninstall Oh-my-zsh: {exc}", exc_info=True)
             return {"success": False, "error": str(exc), "output": ""}
+
+    async def migrate_shell_configs(
+        self,
+        configs: List[ShellConfig],
+        target_file: str = "~/.zshrc",
+        progress_callback: Optional[Callable[[str], None]] = None
+    ) -> dict:
+        """
+        将检测到的配置迁移到目标 shell 配置文件。
+
+        Args:
+            configs: 要迁移的配置列表
+            target_file: 目标配置文件路径
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str, "backup_path": str}
+        """
+        try:
+            from datetime import datetime
+            import time
+
+            # 默认进度回调
+            if progress_callback is None:
+                progress_callback = lambda msg: logger.info(msg)
+
+            logger.info(f"Starting shell configuration migration to {target_file}")
+            progress_callback("开始配置迁移...")
+
+            # 解析目标文件路径
+            target_path = Path(target_file).expanduser()
+            backup_path = None
+
+            # 过滤选中的配置
+            selected_configs = [config for config in configs if config.selected]
+            if not selected_configs:
+                return {
+                    "success": False,
+                    "error": "No configurations selected for migration",
+                    "output": "",
+                    "backup_path": ""
+                }
+
+            progress_callback(f"准备迁移 {len(selected_configs)} 个工具配置...")
+
+            # 备份现有的 .zshrc 文件
+            if target_path.exists():
+                timestamp = int(time.time())
+                backup_path = target_path.parent / f"{target_path.name}.backup.{timestamp}"
+                progress_callback(f"备份现有配置到 {backup_path}...")
+
+                try:
+                    import shutil
+                    shutil.copy2(target_path, backup_path)
+                    logger.info(f"Backup created at: {backup_path}")
+                except Exception as backup_exc:
+                    logger.error(f"Failed to create backup: {backup_exc}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to create backup: {backup_exc}",
+                        "output": "",
+                        "backup_path": ""
+                    }
+
+            # 读取现有内容（如果存在）
+            existing_content = ""
+            if target_path.exists():
+                try:
+                    with open(target_path, 'r', encoding='utf-8') as f:
+                        existing_content = f.read()
+                except Exception as read_exc:
+                    logger.error(f"Failed to read existing {target_path}: {read_exc}")
+
+            # 准备要写入的内容
+            migration_content = self._prepare_migration_content(selected_configs, progress_callback)
+
+            # 写入配置
+            try:
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    # 写入现有内容
+                    if existing_content.strip():
+                        f.write(existing_content)
+                        if not existing_content.endswith('\n'):
+                            f.write('\n')
+                        f.write('\n')
+
+                    # 写入迁移内容
+                    f.write(migration_content)
+
+                logger.info(f"Successfully migrated configurations to {target_path}")
+                progress_callback("配置迁移完成！")
+
+                # 构建成功消息
+                tool_names = [config.tool_name for config in selected_configs]
+                success_msg = f"成功迁移 {len(tool_names)} 个工具配置: {', '.join(tool_names)}"
+                if backup_path:
+                    success_msg += f"\n备份文件: {backup_path}"
+
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": success_msg,
+                    "backup_path": str(backup_path) if backup_path else ""
+                }
+
+            except Exception as write_exc:
+                logger.error(f"Failed to write configurations: {write_exc}")
+
+                # 尝试回滚
+                if backup_path and backup_path.exists():
+                    try:
+                        progress_callback("写入失败，正在回滚...")
+                        shutil.copy2(backup_path, target_path)
+                        logger.info("Rollback completed")
+                    except Exception as rollback_exc:
+                        logger.error(f"Rollback failed: {rollback_exc}")
+
+                return {
+                    "success": False,
+                    "error": f"Failed to write configurations: {write_exc}",
+                    "output": "",
+                    "backup_path": str(backup_path) if backup_path else ""
+                }
+
+        except Exception as exc:
+            logger.error(f"Failed to migrate shell configurations: {exc}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(exc),
+                "output": "",
+                "backup_path": ""
+            }
+
+    def _prepare_migration_content(self, configs: List[ShellConfig], progress_callback) -> str:
+        """
+        准备迁移内容，包括头部注释和配置行。
+
+        Args:
+            configs: 要迁移的配置列表
+            progress_callback: 进度回调函数
+
+        Returns:
+            str: 格式化的迁移内容
+        """
+        from datetime import datetime
+
+        lines = []
+
+        # 添加迁移标记头部
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines.append("# ================================================")
+        lines.append(f"# Shell Configuration Migration - {timestamp}")
+        lines.append("# 检测到的工具配置自动迁移")
+        lines.append("# ================================================\n")
+
+        # 按工具分组配置
+        tool_groups = {}
+        for config in configs:
+            if config.tool_name not in tool_groups:
+                tool_groups[config.tool_name] = {
+                    "description": config.description,
+                    "source_file": config.source_file,
+                    "config_lines": []
+                }
+            tool_groups[config.tool_name]["config_lines"].extend(config.config_lines)
+
+        # 为每个工具生成配置块
+        for tool_name, tool_data in tool_groups.items():
+            progress_callback(f"处理 {tool_name} 配置...")
+
+            lines.append(f"# {tool_name} - {tool_data['description']}")
+            lines.append(f"# 源文件: {tool_data['source_file']}")
+            lines.append(f"# {tool_data['description']} 配置开始")
+
+            for line in tool_data["config_lines"]:
+                lines.append(line)
+
+            lines.append(f"# {tool_name} 配置结束\n")
+
+        # 添加迁移说明
+        lines.append("# ================================================")
+        lines.append("# 迁移说明:")
+        lines.append("# 1. 以上配置已从原有 shell 配置文件自动检测并迁移")
+        lines.append("# 2. 请检查配置是否在新的 Zsh 环境中正常工作")
+        lines.append("# 3. 如有问题，可以从备份文件恢复原配置")
+        lines.append("# 4. 建议重新启动终端或运行 'source ~/.zshrc' 使配置生效")
+        lines.append("# ================================================\n")
+
+        return '\n'.join(lines) + '\n'
 
     async def install_plugin(
         self, plugin: dict, progress_callback: Callable[[str], None]

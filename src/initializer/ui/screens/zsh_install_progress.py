@@ -80,20 +80,24 @@ class ZshInstallProgress(ModalScreen[dict]):
 
     def __init__(
         self,
-        target: str,  # "zsh", "ohmyzsh", "plugin", "shell"
-        operation: str,  # "install", "uninstall", "change"
-        zsh_manager: ZshManager,
+        target: str,  # "zsh", "ohmyzsh", "plugin", "shell", "config_migration"
+        operation: str,  # "install", "uninstall", "change", "migrate"
+        zsh_manager: Optional[ZshManager] = None,
         package_manager: Optional[str] = None,
         plugin: Optional[dict] = None,
         shell_path: Optional[str] = None,
+        configs: Optional[list] = None,
+        completion_callback: Optional[callable] = None,
     ):
         super().__init__()
         self.target = target
         self.operation = operation
-        self.zsh_manager = zsh_manager
+        self.zsh_manager = zsh_manager or ZshManager()
         self.package_manager = package_manager
         self.plugin = plugin
         self.shell_path = shell_path
+        self.configs = configs
+        self.completion_callback = completion_callback
 
     def compose(self) -> ComposeResult:
         """Compose the progress modal."""
@@ -107,6 +111,7 @@ class ZshInstallProgress(ModalScreen[dict]):
                 ("plugin", "install"): "Installing Plugin",
                 ("plugin", "uninstall"): "Uninstalling Plugin",
                 ("shell", "change"): "Changing Default Shell",
+                ("config_migration", "migrate"): "Migrating Shell Configurations",
             }
             yield Static(
                 title_map.get((self.target, self.operation), "Processing..."),
@@ -158,6 +163,14 @@ class ZshInstallProgress(ModalScreen[dict]):
             return
 
         result = getattr(self, 'result', {})
+
+        # 如果有 completion_callback，先调用它
+        if self.completion_callback:
+            try:
+                self.completion_callback(result)
+            except Exception as exc:
+                logger.error(f"Completion callback failed: {exc}", exc_info=True)
+
         self.dismiss(result)
 
     def action_scroll_down(self) -> None:
@@ -241,6 +254,11 @@ class ZshInstallProgress(ModalScreen[dict]):
             elif self.target == "shell":
                 result = await self.zsh_manager.change_default_shell(
                     self.shell_path, progress_callback
+                )
+
+            elif self.target == "config_migration":
+                result = await self.zsh_manager.migrate_shell_configs(
+                    self.configs, progress_callback=progress_callback
                 )
 
             # 更新状态文本
