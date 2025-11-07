@@ -540,9 +540,9 @@ class ZshManagementPanel(Widget):
                 try:
                     # 单行交互：状态 + Enter 触发 modal
                     status_text = (
-                        "[green]Installed[/green]"
+                        "[bold green]Installed[/bold green]"
                         if plugin_info.installed
-                        else "[yellow]Not Installed[/yellow]"
+                        else "[bold yellow]Not Installed[/bold yellow]"
                     )
                     action_hint = "Uninstall" if plugin_info.installed else "Install"
 
