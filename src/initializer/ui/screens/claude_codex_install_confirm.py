@@ -3,7 +3,7 @@
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static
+from textual.widgets import Label
 
 from ...utils.logger import get_ui_logger
 from ...utils.text_utils import truncate_command_for_display
@@ -50,14 +50,21 @@ class ClaudeCodexInstallConfirm(ModalScreen[bool]):
     }
 
     #help-box {
+        dock: bottom;
+        width: 100%;
         height: 3;
-        background: $panel;
-        padding: 1;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
     }
 
     .help-text {
-        color: $text;
+        width: 100%;
+        height: 1;
+        content-align: center middle;
         text-align: center;
+        color: $text-muted;
     }
     """
 
@@ -99,10 +106,7 @@ class ClaudeCodexInstallConfirm(ModalScreen[bool]):
                         yield Label(f"  $ {truncated_cmd}")
 
             with Container(id="help-box"):
-                yield Static(
-                    "[Y/Enter] Confirm  [N/Esc] Cancel",
-                    classes="help-text"
-                )
+                yield Label("Y/Enter=Confirm | N/ESC=Cancel", classes="help-text")
 
     def action_confirm(self) -> None:
         """Handle confirmation action."""

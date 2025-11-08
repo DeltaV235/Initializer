@@ -205,3 +205,19 @@
 **记录时间**：2025-10-30 14:55
 **任务状态**：✅ 已完成
 **质量评分**：96/100
+
+## 2025-10-31 11:52 Codex
+
+- 任务标识：`[TASK_MARKER: 20251030-143500-5678]` 上下文收集
+- 工具调用：按规范调用 `serena__activate_project`、`serena__check_onboarding_performed` 完成接入校验
+- Serena 降级：`serena__search_for_pattern` 在仓库根目录调用超时，依据降级矩阵改用 `rg`、`sed` 等只读命令检索
+- 主要查看文件：
+  - `src/initializer/modules/claude_codex_manager.py`
+  - `src/initializer/ui/screens/claude_codex_manager.py`
+  - `src/initializer/ui/screens/main_menu.py`
+  - `src/initializer/ui/screens/main_menu_components/event_handlers.py`
+  - `config/modules.yaml`
+- 初步结论：Claude & Codex 面板在 `_refresh_panel()` 结束时未同步 `focus_index`，导致加载完成后右侧箭头光标缺失，需依赖 `navigate()` 触发刷新
+- 下一步建议：在 `.claude/context-initial.json` 汇总扫描结果供后续分析使用
+
+---

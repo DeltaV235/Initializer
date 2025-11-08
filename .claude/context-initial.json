@@ -1,209 +1,152 @@
 {
-  "meta": {
-    "generated_at": "2025-10-28 18:35 (UTC+8)",
-    "agent": "Codex",
-    "task_marker": "20251028-143000-ABCD",
-    "conversation_id": "NOT_FOUND"
+  "元数据": {
+    "任务标识": "20251030-143500-5678",
+    "生成时间": "2025-10-31 11:52 (UTC+8)",
+    "执行者": "Codex",
+    "说明": "Claude Manager 模块右侧光标加载完成后缺失，已按要求完成结构化扫描"
   },
-  "claude_code_presence": {
-    "modules": [
+  "位置定位": {
+    "后端模块": [
       {
-        "name": "ClaudeCodexManager",
-        "path": "src/initializer/modules/claude_codex_manager.py:41",
-        "notes": "集中封装 Claude Code 与 Codex 的检测、配置统计、命令/Agent 解析逻辑，返回 `ClaudeCodeInfo`、`CodexInfo` 数据类。",
-        "evidence": [
-          {
-            "path": "src/initializer/modules/claude_codex_manager.py:14"
-          },
-          {
-            "path": "src/initializer/modules/claude_codex_manager.py:45"
-          },
-          {
-            "path": "src/initializer/modules/claude_codex_manager.py:408"
-          },
-          {
-            "path": "src/initializer/modules/claude_codex_manager.py:464"
-          }
-        ]
-      },
-      {
-        "name": "Config 宣言",
-        "path": "config/modules.yaml:130",
-        "notes": "模块在配置文件中以 `claude_codex_management` 声明启用，并提供 CLI 命令、配置路径等基础元信息。",
-        "evidence": [
-          {
-            "path": "config/modules.yaml:132"
-          },
-          {
-            "path": "config/modules.yaml:133"
-          },
-          {
-            "path": "config/modules.yaml:138"
-          }
+        "名称": "ClaudeCodexManager",
+        "路径": "src/initializer/modules/claude_codex_manager.py:41",
+        "说明": "聚合 Claude Code / Codex CLI 检测与配置统计，提供 `ClaudeCodeInfo` 与 `CodexInfo` 数据类",
+        "证据": [
+          "src/initializer/modules/claude_codex_manager.py:14",
+          "src/initializer/modules/claude_codex_manager.py:55",
+          "src/initializer/modules/claude_codex_manager.py:130"
         ]
       }
     ],
-    "ui_entrypoints": [
+    "界面组件": [
       {
-        "component": "MainMenu._build_claude_codex_management_settings",
-        "path": "src/initializer/ui/screens/main_menu.py:825",
-        "notes": "主菜单右侧面板通过 `UIBuilders.build_claude_codex_management_settings` 注入 Claude/Codex 管理面板。"
+        "名称": "ClaudeCodexManagementPanel",
+        "路径": "src/initializer/ui/screens/claude_codex_manager.py:58",
+        "说明": "Textual Widget，负责右侧面板渲染、加载状态与交互条目注册",
+        "证据": [
+          "src/initializer/ui/screens/claude_codex_manager.py:83",
+          "src/initializer/ui/screens/claude_codex_manager.py:130",
+          "src/initializer/ui/screens/claude_codex_manager.py:344"
+        ]
       },
       {
-        "component": "UIBuilders.build_claude_codex_management_settings",
-        "path": "src/initializer/ui/screens/main_menu_components/ui_builders.py:108",
-        "notes": "负责实例化并挂载 `ClaudeCodexManagementPanel`，并在右侧面板获得焦点时刷新快捷键提示。"
+        "名称": "MainMenuScreen",
+        "路径": "src/initializer/ui/screens/main_menu.py:36",
+        "说明": "主界面屏幕，管理段落选择、左右面板焦点与帮助文案，`watch_current_panel_focus` 在右侧聚焦时触发箭头刷新",
+        "证据": [
+          "src/initializer/ui/screens/main_menu.py:114",
+          "src/initializer/ui/screens/main_menu.py:344",
+          "src/initializer/ui/screens/main_menu.py:360"
+        ]
+      },
+      {
+        "名称": "UIBuilders.build_claude_codex_management_settings",
+        "路径": "src/initializer/ui/screens/main_menu_components/ui_builders.py:108",
+        "说明": "在右侧 ScrollableContainer 中实例化并挂载 Claude/Codex 管理面板，若右侧已聚焦则立即刷新箭头",
+        "证据": [
+          "src/initializer/ui/screens/main_menu_components/ui_builders.py:108",
+          "src/initializer/ui/screens/main_menu_components/ui_builders.py:118"
+        ]
       }
     ],
-    "ui_panels": [
+    "配置声明": [
       {
-        "component": "ClaudeCodexManagementPanel",
-        "path": "src/initializer/ui/screens/claude_codex_manager.py:58",
-        "notes": "Textual Widget，展示 Claude/Codex 安装状态、MCP 列表、Agents、Commands 等信息，并通过 `_register_action` 建立可展开条目。"
-      },
+        "名称": "modules.yaml",
+        "路径": "config/modules.yaml:130",
+        "说明": "`claude_codex_management` 模块在配置文件中启用，并定义 CLI 路径与消息文案",
+        "证据": [
+          "config/modules.yaml:130",
+          "config/modules.yaml:134",
+          "config/modules.yaml:142"
+        ]
+      }
+    ],
+    "焦点管理逻辑": [
       {
-        "component": "ClaudeCodexInstallConfirm",
-        "path": "src/initializer/ui/screens/claude_codex_install_confirm.py:12",
-        "notes": "安装确认弹窗，显示即将执行的命令列表。"
-      },
-      {
-        "component": "ClaudeCodexInstallProgress",
-        "path": "src/initializer/ui/screens/claude_codex_install_progress.py:18",
-        "notes": "进度弹窗，实时流式输出命令执行日志。"
+        "组件": "EventHandlers",
+        "路径": "src/initializer/ui/screens/main_menu_components/event_handlers.py:96",
+        "说明": "右侧面板上下导航时调用面板 `navigate()`，但 `action_select_item` 尚未覆盖 Claude/Codex 分支",
+        "证据": [
+          "src/initializer/ui/screens/main_menu_components/event_handlers.py:96",
+          "src/initializer/ui/screens/main_menu_components/event_handlers.py:155",
+          "src/initializer/ui/screens/main_menu_components/event_handlers.py:183"
+        ]
       }
     ]
   },
-  "text_display_analysis": {
-    "panel_css": {
-      "summary": "面板局部 CSS 将 `.tool-info-line` 与 `.tool-action` 统一设置为 `text-wrap: wrap; width: 100%`，确保长文本自动换行但不会截断。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:23"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:35"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:42"
-        }
+  "现状分析": {
+    "模块切换流程": "左侧段落按钮更新 `MainMenuScreen.selected_segment` → `update_settings_panel()` 清理旧面板并通过 UIBuilders 构建新面板 → Claude 面板挂载后在 `on_mount()` 中调用 `_load_status()` 异步读取 CLI 信息 → 读取完成后 `_refresh_panel()` 重建右侧条目",
+    "加载完成处理": {
+      "描述": "`_refresh_panel()` 清空组件并重新注册 action_entries，最终调用 `_refresh_action_labels()` 直接写入标签；由于未通过 `refresh_action_labels()` 重置 `focus_index`，初始箭头为空格",
+      "证据": [
+        "src/initializer/ui/screens/claude_codex_manager.py:130",
+        "src/initializer/ui/screens/claude_codex_manager.py:332",
+        "src/initializer/ui/screens/claude_codex_manager.py:381"
       ]
     },
-    "panel_render_flow": {
-      "summary": "面板根据 `ClaudeCodeInfo`/`CodexInfo` 统计值渲染可展开条目，展开后逐条生成 `Label(f\"    - {name}: {description}\")`，依赖空格缩进表达层级。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:186"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:205"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:219"
-        }
-      ]
-    },
-    "modal_confirm": {
-      "summary": "`ClaudeCodexInstallConfirm` 在滚动容器内循环渲染 `Label(f\"  $ {cmd}\")`，未设置额外样式，长命令依赖 Textual 默认换行。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_confirm.py:95"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_confirm.py:97"
-        }
-      ]
-    },
-    "modal_progress": {
-      "summary": "进度弹窗通过 `_append_log` 将所有输出拼接为单个字符串，挂载在 `#log-content` 的 `Static` 上，CSS 未设置 `text-wrap` 或换行策略，极长行会溢出但容器可滚动。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:88"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:111"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:123"
-        }
+    "交互对比": [
+      {
+        "模块": "Vim 管理面板",
+        "路径": "src/initializer/ui/screens/vim_management.py:114",
+        "对比点": "`_register_action_entries()` 在数据刷新时将 `focus_index` 重置为 0 并调用 `_refresh_action_labels()`，保证加载完即显示箭头",
+        "证据": [
+          "src/initializer/ui/screens/vim_management.py:137",
+          "src/initializer/ui/screens/vim_management.py:155"
+        ]
+      },
+      {
+        "模块": "Zsh 管理面板",
+        "路径": "src/initializer/ui/screens/zsh_manager.py:120",
+        "对比点": "`_register_action_entries()` 根据历史操作恢复或初始化 `focus_index`，同样在刷新后立刻显示箭头",
+        "证据": [
+          "src/initializer/ui/screens/zsh_manager.py:167",
+          "src/initializer/ui/screens/zsh_manager.py:205"
+        ]
+      }
+    ],
+    "加载后焦点传播": {
+      "描述": "主屏幕监听 `current_panel_focus` 变化，当右侧获得焦点时若面板存在且 `focus_index` 为空则会执行 `panel.refresh_action_labels()`，但若加载前已在右侧且焦点未变化则不会再次触发",
+      "证据": [
+        "src/initializer/ui/screens/main_menu.py:114",
+        "src/initializer/ui/screens/main_menu.py:207",
+        "src/initializer/ui/screens/main_menu.py:210"
       ]
     }
   },
-  "truncate_candidates": [
-    {
-      "area": "ClaudeCodexManagementPanel 展开列表",
-      "risk": "命令/Agent 描述直接拼接在单行字符串中，若 frontmatter 描述过长会在列表中占据大量垂直空间，缺少限制或折叠控制。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:202"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:220"
-        }
-      ]
-    },
-    {
-      "area": "ClaudeCodexInstallConfirm 命令列表",
-      "risk": "Shell 命令原样展示，极长命令会导致滚动容器横向撑开，需要考虑软换行或折叠。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_confirm.py:95"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_confirm.py:97"
-        }
-      ]
-    },
-    {
-      "area": "ClaudeCodexInstallProgress 日志输出",
-      "risk": "日志拼接为整段文本，没有截断或分栏；输出行若包含超长 URL/命令会横向溢出，同时日志持续增长可能导致性能与阅读负担。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:88"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:116"
-        },
-        {
-          "path": "src/initializer/ui/screens/claude_codex_install_progress.py:136"
-        }
-      ]
-    }
-  ],
-  "observations": [
-    {
-      "item": "命令/Agent 解析逻辑",
-      "detail": "解析 `~/.claude/agents` 与 `~/.claude/commands` 目录下的 Markdown 前言区，若没有 `description` 字段则填充 `N/A`，导致 UI 仍显示占位文本。",
-      "evidence": [
-        {
-          "path": "src/initializer/modules/claude_codex_manager.py:419"
-        },
-        {
-          "path": "src/initializer/modules/claude_codex_manager.py:484"
-        }
-      ]
-    },
-    {
-      "item": "路径硬编码",
-      "detail": "面板展开逻辑直接引用 `Path.home() / \".claude\"`，没有复用 `config/modules.yaml` 中的 `config_path`，后续若允许自定义目录需同步调整。",
-      "evidence": [
-        {
-          "path": "src/initializer/ui/screens/claude_codex_manager.py:195"
-        },
-        {
-          "path": "src/initializer/modules/claude_codex_manager.py:66"
-        }
-      ]
-    }
-  ],
-  "tool_fallbacks": [
-    {
-      "timestamp": "2025-10-28 18:20 (UTC+8)",
-      "reason": "Serena `search_for_pattern` 在仓库根目录与 `src` 子目录两次超时，按降级矩阵改用 `rg` 执行只读检索。",
-      "commands": [
-        "rg --line-number \"Claude Code\"",
-        "rg --line-number \"command\" src/initializer/ui/screens",
-        "rg --line-number \"agent\" src/initializer/ui/screens"
-      ]
-    }
-  ]
+  "技术栈确认": {
+    "UI 框架": "基于 Textual，右侧面板使用 `ScrollableContainer` + `Label`，依赖 `reactive` 属性触发 UI 更新",
+    "异步机制": "使用 `@work(exclusive=True, thread=True)` 将 CLI 检测放入后台线程，完成后通过 `app.call_from_thread()` 回到主线程更新 UI",
+    "光标与焦点": "面板通过维护 `action_entries` 与 `focus_index` 手动渲染前缀箭头 (`[#7dd3fc]▶[/#7dd3fc]`)，而非使用 Textual 内建焦点样式；箭头刷新取决于 `_is_active()` 判断 (`selected_segment` + `current_panel_focus`)",
+    "事件机制": "主屏幕与 EventHandlers 将 Enter/上下/Tab 等按键路由到各面板，Claude 面板的 `handle_enter()` 仅在主屏幕中显式调用"
+  },
+  "测试相关": {
+    "自动化": "仓库中未找到 `tests/` 目录或 `test_*.py` 文件，Claude 管理模块暂无自动化测试覆盖",
+    "验证方式": "主要依赖手动在 TUI 中切换段落、加载状态观察箭头显示，无现成脚本可复现"
+  },
+  "观察报告": {
+    "异常": [
+      {
+        "问题": "加载完成后箭头光标缺失",
+        "根因推测": "`_refresh_panel()` 结束时只调用 `_refresh_action_labels()`，未走 `refresh_action_labels()` 初始化 `focus_index`；若右侧焦点未发生变化，`watch_current_panel_focus` 不会二次触发，从而保持 `focus_index=None`",
+        "证据": [
+          "src/initializer/ui/screens/claude_codex_manager.py:332",
+          "src/initializer/ui/screens/claude_codex_manager.py:381",
+          "src/initializer/ui/screens/main_menu.py:200"
+        ]
+      },
+      {
+        "问题": "Enter 键处理入口缺少统一路由",
+        "观察": "`EventHandlers.action_select_item` 未覆盖 `claude_codex_management`，主屏幕直接处理 Enter；虽然功能可用，但与其他模块存在实现差异，后续调整需谨慎保持两个入口一致",
+        "证据": [
+          "src/initializer/ui/screens/main_menu_components/event_handlers.py:155",
+          "src/initializer/ui/screens/main_menu.py:1159"
+        ]
+      }
+    ],
+    "建议深入": [
+      "确认 `_refresh_panel()` 是否应改为调用 `self.refresh_action_labels()` 或显式在数据刷新后设置 `focus_index = 0`",
+      "评估 `watch_current_panel_focus` 是否需要在 Claude 面板加载完成时强制刷新箭头，以覆盖右侧已聚焦但 `focus_index` 尚未初始化的场景",
+      "考虑为 Claude 面板补充与 Vim/Zsh 面板一致的 `_register_action_entries` 封装，减少手动维护 focus 逻辑"
+    ]
+  }
 }
