@@ -1210,15 +1210,10 @@ source $ZSH/oh-my-zsh.sh
             backup_path = str(backup_path_obj)
             logger.info(f"Backup created at: {backup_path}")
 
-            # 重新构建 plugins 行（尽量保留原始格式）
-            # 策略：保留原始文本的结构，只替换插件列表部分
-            if is_multiline:
-                # 多行格式：尝试保留缩进和格式
-                # 简化处理：使用一致的缩进
-                plugins_str = "plugins=(\n    " + "\n    ".join(plugins) + "\n)"
-            else:
-                # 单行格式
-                plugins_str = f"plugins=({' '.join(plugins)})"
+            # 重新构建 plugins 行
+            # 策略：统一使用多行格式，每个插件一行，提高可读性
+            # 无论原格式是单行还是多行，都转换为统一的多行格式
+            plugins_str = "plugins=(\n    " + "\n    ".join(plugins) + "\n)"
 
             # 使用精确索引替换，避免改错其他地方
             if pos >= 0:
