@@ -6,7 +6,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from ..utils.logger import get_logger
 
@@ -946,6 +946,334 @@ class ZshManager:
                 "backup_path": ""
             }
 
+    def _parse_plugins_line(self, content: str) -> Tuple[str, List[str], bool, int]:
+        """
+        解析 .zshrc 文件中的 plugins=(...) 行。
+
+        支持单行格式（如 plugins=(git docker)）和多行格式（如 plugins=(\n  git\n  docker\n)）。
+        会跳过被注释的行，并正确处理行内注释。
+
+        Args:
+            content: .zshrc 文件内容
+
+        Returns:
+            Tuple[str, List[str], bool, int]: (原始匹配文本, 插件列表, 是否多行格式, 匹配位置)
+            如果未找到 plugins 行，返回 ('', [], False, -1)
+        """
+        try:
+            lines = content.split('\n')
+
+            # 查找未被注释的 plugins= 行
+            for i, line in enumerate(lines):
+                stripped = line.lstrip()
+                # 跳过空行和注释行
+                if not stripped or stripped.startswith('#'):
+                    continue
+
+                # 检查是否包含 plugins=
+                if 'plugins=' not in line:
+                    continue
+
+                # 检查行首是否有 plugins=（避免匹配变量赋值等）
+                if not stripped.startswith('plugins='):
+                    continue
+
+                # 找到有效的 plugins= 行，判断是单行还是多行
+                if '(' in line and ')' in line:
+                    # 单行格式: plugins=(git docker)
+                    start_idx = line.index('(')
+                    end_idx = line.index(')')
+                    plugins_part = line[start_idx+1:end_idx]
+
+                    # 移除行内注释（# 后面的内容）
+                    if '#' in plugins_part:
+                        plugins_part = plugins_part[:plugins_part.index('#')]
+
+                    # 分割插件名（同时过滤续行符，虽然单行中不常见但也要防护）
+                    plugins = [p.strip() for p in plugins_part.split() if p.strip() and p.strip() != '\\']
+                    original_text = line[line.index('plugins='):end_idx+1]
+
+                    # 计算在原始内容中的位置
+                    pos = content.find(line)
+
+                    logger.debug(f"Parsed single-line plugins format: {plugins}")
+                    return (original_text, plugins, False, pos)
+
+                elif '(' in line:
+                    # 多行格式开始: plugins=(
+                    # 需要找到对应的 )
+                    start_line = i
+                    plugins_lines = []
+                    bracket_count = line.count('(') - line.count(')')
+
+                    # 提取第一行的内容
+                    first_part = line[line.index('(')+1:]
+                    if '#' in first_part:
+                        first_part = first_part[:first_part.index('#')]
+                    # 移除续行符后再分割插件名
+                    first_part = first_part.rstrip('\\').strip()
+                    plugins_lines.extend([p.strip() for p in first_part.split() if p.strip() and p.strip() != '\\'])
+
+                    # 继续读取后续行直到找到 )
+                    for j in range(i+1, len(lines)):
+                        current_line = lines[j]
+                        stripped_line = current_line.lstrip()
+
+                        # 跳过注释行
+                        if stripped_line.startswith('#'):
+                            continue
+
+                        # 移除行内注释
+                        content_part = current_line
+                        if '#' in content_part:
+                            content_part = content_part[:content_part.index('#')]
+
+                        # 检查是否有结束括号
+                        if ')' in content_part:
+                            # 提取 ) 之前的内容
+                            end_part = content_part[:content_part.index(')')]
+                            # 移除续行符后再分割插件名
+                            end_part = end_part.rstrip('\\').strip()
+                            plugins_lines.extend([p.strip() for p in end_part.split() if p.strip() and p.strip() != '\\'])
+
+                            # 构建原始文本（从 plugins= 到 )）
+                            original_lines = lines[start_line:j+1]
+                            original_text = '\n'.join(original_lines)
+                            original_text = original_text[original_text.index('plugins='):original_text.index(')')+1]
+
+                            # 计算位置
+                            pos = content.find(original_text)
+
+                            logger.debug(f"Parsed multi-line plugins format: {plugins_lines}")
+                            return (original_text, plugins_lines, True, pos)
+
+                        # 提取当前行的插件名
+                        # 移除续行符后再分割插件名
+                        content_part = content_part.rstrip('\\').strip()
+                        plugins_lines.extend([p.strip() for p in content_part.split() if p.strip() and p.strip() != '\\'])
+
+            # 未找到 plugins 行
+            logger.debug("No plugins line found in content")
+            return ('', [], False, -1)
+
+        except Exception as exc:
+            logger.error(f"Error parsing plugins line: {exc}", exc_info=True)
+            return ('', [], False, -1)
+
+    async def _update_zshrc_plugins(
+        self, plugin_name: str, action: str = "add", progress_callback=None
+    ) -> dict:
+        """
+        更新 .zshrc 文件中的 plugins 列表。
+
+        Args:
+            plugin_name: 插件名称
+            action: "add" 或 "remove"
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str, "backup_path": str}
+        """
+        try:
+            import shutil
+            import time
+
+            zshrc_path = Path.home() / ".zshrc"
+            backup_path = ""
+
+            # 检查文件是否存在
+            if not zshrc_path.exists():
+                if action == "remove":
+                    # 文件不存在且是移除操作，直接返回成功
+                    logger.info(f"Plugin {plugin_name}: .zshrc does not exist, skip removal")
+                    return {
+                        "success": True,
+                        "error": "",
+                        "output": f"Plugin {plugin_name} not found in configuration (file does not exist)",
+                        "backup_path": ""
+                    }
+
+                # 文件不存在且是添加操作，创建基本 Oh-my-zsh 配置
+                if progress_callback:
+                    progress_callback("Creating .zshrc with basic Oh-my-zsh configuration...")
+
+                basic_config = f"""# Path to oh-my-zsh installation
+export ZSH="$HOME/.oh-my-zsh"
+
+# Plugins
+plugins=({plugin_name})
+
+# Load Oh-my-zsh
+source $ZSH/oh-my-zsh.sh
+"""
+                zshrc_path.write_text(basic_config, encoding="utf-8")
+                logger.info(f"Created .zshrc with plugin {plugin_name}")
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": f"Created .zshrc and added plugin {plugin_name}",
+                    "backup_path": ""
+                }
+
+            # 读取现有文件内容
+            if progress_callback:
+                progress_callback(f"Reading .zshrc...")
+
+            content = zshrc_path.read_text(encoding="utf-8")
+
+            # 解析现有 plugins 列表
+            original_text, plugins, is_multiline, pos = self._parse_plugins_line(content)
+
+            if not original_text:
+                # 文件中没有 plugins 行
+                if action == "remove":
+                    logger.info(f"Plugin {plugin_name}: no plugins line found, skip removal")
+                    return {
+                        "success": True,
+                        "error": "",
+                        "output": f"Plugin {plugin_name} not found in configuration (no plugins line)",
+                        "backup_path": ""
+                    }
+
+                # 添加操作：在文件末尾添加 plugins 行
+                if progress_callback:
+                    progress_callback(f"Adding plugins line to .zshrc...")
+
+                timestamp = int(time.time())
+                backup_path_obj = zshrc_path.parent / f".zshrc.backup.{timestamp}"
+                shutil.copy2(zshrc_path, backup_path_obj)
+                backup_path = str(backup_path_obj)
+                logger.info(f"Backup created at: {backup_path}")
+
+                new_content = content.rstrip() + f"\n\nplugins=({plugin_name})\n"
+                zshrc_path.write_text(new_content, encoding="utf-8")
+                logger.info(f"Added plugins line with {plugin_name}")
+
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": f"Added plugin {plugin_name} to .zshrc",
+                    "backup_path": backup_path
+                }
+
+            # 处理插件列表
+            if action == "add":
+                if plugin_name in plugins:
+                    # 幂等性：插件已存在
+                    logger.info(f"Plugin {plugin_name} already exists in plugins list")
+                    return {
+                        "success": True,
+                        "error": "",
+                        "output": f"Plugin {plugin_name} already configured",
+                        "backup_path": ""
+                    }
+
+                # 添加插件
+                plugins.append(plugin_name)
+                if progress_callback:
+                    progress_callback(f"Adding {plugin_name} to plugins list...")
+
+            elif action == "remove":
+                if plugin_name not in plugins:
+                    # 幂等性：插件不存在
+                    logger.info(f"Plugin {plugin_name} not found in plugins list")
+                    return {
+                        "success": True,
+                        "error": "",
+                        "output": f"Plugin {plugin_name} not found in configuration",
+                        "backup_path": ""
+                    }
+
+                # 移除插件
+                plugins.remove(plugin_name)
+                if progress_callback:
+                    progress_callback(f"Removing {plugin_name} from plugins list...")
+
+            else:
+                error_msg = f"Invalid action: {action}, must be 'add' or 'remove'"
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "output": "",
+                    "backup_path": ""
+                }
+
+            # 创建备份
+            timestamp = int(time.time())
+            backup_path_obj = zshrc_path.parent / f".zshrc.backup.{timestamp}"
+
+            if progress_callback:
+                progress_callback(f"Creating backup...")
+
+            shutil.copy2(zshrc_path, backup_path_obj)
+            backup_path = str(backup_path_obj)
+            logger.info(f"Backup created at: {backup_path}")
+
+            # 重新构建 plugins 行（尽量保留原始格式）
+            # 策略：保留原始文本的结构，只替换插件列表部分
+            if is_multiline:
+                # 多行格式：尝试保留缩进和格式
+                # 简化处理：使用一致的缩进
+                plugins_str = "plugins=(\n    " + "\n    ".join(plugins) + "\n)"
+            else:
+                # 单行格式
+                plugins_str = f"plugins=({' '.join(plugins)})"
+
+            # 使用精确索引替换，避免改错其他地方
+            if pos >= 0:
+                # 基于位置进行精确替换
+                new_content = content[:pos] + content[pos:].replace(original_text, plugins_str, 1)
+            else:
+                # 降级方案：使用单次替换
+                new_content = content.replace(original_text, plugins_str, 1)
+
+            # 写回文件
+            try:
+                if progress_callback:
+                    progress_callback(f"Updating .zshrc...")
+
+                zshrc_path.write_text(new_content, encoding="utf-8")
+                action_desc = "added to" if action == "add" else "removed from"
+                logger.info(f"Plugin {plugin_name} {action_desc} .zshrc successfully")
+
+                return {
+                    "success": True,
+                    "error": "",
+                    "output": f"Plugin {plugin_name} {action_desc} .zshrc",
+                    "backup_path": backup_path
+                }
+
+            except Exception as write_exc:
+                # 写入失败，从备份恢复
+                logger.error(f"Failed to write .zshrc: {write_exc}", exc_info=True)
+
+                if backup_path_obj.exists():
+                    try:
+                        if progress_callback:
+                            progress_callback("Write failed, restoring from backup...")
+
+                        shutil.copy2(backup_path_obj, zshrc_path)
+                        logger.info("Restored from backup successfully")
+                    except Exception as rollback_exc:
+                        logger.error(f"Rollback failed: {rollback_exc}", exc_info=True)
+
+                return {
+                    "success": False,
+                    "error": f"Failed to write .zshrc: {write_exc}",
+                    "output": "",
+                    "backup_path": backup_path
+                }
+
+        except Exception as exc:
+            logger.error(f"Failed to update zshrc plugins: {exc}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(exc),
+                "output": "",
+                "backup_path": ""
+            }
+
     def _prepare_migration_content(self, configs: List[ShellConfig], progress_callback) -> str:
         """
         准备迁移内容，包括头部注释和配置行。
@@ -1029,7 +1357,26 @@ class ZshManager:
                 progress_callback(f"Installing {name} via package manager...")
                 # 这里需要根据实际情况选择包管理器
                 cmd = ["sudo", "apt", "install", "-y", name]
-                return await self._run_command(cmd, progress_callback)
+                result = await self._run_command(cmd, progress_callback)
+
+                # 安装成功后自动激活插件
+                if result["success"]:
+                    progress_callback(f"Activating plugin {name}...")
+                    update_result = await self._update_zshrc_plugins(
+                        name, "add", progress_callback
+                    )
+
+                    if update_result["success"]:
+                        result["output"] += "\nPlugin activated in .zshrc"
+                        if update_result["backup_path"]:
+                            result["output"] += f"\nBackup: {update_result['backup_path']}"
+                    else:
+                        logger.warning(
+                            f"Plugin installed but activation failed: {update_result['error']}"
+                        )
+                        result["output"] += "\nWarning: Plugin installed but manual activation required"
+
+                return result
             else:
                 # 使用 git clone 安装
                 ohmyzsh_path = Path.home() / ".oh-my-zsh"
@@ -1037,10 +1384,30 @@ class ZshManager:
                 plugin_path = plugins_dir / name
 
                 if plugin_path.exists():
+                    # 插件已安装，但仍需确保在 .zshrc 中激活
+                    progress_callback(f"Plugin {name} already installed, checking activation...")
+                    update_result = await self._update_zshrc_plugins(
+                        name, "add", progress_callback
+                    )
+
+                    output_msg = f"Plugin {name} already installed"
+                    if update_result["success"]:
+                        if "already configured" in update_result["output"]:
+                            output_msg += " and activated"
+                        else:
+                            output_msg += "\nPlugin activated in .zshrc"
+                            if update_result["backup_path"]:
+                                output_msg += f"\nBackup: {update_result['backup_path']}"
+                    else:
+                        logger.warning(
+                            f"Plugin exists but activation failed: {update_result['error']}"
+                        )
+                        output_msg += "\nWarning: Manual activation required"
+
                     return {
                         "success": True,
                         "error": "",
-                        "output": f"Plugin {name} already installed",
+                        "output": output_msg,
                     }
 
                 # 确保 plugins 目录存在
@@ -1048,7 +1415,26 @@ class ZshManager:
 
                 progress_callback(f"Cloning {repo_url}...")
                 cmd = ["git", "clone", repo_url, str(plugin_path)]
-                return await self._run_command(cmd, progress_callback)
+                result = await self._run_command(cmd, progress_callback)
+
+                # 安装成功后自动激活插件
+                if result["success"]:
+                    progress_callback(f"Activating plugin {name}...")
+                    update_result = await self._update_zshrc_plugins(
+                        name, "add", progress_callback
+                    )
+
+                    if update_result["success"]:
+                        result["output"] += "\nPlugin activated in .zshrc"
+                        if update_result["backup_path"]:
+                            result["output"] += f"\nBackup: {update_result['backup_path']}"
+                    else:
+                        logger.warning(
+                            f"Plugin installed but activation failed: {update_result['error']}"
+                        )
+                        result["output"] += "\nWarning: Plugin installed but manual activation required"
+
+                return result
 
         except Exception as exc:
             logger.error(f"Failed to install plugin: {exc}", exc_info=True)
@@ -1077,17 +1463,53 @@ class ZshManager:
             if install_method == "package_manager":
                 # 使用包管理器卸载
                 cmd = ["sudo", "apt", "remove", "-y", name]
-                return await self._run_command(cmd, progress_callback)
+                result = await self._run_command(cmd, progress_callback)
+
+                # 卸载成功后自动从 .zshrc 移除
+                if result["success"]:
+                    progress_callback(f"Removing {name} from .zshrc...")
+                    update_result = await self._update_zshrc_plugins(
+                        name, "remove", progress_callback
+                    )
+
+                    if update_result["success"]:
+                        result["output"] += "\nPlugin removed from .zshrc"
+                        if update_result["backup_path"]:
+                            result["output"] += f"\nBackup: {update_result['backup_path']}"
+                    else:
+                        logger.warning(
+                            f"Plugin uninstalled but config removal failed: {update_result['error']}"
+                        )
+                        result["output"] += "\nWarning: Plugin uninstalled but manual config cleanup required"
+
+                return result
             else:
                 # 删除插件目录
                 ohmyzsh_path = Path.home() / ".oh-my-zsh"
                 plugin_path = ohmyzsh_path / "custom" / "plugins" / name
 
                 if not plugin_path.exists():
+                    # 插件目录不存在，但仍需从 .zshrc 移除配置
+                    progress_callback(f"Plugin {name} not installed, checking .zshrc...")
+                    update_result = await self._update_zshrc_plugins(
+                        name, "remove", progress_callback
+                    )
+
+                    output_msg = f"Plugin {name} not installed"
+                    if update_result["success"]:
+                        if "not found" not in update_result["output"]:
+                            output_msg += "\nPlugin removed from .zshrc"
+                            if update_result["backup_path"]:
+                                output_msg += f"\nBackup: {update_result['backup_path']}"
+                    else:
+                        logger.warning(
+                            f"Plugin not found but config removal failed: {update_result['error']}"
+                        )
+
                     return {
                         "success": True,
                         "error": "",
-                        "output": f"Plugin {name} not installed",
+                        "output": output_msg,
                     }
 
                 import shutil
@@ -1096,11 +1518,29 @@ class ZshManager:
                 shutil.rmtree(plugin_path)
 
                 logger.info(f"Plugin {name} uninstalled successfully")
+
+                # 卸载成功后自动从 .zshrc 移除
+                progress_callback(f"Removing {name} from .zshrc...")
+                update_result = await self._update_zshrc_plugins(
+                    name, "remove", progress_callback
+                )
+
+                success_msg = f"Plugin {name} uninstalled successfully"
+                if update_result["success"]:
+                    success_msg += "\nPlugin removed from .zshrc"
+                    if update_result["backup_path"]:
+                        success_msg += f"\nBackup: {update_result['backup_path']}"
+                else:
+                    logger.warning(
+                        f"Plugin uninstalled but config removal failed: {update_result['error']}"
+                    )
+                    success_msg += "\nWarning: Manual config cleanup required"
+
                 progress_callback("Plugin uninstalled successfully!")
                 return {
                     "success": True,
                     "error": "",
-                    "output": "Uninstalled successfully",
+                    "output": success_msg,
                 }
 
         except Exception as exc:
