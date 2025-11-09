@@ -1370,6 +1370,8 @@ source $ZSH/oh-my-zsh.sh
                         result["output"] += "\nPlugin activated in .zshrc"
                         if update_result["backup_path"]:
                             result["output"] += f"\nBackup: {update_result['backup_path']}"
+                        result["output"] += "\n\nTo activate the plugin, please restart your shell or run:"
+                        result["output"] += "\n  source ~/.zshrc"
                     else:
                         logger.warning(
                             f"Plugin installed but activation failed: {update_result['error']}"
@@ -1398,6 +1400,8 @@ source $ZSH/oh-my-zsh.sh
                             output_msg += "\nPlugin activated in .zshrc"
                             if update_result["backup_path"]:
                                 output_msg += f"\nBackup: {update_result['backup_path']}"
+                            output_msg += "\n\nTo activate the plugin, please restart your shell or run:"
+                            output_msg += "\n  source ~/.zshrc"
                     else:
                         logger.warning(
                             f"Plugin exists but activation failed: {update_result['error']}"
@@ -1428,6 +1432,8 @@ source $ZSH/oh-my-zsh.sh
                         result["output"] += "\nPlugin activated in .zshrc"
                         if update_result["backup_path"]:
                             result["output"] += f"\nBackup: {update_result['backup_path']}"
+                        result["output"] += "\n\nTo activate the plugin, please restart your shell or run:"
+                        result["output"] += "\n  source ~/.zshrc"
                     else:
                         logger.warning(
                             f"Plugin installed but activation failed: {update_result['error']}"
