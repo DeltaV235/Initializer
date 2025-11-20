@@ -12,5 +12,54 @@
     "timestamp": "2025-10-21T21:30:00+08:00",
     "description": "Claude Code & Codex Manager 最终审查",
     "status": "in_progress"
+  },
+  {
+    "task_marker": "20251107-143500-ZSH-CONFIG",
+    "conversation_id": "CONV-20251107-1435",
+    "timestamp": "2025-11-08T23:32:07+08:00",
+    "description": "Zsh 配置更新机制上下文收集",
+    "status": "in_progress"
+  },
+  {
+    "task_marker": "20251107-160000-ZSH-REVIEW",
+    "conversation_id": "CONV-20251107-1600",
+    "timestamp": "2025-11-09T00:55:00+08:00",
+    "description": "Zsh 插件自动激活功能代码审查",
+    "status": "in_progress"
+  },
+  {
+    "task_marker": "20251109-020000-ZSH-REVIEW-V2",
+    "conversation_id": "019a6493-52dc-71c2-a465-d97938f69a15",
+    "timestamp": "2025-11-09T02:00:00+08:00",
+    "description": "Zsh 插件自动激活功能第二次代码审查",
+    "status": "completed"
+  },
+  {
+    "task_marker": "20251109-030000-ZSH-REVIEW-V3",
+    "conversation_id": "019a649e-e754-71c2-b894-4315cb6c099f",
+    "timestamp": "2025-11-09T03:00:00+08:00",
+    "description": "Zsh 插件自动激活功能第三次代码审查（最终）",
+    "status": "completed"
+  },
+  {
+    "task_marker": "20251110-ZSH-TMUX-CONTEXT",
+    "conversation_id": "c1782117-3e5f-45ff-9210-7c51c5c216b6",
+    "timestamp": "2025-11-10T21:00:30.271617+08:00",
+    "description": "Zsh Manager 模块 + Tmux 功能上下文收集",
+    "status": "in_progress"
+  },
+  {
+    "task_marker": "20251119-ZSH-TMUX-REVIEW",
+    "conversation_id": "617fe2bd-8374-43e2-a267-226604be4d1f",
+    "timestamp": "2025-11-19T00:00:00+08:00",
+    "description": "zSH and Tmux Manager 代码审查",
+    "status": "in_progress"
+  },
+  {
+    "task_marker": "20251119-ZSH-TMUX-REVIEW-V2",
+    "conversation_id": "2e5b0907-c82a-429c-b809-d99c7452732a",
+    "timestamp": "2025-11-20T01:04:36.180331+08:00",
+    "description": "zSH and Tmux Manager 第二轮代码审查",
+    "status": "in_progress"
   }
 ]
