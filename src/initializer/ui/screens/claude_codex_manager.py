@@ -81,16 +81,17 @@ class ClaudeCodexManagementPanel(Widget):
             yield Static("Loading...", classes="loading-text")
 
     def on_mount(self) -> None:
-        """初始化面板并加载状态。"""
+        """初始化面板（等待外部调用 load_from_cache 或 force_reload）。"""
         logger.info("Mounting Claude Code & Codex management panel")
-        self._show_loading()
-        self._load_status()
 
     def _show_loading(self) -> None:
         """显示加载状态。"""
-        scroll_container = self.query_one("#claude-codex-panel-scroll")
-        scroll_container.remove_children()
-        scroll_container.mount(Static("Loading...", classes="loading-text"))
+        try:
+            scroll_container = self.query_one("#claude-codex-panel-scroll")
+            scroll_container.remove_children()
+            scroll_container.mount(Static("Loading...", classes="loading-text"))
+        except Exception as e:
+            logger.debug(f"Could not show loading state: {e}")
 
     @work(exclusive=True, thread=True)
     async def _load_status(self) -> None:
@@ -108,7 +109,26 @@ class ClaudeCodexManagementPanel(Widget):
             )
 
             self.is_loading = False
-            self.app.call_from_thread(self._refresh_panel)
+
+            # 保存到缓存并刷新面板
+            def update_ui():
+                # 保存到 SegmentStateManager（如果在 main_menu 中）
+                try:
+                    screen = self.app.screen
+                    if hasattr(screen, "segment_states"):
+                        cache_data = {
+                            "claude_info": self.claude_info,
+                            "codex_info": self.codex_info
+                        }
+                        screen.segment_states.finish_loading("claude_codex_management", cache_data)
+                        logger.debug("Saved Claude Codex status to cache")
+                except Exception as e:
+                    logger.debug(f"Could not save to cache: {e}")
+
+                # 刷新面板显示
+                self._refresh_panel()
+
+            self.app.call_from_thread(update_ui)
 
         except Exception as e:
             logger.error(f"Failed to load status: {e}")
@@ -117,22 +137,49 @@ class ClaudeCodexManagementPanel(Widget):
 
     def _show_error(self) -> None:
         """显示错误信息。"""
-        scroll_container = self.query_one("#claude-codex-panel-scroll")
-        scroll_container.remove_children()
-        with scroll_container:
-            scroll_container.mount(
-                Static(
-                    "Failed to load tool status. Please check logs.",
-                    classes="loading-text"
+        try:
+            scroll_container = self.query_one("#claude-codex-panel-scroll")
+            scroll_container.remove_children()
+            with scroll_container:
+                scroll_container.mount(
+                    Static(
+                        "Failed to load tool status. Please check logs.",
+                        classes="loading-text"
+                    )
                 )
-            )
+        except Exception as e:
+            logger.debug(f"Could not show error state: {e}")
+
+    def load_from_cache(self, cache_data: dict) -> None:
+        """从缓存恢复检测数据。
+
+        Args:
+            cache_data: 包含 claude_info 和 codex_info 的字典
+        """
+        logger.info("Loading Claude Codex status from cache")
+        self.claude_info = cache_data.get("claude_info")
+        self.codex_info = cache_data.get("codex_info")
+        self.is_loading = False
+        self._refresh_panel()
+
+    def force_reload(self) -> None:
+        """强制重新加载检测状态（手动刷新时调用）。"""
+        logger.info("Force reloading Claude Codex status")
+        self.is_loading = True
+        self._show_loading()
+        self._load_status()
 
     def _refresh_panel(self) -> None:
         """重新渲染面板内容。"""
         logger.debug("Refreshing panel content")
 
         # 清空现有内容
-        scroll_container = self.query_one("#claude-codex-panel-scroll")
+        try:
+            scroll_container = self.query_one("#claude-codex-panel-scroll")
+        except Exception as e:
+            logger.debug(f"Could not refresh panel: {e}")
+            return
+
         scroll_container.remove_children()
 
         # 清空 action entries
@@ -553,11 +600,30 @@ class ClaudeCodexManagementPanel(Widget):
         """
         if success:
             logger.info(f"{tool_name} {operation} completed successfully")
+
+            # 清除缓存并统一重新加载（如果在 main_menu 中）
+            try:
+                screen = self.app.screen
+                if hasattr(screen, "segment_states") and hasattr(screen, "_load_claude_codex_status"):
+                    # 在 main_menu 场景下，通过统一入口重新加载
+                    screen.segment_states.clear("claude_codex_management")
+                    logger.debug("Cleared claude_codex_management cache after operation")
+
+                    # 显示 loading 状态
+                    self.is_loading = True
+                    self._show_loading()
+
+                    # 启动统一的异步加载（通过 SegmentStateManager）
+                    screen.segment_states.start_loading("claude_codex_management")
+                    screen._load_claude_codex_status()
+                    return  # 统一入口已处理，直接返回
+            except Exception as e:
+                logger.debug(f"Could not use unified loading: {e}")
         else:
             logger.error(f"{tool_name} {operation} failed")
 
-        # 重新加载状态
-        logger.debug("Reloading tool status after operation")
+        # 独立 Screen 模式下，使用 Panel 自有的加载逻辑
+        logger.debug("Reloading tool status after operation (standalone mode)")
         self._load_status()
 
     def _toggle_expand(self, item_key: str) -> None:

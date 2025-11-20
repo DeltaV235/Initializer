@@ -217,6 +217,8 @@ class EventHandlers:
             panel = getattr(screen, "zsh_management_panel", None)
             if panel:
                 panel.action_refresh()
+        elif screen.selected_segment == "claude_codex_management":
+            screen.refresh_claude_codex()
 
     @staticmethod
     def action_homebrew(screen) -> None:
