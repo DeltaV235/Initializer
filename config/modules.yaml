@@ -86,7 +86,7 @@ modules:
       backup_created: "Existing config backed up to: {backup_path}"
   zsh_management:
     enabled: true
-    description: "Zsh and Oh-my-zsh installation and management"
+    description: "zSH and Tmux Manager"
     zsh:
       install_method: "system"
     ohmyzsh:
@@ -96,6 +96,13 @@ modules:
         - "https://raw.fastgit.org/ohmyzsh/ohmyzsh/master/tools/install.sh"
       config_path: "~/.oh-my-zsh"
       uninstall_command: "rm -rf ~/.oh-my-zsh ~/.zshrc*"
+    tmux:
+      package_name: "tmux"
+      oh_my_tmux:
+        repo: "https://github.com/gpakosz/.tmux.git"
+        config_files:
+          - ".tmux.conf"
+          - ".tmux.conf.local"
     plugins:
       - name: "zsh-autosuggestions"
         description: "Fish-like autosuggestions for Zsh"

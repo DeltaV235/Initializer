@@ -9,7 +9,7 @@ from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Label, Rule, Static
 
-from ...modules.zsh_manager import OhMyZshInfo, ZshInfo
+from ...modules.zsh_manager import OhMyZshInfo, OhMyTmuxInfo, TmuxInfo, ZshInfo
 from ...utils.logger import get_ui_logger
 
 logger = get_ui_logger("zsh_install_confirm")
@@ -87,11 +87,13 @@ class ZshInstallConfirm(ModalScreen[bool]):
 
     def __init__(
         self,
-        target: str,  # "zsh", "ohmyzsh", "plugin"
+        target: str,  # "zsh", "ohmyzsh", "tmux", "ohmytmux", "plugin"
         operation: str,  # "install", "uninstall"
         package_manager: str,
         zsh_info: Optional[ZshInfo] = None,
         ohmyzsh_info: Optional[OhMyZshInfo] = None,
+        tmux_info: Optional[TmuxInfo] = None,
+        ohmytmux_info: Optional[OhMyTmuxInfo] = None,
         plugin: Optional[dict] = None,
     ):
         super().__init__()
@@ -100,6 +102,8 @@ class ZshInstallConfirm(ModalScreen[bool]):
         self.package_manager = package_manager
         self.zsh_info = zsh_info
         self.ohmyzsh_info = ohmyzsh_info
+        self.tmux_info = tmux_info
+        self.ohmytmux_info = ohmytmux_info
         self.plugin = plugin
 
     def compose(self) -> ComposeResult:
@@ -110,6 +114,10 @@ class ZshInstallConfirm(ModalScreen[bool]):
                 ("zsh", "uninstall"): "⚠️ Confirm Zsh Removal",
                 ("ohmyzsh", "install"): "⚠️ Confirm Oh-my-zsh Installation",
                 ("ohmyzsh", "uninstall"): "⚠️ Confirm Oh-my-zsh Removal",
+                ("tmux", "install"): "⚠️ Confirm Tmux Installation",
+                ("tmux", "uninstall"): "⚠️ Confirm Tmux Removal",
+                ("ohmytmux", "install"): "⚠️ Confirm oh-my-tmux Installation",
+                ("ohmytmux", "uninstall"): "⚠️ Confirm oh-my-tmux Removal",
                 ("plugin", "install"): "⚠️ Confirm Plugin Installation",
                 ("plugin", "uninstall"): "⚠️ Confirm Plugin Removal",
             }
@@ -227,6 +235,103 @@ class ZshInstallConfirm(ModalScreen[bool]):
                         )
                         yield Static(
                             "⚠️  The directory will be renamed with a .removed timestamp for rollback.",
+                            classes="note-text",
+                        )
+
+                elif self.target == "tmux":
+                    if self.operation == "install":
+                        yield Static("This will install:", classes="info-text")
+                        yield Static(
+                            f"  • Tmux (via {self.package_manager})\n"
+                            "  • Version from system repository",
+                            classes="action-list",
+                        )
+                        # Display specific command
+                        if self.package_manager in ["apt", "apt-get"]:
+                            cmd = "sudo apt install -y tmux"
+                        elif self.package_manager == "dnf":
+                            cmd = "sudo dnf install -y tmux"
+                        elif self.package_manager == "yum":
+                            cmd = "sudo yum install -y tmux"
+                        elif self.package_manager == "pacman":
+                            cmd = "sudo pacman -S --noconfirm tmux"
+                        elif self.package_manager == "zypper":
+                            cmd = "sudo zypper install -y tmux"
+                        elif self.package_manager == "brew":
+                            cmd = "brew install tmux"
+                        else:
+                            cmd = f"Install tmux using your system's package manager ({self.package_manager})"
+                        yield Static(
+                            f"Command: {cmd}",
+                            classes="action-list",
+                        )
+                        yield Static(
+                            "⚠️  Note: Tmux is a terminal multiplexer that lets you switch easily between several programs in one terminal.",
+                            classes="note-text",
+                        )
+                    else:  # uninstall
+                        yield Static("This will remove:", classes="info-text")
+                        yield Static(
+                            f"  • Tmux package via {self.package_manager}\n"
+                            "  • Related binaries installed by the package manager",
+                            classes="action-list",
+                        )
+                        # Display specific command
+                        if self.package_manager in ["apt", "apt-get"]:
+                            cmd = "sudo apt remove -y tmux"
+                        elif self.package_manager == "dnf":
+                            cmd = "sudo dnf remove -y tmux"
+                        elif self.package_manager == "yum":
+                            cmd = "sudo yum remove -y tmux"
+                        elif self.package_manager == "pacman":
+                            cmd = "sudo pacman -R --noconfirm tmux"
+                        elif self.package_manager == "zypper":
+                            cmd = "sudo zypper remove -y tmux"
+                        elif self.package_manager == "brew":
+                            cmd = "brew uninstall tmux"
+                        else:
+                            cmd = f"Uninstall tmux using your system's package manager ({self.package_manager})"
+                        yield Static(
+                            f"Command: {cmd}",
+                            classes="action-list",
+                        )
+                        yield Static(
+                            "⚠️  User configuration in ~/.tmux.conf will not be touched.",
+                            classes="note-text",
+                        )
+
+                elif self.target == "ohmytmux":
+                    if self.operation == "install":
+                        yield Static("This will install:", classes="info-text")
+                        yield Static(
+                            "  • oh-my-tmux configuration framework\n"
+                            "  • Starter template from GitHub",
+                            classes="action-list",
+                        )
+                        # Display specific command
+                        yield Static(
+                            "Command: git clone https://github.com/gpakosz/.tmux.git ~/.tmux",
+                            classes="action-list",
+                        )
+                        yield Static(
+                            "⚠️  Existing .tmux directory and .tmux.conf will be backed up with a timestamp.",
+                            classes="note-text",
+                        )
+                    else:  # uninstall
+                        yield Static("This will remove:", classes="info-text")
+                        yield Static(
+                            "  • oh-my-tmux configuration directory (~/.tmux)\n"
+                            "  • Symbolic link (~/.tmux.conf)\n"
+                            "  • Local configuration (~/.tmux.conf.local)",
+                            classes="action-list",
+                        )
+                        # Display specific command
+                        yield Static(
+                            "Command: rm -rf ~/.tmux ~/.tmux.conf ~/.tmux.conf.local",
+                            classes="action-list",
+                        )
+                        yield Static(
+                            "⚠️  All oh-my-tmux files will be permanently removed.",
                             classes="note-text",
                         )
 

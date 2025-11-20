@@ -60,6 +60,24 @@ class ShellConfig:
     selected: bool = True
 
 
+@dataclass
+class TmuxInfo:
+    """Tmux 安装信息。"""
+
+    installed: bool = False
+    version: Optional[str] = None
+    path: Optional[str] = None
+
+
+@dataclass
+class OhMyTmuxInfo:
+    """Oh-my-tmux 安装信息。"""
+
+    installed: bool = False
+    config_path: Optional[str] = None
+    repo_path: Optional[str] = None
+
+
 class ZshManager:
     """Manager for Zsh and Oh-my-zsh installation and configuration."""
 
@@ -177,6 +195,84 @@ class ZshManager:
         except Exception as exc:
             logger.error(f"Failed to detect Oh-my-zsh: {exc}", exc_info=True)
             return OhMyZshInfo(installed=False)
+
+    @staticmethod
+    async def detect_tmux() -> TmuxInfo:
+        """
+        检测 Tmux 的安装状态和版本。
+
+        Returns:
+            TmuxInfo: Tmux 安装信息
+        """
+        try:
+            # 检查 tmux 是否存在
+            result = subprocess.run(
+                ["which", "tmux"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                logger.debug("Tmux not found in PATH")
+                return TmuxInfo(installed=False)
+
+            tmux_path = result.stdout.strip()
+            logger.debug(f"Tmux found at: {tmux_path}")
+
+            # 获取版本信息 (tmux -V 输出格式: "tmux 3.2a")
+            version_result = subprocess.run(
+                ["tmux", "-V"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            version = None
+            if version_result.returncode == 0:
+                # 解析版本号
+                output = version_result.stdout.strip()
+                parts = output.split()
+                if len(parts) >= 2:
+                    version = parts[1]
+
+            logger.info(f"Detected Tmux: version={version}, path={tmux_path}")
+            return TmuxInfo(installed=True, version=version, path=tmux_path)
+
+        except subprocess.TimeoutExpired:
+            logger.error("Tmux detection timed out")
+            return TmuxInfo(installed=False)
+        except Exception as exc:
+            logger.error(f"Failed to detect Tmux: {exc}", exc_info=True)
+            return TmuxInfo(installed=False)
+
+    @staticmethod
+    async def detect_ohmytmux() -> OhMyTmuxInfo:
+        """
+        检测 oh-my-tmux 的安装状态。
+
+        Returns:
+            OhMyTmuxInfo: oh-my-tmux 安装信息
+        """
+        try:
+            # 检查 ~/.tmux/.tmux.conf 是否存在
+            repo_path = Path.home() / ".tmux"
+            config_path = repo_path / ".tmux.conf"
+
+            if not config_path.exists():
+                logger.debug("oh-my-tmux not found")
+                return OhMyTmuxInfo(installed=False)
+
+            logger.info(f"Detected oh-my-tmux at: {repo_path}")
+            return OhMyTmuxInfo(
+                installed=True,
+                config_path=str(config_path),
+                repo_path=str(repo_path),
+            )
+
+        except Exception as exc:
+            logger.error(f"Failed to detect oh-my-tmux: {exc}", exc_info=True)
+            return OhMyTmuxInfo(installed=False)
 
     @staticmethod
     async def get_current_shell() -> str:
@@ -1546,6 +1642,238 @@ source $ZSH/oh-my-zsh.sh
 
         except Exception as exc:
             logger.error(f"Failed to uninstall plugin: {exc}", exc_info=True)
+            return {"success": False, "error": str(exc), "output": ""}
+
+    async def install_tmux(
+        self, progress_callback: Callable[[str], None]
+    ) -> dict:
+        """
+        通过包管理器安装 Tmux。
+
+        Args:
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str}
+        """
+        try:
+            logger.info("Starting Tmux installation")
+            progress_callback("Detecting package manager...")
+
+            # 检测包管理器
+            from .package_manager import PackageManager
+
+            pkg_manager = await PackageManager.detect_package_manager()
+
+            if not pkg_manager:
+                error_msg = "No supported package manager found"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            progress_callback(f"Using package manager: {pkg_manager}")
+
+            # 安装 tmux
+            if pkg_manager in ["apt", "apt-get"]:
+                cmd = ["sudo", pkg_manager, "install", "-y", "tmux"]
+            elif pkg_manager == "yum":
+                cmd = ["sudo", "yum", "install", "-y", "tmux"]
+            elif pkg_manager == "dnf":
+                cmd = ["sudo", "dnf", "install", "-y", "tmux"]
+            else:
+                error_msg = f"Unsupported package manager: {pkg_manager}"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            return await self._run_command(cmd, progress_callback, timeout=300)
+
+        except Exception as exc:
+            logger.error(f"Tmux installation failed: {exc}", exc_info=True)
+            return {"success": False, "error": str(exc), "output": ""}
+
+    async def uninstall_tmux(
+        self, progress_callback: Callable[[str], None]
+    ) -> dict:
+        """
+        通过包管理器卸载 Tmux。
+
+        Args:
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str}
+        """
+        try:
+            logger.info("Starting Tmux uninstallation")
+            progress_callback("Detecting package manager...")
+
+            from .package_manager import PackageManager
+
+            pkg_manager = await PackageManager.detect_package_manager()
+
+            if not pkg_manager:
+                error_msg = "No supported package manager found"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            progress_callback(f"Using package manager: {pkg_manager}")
+
+            # 卸载 tmux
+            if pkg_manager in ["apt", "apt-get"]:
+                cmd = ["sudo", pkg_manager, "remove", "-y", "tmux"]
+            elif pkg_manager == "yum":
+                cmd = ["sudo", "yum", "remove", "-y", "tmux"]
+            elif pkg_manager == "dnf":
+                cmd = ["sudo", "dnf", "remove", "-y", "tmux"]
+            else:
+                error_msg = f"Unsupported package manager: {pkg_manager}"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            return await self._run_command(cmd, progress_callback, timeout=300)
+
+        except Exception as exc:
+            logger.error(f"Tmux uninstallation failed: {exc}", exc_info=True)
+            return {"success": False, "error": str(exc), "output": ""}
+
+    async def install_ohmytmux(
+        self, progress_callback: Callable[[str], None]
+    ) -> dict:
+        """
+        安装 oh-my-tmux 配置框架。
+
+        Args:
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str}
+        """
+        try:
+            import shutil
+            import time
+
+            logger.info("Starting oh-my-tmux installation")
+
+            # 从配置读取 oh-my-tmux 设置
+            modules_config = self.config_manager.get_modules_config()
+            zsh_config = modules_config.get("zsh_management", {})
+            tmux_config = zsh_config.get("tmux", {})
+            ohmytmux_config = tmux_config.get("oh_my_tmux", {})
+
+            # 获取仓库地址和配置文件列表
+            repo_url = ohmytmux_config.get("repo", "https://github.com/gpakosz/.tmux.git")
+            config_files = ohmytmux_config.get("config_files", [".tmux.conf", ".tmux.conf.local"])
+
+            logger.debug(f"Using repo: {repo_url}")
+            logger.debug(f"Config files: {config_files}")
+
+            # 检查 git 是否安装
+            git_check = subprocess.run(["which", "git"], capture_output=True)
+            if git_check.returncode != 0:
+                error_msg = "Git is not installed. Please install git first."
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            progress_callback("Git found, proceeding with installation...")
+
+            # 检查目标目录是否已存在
+            tmux_dir = Path.home() / ".tmux"
+            if tmux_dir.exists():
+                backup_path = Path.home() / f".tmux.backup.{int(time.time())}"
+                progress_callback(f"Backing up existing .tmux to {backup_path.name}...")
+                shutil.move(str(tmux_dir), str(backup_path))
+                logger.info(f"Backup created: {backup_path}")
+
+            # 克隆仓库
+            progress_callback(f"Cloning oh-my-tmux repository from {repo_url}...")
+            clone_cmd = [
+                "git",
+                "clone",
+                repo_url,
+                str(tmux_dir),
+            ]
+            clone_result = await self._run_command(
+                clone_cmd, progress_callback, timeout=120
+            )
+
+            if not clone_result["success"]:
+                return clone_result
+
+            # 创建符号链接
+            progress_callback("Creating symbolic link for .tmux.conf...")
+            config_src = tmux_dir / ".tmux.conf"
+            config_dst = Path.home() / ".tmux.conf"
+
+            if config_dst.exists() or config_dst.is_symlink():
+                backup_config = Path.home() / f".tmux.conf.backup.{int(time.time())}"
+                shutil.move(str(config_dst), str(backup_config))
+                logger.info(f"Backup existing .tmux.conf: {backup_config}")
+
+            config_dst.symlink_to(config_src)
+            progress_callback("Symbolic link created successfully.")
+
+            # 复制本地配置文件
+            progress_callback("Copying local configuration file...")
+            local_config_src = tmux_dir / ".tmux.conf.local"
+            local_config_dst = Path.home() / ".tmux.conf.local"
+
+            if not local_config_dst.exists():
+                shutil.copy(str(local_config_src), str(local_config_dst))
+                progress_callback("Local configuration file copied.")
+
+            progress_callback("oh-my-tmux installed successfully!")
+            logger.info("oh-my-tmux installation completed")
+
+            return {"success": True, "error": "", "output": "Installation completed"}
+
+        except Exception as exc:
+            logger.error(f"oh-my-tmux installation failed: {exc}", exc_info=True)
+            return {"success": False, "error": str(exc), "output": ""}
+
+    async def uninstall_ohmytmux(
+        self, progress_callback: Callable[[str], None]
+    ) -> dict:
+        """
+        卸载 oh-my-tmux 配置框架。
+
+        Args:
+            progress_callback: 进度回调函数
+
+        Returns:
+            dict: {"success": bool, "error": str, "output": str}
+        """
+        try:
+            import shutil
+
+            logger.info("Starting oh-my-tmux uninstallation")
+
+            # 删除仓库目录
+            tmux_dir = Path.home() / ".tmux"
+            if tmux_dir.exists():
+                progress_callback("Removing oh-my-tmux repository...")
+                shutil.rmtree(str(tmux_dir))
+                logger.info("Repository removed")
+
+            # 删除符号链接
+            config_link = Path.home() / ".tmux.conf"
+            if config_link.is_symlink():
+                progress_callback("Removing .tmux.conf symbolic link...")
+                config_link.unlink()
+                logger.info("Symbolic link removed")
+
+            # 删除本地配置文件
+            local_config = Path.home() / ".tmux.conf.local"
+            if local_config.exists():
+                progress_callback("Removing .tmux.conf.local...")
+                local_config.unlink()
+                logger.info("Local config removed")
+
+            progress_callback("oh-my-tmux uninstalled successfully!")
+            logger.info("oh-my-tmux uninstallation completed")
+
+            return {"success": True, "error": "", "output": "Uninstallation completed"}
+
+        except Exception as exc:
+            logger.error(f"oh-my-tmux uninstallation failed: {exc}", exc_info=True)
             return {"success": False, "error": str(exc), "output": ""}
 
     async def _run_command(

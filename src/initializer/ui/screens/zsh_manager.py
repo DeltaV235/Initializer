@@ -12,7 +12,11 @@ from textual.widgets import Button, Label, Rule, Static
 
 from ...config_manager import ConfigManager
 from ...modules.package_manager import PackageManagerDetector
-from ...modules.zsh_manager import ZshManager
+from ...modules.zsh_manager import (
+    OhMyTmuxInfo,
+    TmuxInfo,
+    ZshManager,
+)
 from ...utils.logger import get_ui_logger
 
 logger = get_ui_logger("zsh_management")
@@ -54,6 +58,8 @@ class ZshManagementPanel(Widget):
 
     zsh_info = reactive(None)
     ohmyzsh_info = reactive(None)
+    tmux_info = reactive(None)
+    ohmytmux_info = reactive(None)
     current_shell = reactive("")
     available_shells = reactive([])
     plugin_status = reactive([])
@@ -102,6 +108,12 @@ class ZshManagementPanel(Widget):
 
             self.ohmyzsh_info = await ZshManager.detect_ohmyzsh()
             logger.debug(f"Oh-my-zsh info: {self.ohmyzsh_info}")
+
+            self.tmux_info = await ZshManager.detect_tmux()
+            logger.debug(f"Tmux info: {self.tmux_info}")
+
+            self.ohmytmux_info = await ZshManager.detect_ohmytmux()
+            logger.debug(f"oh-my-tmux info: {self.ohmytmux_info}")
 
             self.current_shell = await ZshManager.get_current_shell()
             logger.debug(f"Current shell: {self.current_shell}")
@@ -181,7 +193,11 @@ class ZshManagementPanel(Widget):
                 'install_zsh': 'uninstall_zsh',
                 'uninstall_zsh': 'install_zsh',
                 'install_ohmyzsh': 'uninstall_ohmyzsh',
-                'uninstall_ohmyzsh': 'install_ohmyzsh'
+                'uninstall_ohmyzsh': 'install_ohmyzsh',
+                'install_tmux': 'uninstall_tmux',
+                'uninstall_tmux': 'install_tmux',
+                'install_ohmytmux': 'uninstall_ohmytmux',
+                'uninstall_ohmytmux': 'install_ohmytmux'
             }
 
             # 首先尝试精确匹配
@@ -332,6 +348,18 @@ class ZshManagementPanel(Widget):
             self._open_ohmyzsh_confirm("install")
         elif action == "uninstall_ohmyzsh":
             self._open_ohmyzsh_confirm("uninstall")
+
+        # Tmux 安装/卸载
+        elif action == "install_tmux":
+            self._open_tmux_confirm("install")
+        elif action == "uninstall_tmux":
+            self._open_tmux_confirm("uninstall")
+
+        # oh-my-tmux 安装/卸载
+        elif action == "install_ohmytmux":
+            self._open_ohmytmux_confirm("install")
+        elif action == "uninstall_ohmytmux":
+            self._open_ohmytmux_confirm("uninstall")
 
         # 插件管理（通过 modal）
         elif action.startswith("manage_plugin:"):
@@ -524,6 +552,107 @@ class ZshManagementPanel(Widget):
                     }
                 )
 
+            # Section 3.5: Tmux
+            container.mount(Rule())
+            container.mount(Label("Tmux", classes="section-header"))
+
+            if self.tmux_info:
+                # Tmux 状态
+                if self.tmux_info.installed:
+                    version_str = f"v{self.tmux_info.version}" if self.tmux_info.version else "Unknown Version"
+                    container.mount(
+                        Static(
+                            f"Status: [green]Installed[/green] ({version_str})",
+                            classes="zsh-info-line",
+                        )
+                    )
+
+                    # Uninstall Tmux action
+                    widget = Static("", classes="zsh-action")
+                    container.mount(widget)
+                    action_entries.append(
+                        {
+                            "label": "Uninstall Tmux",
+                            "action": "uninstall_tmux",
+                            "widget": widget,
+                        }
+                    )
+                else:
+                    container.mount(
+                        Static("Status: [yellow]Not Installed[/yellow]", classes="zsh-info-line")
+                    )
+
+                    # Install Tmux action
+                    widget = Static("", classes="zsh-action")
+                    container.mount(widget)
+                    action_entries.append(
+                        {
+                            "label": "Install Tmux",
+                            "action": "install_tmux",
+                            "widget": widget,
+                        }
+                    )
+
+                # oh-my-tmux 状态
+                container.mount(Static("", classes="zsh-info-line"))  # 空行分隔
+                if self.ohmytmux_info:
+                    if self.ohmytmux_info.installed:
+                        container.mount(
+                            Static(
+                                "oh-my-tmux: [green]Installed[/green]",
+                                classes="zsh-info-line",
+                            )
+                        )
+                        if self.ohmytmux_info.config_path:
+                            container.mount(
+                                Static(
+                                    f"Config: {self.ohmytmux_info.config_path}",
+                                    classes="zsh-info-line zsh-info-secondary",
+                                )
+                            )
+
+                        # Uninstall oh-my-tmux action
+                        widget = Static("", classes="zsh-action")
+                        container.mount(widget)
+                        action_entries.append(
+                            {
+                                "label": "Uninstall oh-my-tmux",
+                                "action": "uninstall_ohmytmux",
+                                "widget": widget,
+                            }
+                        )
+                    else:
+                        container.mount(
+                            Static(
+                                "oh-my-tmux: [yellow]Not Installed[/yellow]",
+                                classes="zsh-info-line",
+                            )
+                        )
+
+                        # Install oh-my-tmux action (only if Tmux is installed)
+                        if self.tmux_info.installed:
+                            widget = Static("", classes="zsh-action")
+                            container.mount(widget)
+                            action_entries.append(
+                                {
+                                    "label": "Install oh-my-tmux",
+                                    "action": "install_ohmytmux",
+                                    "widget": widget,
+                                }
+                            )
+                        else:
+                            # Show disabled message when Tmux not installed
+                            container.mount(
+                                Static(
+                                    "[dim]Requires Tmux to be installed first[/dim]",
+                                    classes="zsh-info-line zsh-info-secondary",
+                                )
+                            )
+            else:
+                container.mount(
+                    Static("Status: [red]Error checking status[/red]", classes="zsh-info-line")
+                )
+
             container.mount(Rule())
 
             # Section 4: Plugins
@@ -686,6 +815,44 @@ class ZshManagementPanel(Widget):
             zsh_info=self.zsh_info,
             ohmyzsh_info=self.ohmyzsh_info,
             plugin=plugin,
+        )
+        self.app.push_screen(modal, handle_confirmation)
+
+    def _open_tmux_confirm(self, operation: str) -> None:
+        """打开 Tmux 安装/卸载确认弹窗。"""
+        from .zsh_install_confirm import ZshInstallConfirm
+
+        logger.info(f"Opening Tmux {operation} confirmation")
+
+        def handle_confirmation(confirmed: bool) -> None:
+            if confirmed:
+                self._execute_tmux_operation(operation)
+
+        modal = ZshInstallConfirm(
+            target="tmux",
+            operation=operation,
+            package_manager=self.primary_pm.name if self.primary_pm else "unknown",
+            tmux_info=self.tmux_info,
+            ohmytmux_info=self.ohmytmux_info,
+        )
+        self.app.push_screen(modal, handle_confirmation)
+
+    def _open_ohmytmux_confirm(self, operation: str) -> None:
+        """打开 oh-my-tmux 安装/卸载确认弹窗。"""
+        from .zsh_install_confirm import ZshInstallConfirm
+
+        logger.info(f"Opening oh-my-tmux {operation} confirmation")
+
+        def handle_confirmation(confirmed: bool) -> None:
+            if confirmed:
+                self._execute_ohmytmux_operation(operation)
+
+        modal = ZshInstallConfirm(
+            target="ohmytmux",
+            operation=operation,
+            package_manager=self.primary_pm.name if self.primary_pm else "unknown",
+            tmux_info=self.tmux_info,
+            ohmytmux_info=self.ohmytmux_info,
         )
         self.app.push_screen(modal, handle_confirmation)
 
@@ -917,6 +1084,60 @@ class ZshManagementPanel(Widget):
             package_manager=None,
             zsh_manager=self.zsh_manager,
             plugin=plugin,
+            shell_path=None,
+        )
+        self.app.push_screen(modal, handle_completion)
+
+    def _execute_tmux_operation(self, operation: str) -> None:
+        """打开 Tmux 安装/卸载进度弹窗并在完成后刷新状态。"""
+        from .zsh_install_progress import ZshInstallProgress
+
+        logger.info(f"Executing Tmux {operation}")
+
+        # 保存当前的 action
+        self._save_pending_action()
+
+        def handle_completion(result: dict) -> None:
+            logger.info(f"Tmux {operation} completed: {result}")
+            self.is_loading = True
+            self._show_loading()
+            self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
+
+        modal = ZshInstallProgress(
+            target="tmux",
+            operation=operation,
+            package_manager=self.primary_pm.name if self.primary_pm else "unknown",
+            zsh_manager=self.zsh_manager,
+            plugin=None,
+            shell_path=None,
+        )
+        self.app.push_screen(modal, handle_completion)
+
+    def _execute_ohmytmux_operation(self, operation: str) -> None:
+        """打开 oh-my-tmux 安装/卸载进度弹窗并在完成后刷新状态。"""
+        from .zsh_install_progress import ZshInstallProgress
+
+        logger.info(f"Executing oh-my-tmux {operation}")
+
+        # 保存当前的 action
+        self._save_pending_action()
+
+        def handle_completion(result: dict) -> None:
+            logger.info(f"oh-my-tmux {operation} completed: {result}")
+            self.is_loading = True
+            self._show_loading()
+            self._load_zsh_status()
+            # 恢复焦点（通过 pending_focus_action 机制自动处理）
+            self._restore_panel_focus()
+
+        modal = ZshInstallProgress(
+            target="ohmytmux",
+            operation=operation,
+            package_manager=None,
+            zsh_manager=self.zsh_manager,
+            plugin=None,
             shell_path=None,
         )
         self.app.push_screen(modal, handle_completion)

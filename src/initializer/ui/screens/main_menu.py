@@ -68,7 +68,7 @@ class MainMenuScreen(Screen):
         {"id": "app_install", "name": "Application Manager"},
         {"id": "homebrew", "name": "Homebrew"},
         {"id": "vim_management", "name": "Vim Management"},
-        {"id": "zsh_management", "name": "Zsh Manager"},
+        {"id": "zsh_management", "name": "zSH and Tmux Manager"},
         {"id": "claude_codex_management", "name": "Claude & Codex"},
         {"id": "user_management", "name": "User Management"},
         {"id": "settings", "name": "Settings"},

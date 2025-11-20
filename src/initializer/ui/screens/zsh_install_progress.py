@@ -108,6 +108,10 @@ class ZshInstallProgress(ModalScreen[dict]):
                 ("zsh", "uninstall"): "Uninstalling Zsh",
                 ("ohmyzsh", "install"): "Installing Oh-my-zsh",
                 ("ohmyzsh", "uninstall"): "Uninstalling Oh-my-zsh",
+                ("tmux", "install"): "Installing Tmux",
+                ("tmux", "uninstall"): "Uninstalling Tmux",
+                ("ohmytmux", "install"): "Installing oh-my-tmux",
+                ("ohmytmux", "uninstall"): "Uninstalling oh-my-tmux",
                 ("plugin", "install"): "Installing Plugin",
                 ("plugin", "uninstall"): "Uninstalling Plugin",
                 ("shell", "change"): "Changing Default Shell",
@@ -260,6 +264,18 @@ class ZshInstallProgress(ModalScreen[dict]):
                 result = await self.zsh_manager.migrate_shell_configs(
                     self.configs, progress_callback=progress_callback
                 )
+
+            elif self.target == "tmux":
+                if self.operation == "install":
+                    result = await self.zsh_manager.install_tmux(progress_callback)
+                else:  # uninstall
+                    result = await self.zsh_manager.uninstall_tmux(progress_callback)
+
+            elif self.target == "ohmytmux":
+                if self.operation == "install":
+                    result = await self.zsh_manager.install_ohmytmux(progress_callback)
+                else:  # uninstall
+                    result = await self.zsh_manager.uninstall_ohmytmux(progress_callback)
 
             # 更新状态文本
             if result and result.get("success"):
