@@ -1755,8 +1755,16 @@ source $ZSH/oh-my-zsh.sh
 
             # 从配置读取 oh-my-tmux 设置
             modules_config = self.config_manager.get_modules_config()
-            zsh_config = modules_config.get("zsh_management", {})
-            tmux_config = zsh_config.get("tmux", {})
+            zsh_config = modules_config.get("zsh_management")
+
+            # 检查模块是否启用
+            if not zsh_config or not zsh_config.enabled:
+                error_msg = "Zsh management module is not enabled in configuration"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg, "output": ""}
+
+            # 从 settings 中获取嵌套配置
+            tmux_config = zsh_config.settings.get("tmux", {})
             ohmytmux_config = tmux_config.get("oh_my_tmux", {})
 
             # 获取仓库地址和配置文件列表
