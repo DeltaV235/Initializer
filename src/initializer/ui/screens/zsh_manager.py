@@ -233,6 +233,7 @@ class ZshManagementPanel(Widget):
             self.focus_index = 0 if entries else None
 
         self._refresh_action_labels()
+        self._scroll_focus_into_view()
         self._notify_help_update()
 
     def _refresh_action_labels(self) -> None:
@@ -298,7 +299,18 @@ class ZshManagementPanel(Widget):
             self.focus_index = max(0, self.focus_index - 1)
 
         self._refresh_action_labels()
+        self._scroll_focus_into_view()
         self._notify_help_update()
+
+    def _scroll_focus_into_view(self) -> None:
+        """确保当前焦点条目在可视区域内。"""
+        try:
+            entry = self._current_action_entry()
+            widget = entry.get("widget") if entry else None
+            if widget:
+                widget.scroll_visible(animate=False)
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"Scroll to focus failed: {e}")
 
     def _current_action_entry(self) -> Optional[dict]:
         if self.focus_index is None:
