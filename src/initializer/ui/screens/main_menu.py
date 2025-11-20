@@ -304,7 +304,26 @@ class MainMenuScreen(Screen):
         self.segment_states.clear("system_info")
         if self.selected_segment == "system_info":
             self.update_settings_panel()
-    
+
+    def refresh_claude_codex(self) -> None:
+        """手动刷新 Claude Codex 检测状态（R键触发）。"""
+        logger.info("Manually refreshing Claude Codex status")
+
+        # 清除 SegmentStateManager 缓存
+        self.segment_states.clear("claude_codex_management")
+
+        # 如果当前在 claude_codex_management segment，统一通过 SegmentStateManager 重新加载
+        if self.selected_segment == "claude_codex_management":
+            panel = self.claude_codex_management_panel
+            if panel:
+                # 显示 loading 状态
+                panel.is_loading = True
+                panel._show_loading()
+
+                # 启动统一的异步加载（通过 SegmentStateManager）
+                self.segment_states.start_loading("claude_codex_management")
+                self._load_claude_codex_status()
+
     def update_settings_panel(self) -> None:
         """Update the settings panel based on selected segment."""
         try:
@@ -476,7 +495,50 @@ class MainMenuScreen(Screen):
                     self.refresh()
 
             self.app.call_from_thread(update_error)
-    
+
+    @work(exclusive=True, thread=True)
+    async def _load_claude_codex_status(self) -> None:
+        """异步加载 Claude Code 和 Codex 检测状态。"""
+        try:
+            from ...modules.claude_codex_manager import ClaudeCodexManager
+
+            # 并行检测两个工具（在后台线程执行）
+            claude_info = await ClaudeCodexManager.detect_claude_code()
+            codex_info = await ClaudeCodexManager.detect_codex()
+
+            logger.info(
+                f"Claude Codex status loaded: Claude={claude_info.installed}, "
+                f"Codex={codex_info.installed}"
+            )
+
+            # 准备缓存数据
+            cache_data = {
+                "claude_info": claude_info,
+                "codex_info": codex_info
+            }
+
+            # 更新缓存和 UI（主线程）
+            def update_ui():
+                self.segment_states.finish_loading("claude_codex_management", cache_data)
+
+                # 如果还在 claude_codex_management segment，刷新面板
+                if self.selected_segment == "claude_codex_management":
+                    panel = self.claude_codex_management_panel
+                    if panel:
+                        panel.load_from_cache(cache_data)
+
+            self.app.call_from_thread(update_ui)
+
+        except Exception as e:
+            logger.error(f"Failed to load Claude Codex status: {e}")
+
+            def update_error():
+                self.segment_states.set_error("claude_codex_management", str(e))
+                if self.selected_segment == "claude_codex_management":
+                    self._show_error_message(f"Failed to load status: {str(e)[:100]}")
+
+            self.app.call_from_thread(update_error)
+
     def _display_package_manager_info(self, container: ScrollableContainer, pkg_info: dict) -> None:
         """Display Package Manager information in the container."""
         # Handle error case

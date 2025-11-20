@@ -106,13 +106,36 @@ class UIBuilders:
 
     @staticmethod
     def build_claude_codex_management_settings(screen, container: ScrollableContainer) -> None:
-        """构建 Claude Code & Codex 管理设置面板。"""
+        """构建 Claude Code & Codex 管理设置面板（带缓存支持）。"""
         from ..claude_codex_manager import ClaudeCodexManagementPanel
 
         container.styles.scrollbar_size = 1
-        panel = ClaudeCodexManagementPanel(screen.config_manager)
-        screen.claude_codex_management_panel = panel
+
+        # 第一层：Panel 实例缓存（避免重建 Widget）
+        if not screen.claude_codex_management_panel:
+            panel = ClaudeCodexManagementPanel(screen.config_manager)
+            screen.claude_codex_management_panel = panel
+        else:
+            panel = screen.claude_codex_management_panel
+
+        # 先挂载 Panel 到 DOM（确保节点存在）
         container.mount(panel)
+
+        # 第二层：检测数据缓存（避免重复检测）
+        state = screen.segment_states.get_state("claude_codex_management")
+        if state and state.is_loaded():
+            # 从缓存恢复检测数据
+            panel.load_from_cache(state.cache)
+        elif state and state.is_loading():
+            # 正在加载中，显示 loading 状态
+            panel.is_loading = True
+            panel._show_loading()
+        else:
+            # 首次加载，启动异步检测
+            screen.segment_states.start_loading("claude_codex_management")
+            panel.is_loading = True
+            panel._show_loading()
+            screen._load_claude_codex_status()
         if screen.current_panel_focus == "right":
             panel.refresh_action_labels()
 

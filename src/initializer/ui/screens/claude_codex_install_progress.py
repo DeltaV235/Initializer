@@ -44,14 +44,21 @@ class ClaudeCodexInstallProgress(ModalScreen[bool]):
     }
 
     #help-box {
+        dock: bottom;
+        width: 100%;
         height: 3;
-        background: $panel;
-        padding: 1;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        margin: 0;
     }
 
     .help-text {
-        color: $text;
+        width: 100%;
+        height: 1;
+        content-align: center middle;
         text-align: center;
+        color: $text-muted;
     }
     """
 
@@ -90,7 +97,7 @@ class ClaudeCodexInstallProgress(ModalScreen[bool]):
                 yield Static("Starting...", id="log-content")
 
             with Container(id="help-box"):
-                yield Static("Please wait...", id="help-text", classes="help-text")
+                yield Label("Please wait...", id="help-text", classes="help-text")
 
     def on_mount(self) -> None:
         """Start operation when modal is mounted."""
@@ -200,12 +207,12 @@ class ClaudeCodexInstallProgress(ModalScreen[bool]):
     def _update_help_text(self) -> None:
         """Update help text based on operation status."""
         try:
-            help_text = self.query_one("#help-text", Static)
+            help_text = self.query_one("#help-text", Label)
 
             if self.status == "success":
-                help_text.update("[green]✓[/green] Completed! [Esc/Q] Close")
+                help_text.update("✓ Completed! ESC/Q=Close")
             else:
-                help_text.update("[red]✗[/red] Failed! [Esc/Q] Close")
+                help_text.update("✗ Failed! ESC/Q=Close")
 
             logger.info(f"Operation completed with status: {self.status}")
 
