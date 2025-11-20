@@ -258,3 +258,13 @@
 - **核心输出**：`.claude/review-report-zsh-tmux.md`
 - **下一步建议**：若进入第三轮需执行交互验证（真实操作或单元测试），确保配置驱动能力附带测试
 - **记录人**：Codex
+### 2025-11-20 16:13 (UTC+8) Codex 审查记录
+- **任务**：[TASK_MARKER: 20251120-ZSH-SCROLL-REVIEW-V3] ZSH Manager 滚动修复第二次审查
+- **关键操作**：
+  - 运行 `sequential-thinking` 明确复审重点与潜在风险
+  - 使用 Serena `get_symbols_overview`/`find_symbol`/`search_for_pattern` 分析 `zsh_manager.py` 中 `navigate()`、`_register_action_entries()` 与 `_scroll_focus_into_view()` 的实现（当前会话未提供 code-index 工具，已记录改用 Serena）
+  - 检查 `.claude/codex-sessions.json` 未找到匹配 conversationId，记录在案等待主 AI 提供
+  - 完成 `.claude/review-report-zsh-scroll-fix.md` 第二次审查内容与评分
+- **核心输出**：`.claude/review-report-zsh-scroll-fix.md`
+- **下一步建议**：如需进一步保障，可在 Textual 端执行一次真实导航+焦点恢复流程录屏确认滚动行为
+- **记录人**：Codex
