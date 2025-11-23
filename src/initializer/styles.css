@@ -836,10 +836,14 @@ Toast {
 }
 
 /* Enhanced truncation for Claude Code specific components */
+/* Responsive width: 95% of parent with reasonable constraints */
+/* min-width: 30 ensures readability on narrow terminals (fits ~68 col terminals) */
+/* max-width removed to allow true percentage-based responsiveness */
 .tool-info-line {
     color: $text;
     margin: 0 0 0 0;
-    width: 100%;
+    width: 95%;
+    min-width: 30;
     text-wrap: wrap;
     max-height: 2;
     overflow: hidden;
@@ -849,7 +853,8 @@ Toast {
 .tool-action {
     color: $text;
     margin: 0 0 0 0;
-    width: 100%;
+    width: 95%;
+    min-width: 30;
     text-wrap: wrap;
     max-height: 2;
     overflow: hidden;
