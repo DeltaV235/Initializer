@@ -5,8 +5,9 @@ import os
 import re
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from ..utils.logger import get_logger
 
@@ -1745,13 +1746,24 @@ source $ZSH/oh-my-zsh.sh
             progress_callback: 进度回调函数
 
         Returns:
-            dict: {"success": bool, "error": str, "output": str}
+            dict: {"success": bool, "backup_paths": dict, "message": str, "logs": list}
         """
-        try:
-            import shutil
-            import time
+        logs = []
+        backup_paths = {}
 
-            logger.info("Starting oh-my-tmux installation")
+        def log(level, msg):
+            """Log helper function"""
+            logs.append(f"[{level.upper()}] {msg}")
+            if level == "info":
+                logger.info(msg)
+            elif level == "error":
+                logger.error(msg)
+            elif level == "success":
+                logger.info(msg)
+            progress_callback(msg)
+
+        try:
+            log("info", "Starting oh-my-tmux installation")
 
             # 从配置读取 oh-my-tmux 设置
             modules_config = self.config_manager.get_modules_config()
@@ -1760,8 +1772,13 @@ source $ZSH/oh-my-zsh.sh
             # 检查模块是否启用
             if not zsh_config or not zsh_config.enabled:
                 error_msg = "Zsh management module is not enabled in configuration"
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg, "output": ""}
+                log("error", error_msg)
+                return {
+                    "success": False,
+                    "backup_paths": backup_paths,
+                    "message": error_msg,
+                    "logs": logs
+                }
 
             # 从 settings 中获取嵌套配置
             tmux_config = zsh_config.settings.get("tmux", {})
@@ -1778,64 +1795,100 @@ source $ZSH/oh-my-zsh.sh
             git_check = subprocess.run(["which", "git"], capture_output=True)
             if git_check.returncode != 0:
                 error_msg = "Git is not installed. Please install git first."
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg, "output": ""}
+                log("error", error_msg)
+                return {
+                    "success": False,
+                    "backup_paths": backup_paths,
+                    "message": error_msg,
+                    "logs": logs
+                }
 
-            progress_callback("Git found, proceeding with installation...")
+            log("info", "Git found, proceeding with installation...")
 
-            # 检查目标目录是否已存在
+            # 备份 .tmux 目录（如果存在）
             tmux_dir = Path.home() / ".tmux"
             if tmux_dir.exists():
-                backup_path = Path.home() / f".tmux.backup.{int(time.time())}"
-                progress_callback(f"Backing up existing .tmux to {backup_path.name}...")
-                shutil.move(str(tmux_dir), str(backup_path))
-                logger.info(f"Backup created: {backup_path}")
+                timestamp = int(datetime.now().timestamp())
+                backup_path = f"{tmux_dir}.backup.{timestamp}"
+                log("info", f"Backing up existing .tmux to: {backup_path}")
+                subprocess.run(["mv", str(tmux_dir), backup_path], check=True)
+                backup_paths["tmux_dir"] = backup_path
+                log("success", f"Backup created at: {backup_path}")
 
             # 克隆仓库
-            progress_callback(f"Cloning oh-my-tmux repository from {repo_url}...")
-            clone_cmd = [
-                "git",
-                "clone",
-                repo_url,
-                str(tmux_dir),
-            ]
-            clone_result = await self._run_command(
-                clone_cmd, progress_callback, timeout=120
+            log("info", f"Cloning oh-my-tmux repository from {repo_url}...")
+            clone_result = subprocess.run(
+                ["git", "clone", repo_url, str(tmux_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120
             )
 
-            if not clone_result["success"]:
-                return clone_result
+            if clone_result.returncode != 0:
+                log("error", "Failed to clone oh-my-tmux repository")
+                # 自动回滚 .tmux 备份
+                if "tmux_dir" in backup_paths:
+                    log("info", "Rolling back: restoring .tmux backup")
+                    subprocess.run(["mv", backup_paths["tmux_dir"], str(tmux_dir)])
+                return {
+                    "success": False,
+                    "backup_paths": backup_paths,
+                    "message": "Git clone failed",
+                    "logs": logs
+                }
 
-            # 创建符号链接
-            progress_callback("Creating symbolic link for .tmux.conf...")
+            log("success", "Repository cloned successfully")
+
+            # 备份并创建符号链接 .tmux.conf
+            log("info", "Creating symbolic link for .tmux.conf...")
             config_src = tmux_dir / ".tmux.conf"
             config_dst = Path.home() / ".tmux.conf"
 
             if config_dst.exists() or config_dst.is_symlink():
-                backup_config = Path.home() / f".tmux.conf.backup.{int(time.time())}"
-                shutil.move(str(config_dst), str(backup_config))
-                logger.info(f"Backup existing .tmux.conf: {backup_config}")
+                timestamp = int(datetime.now().timestamp())
+                backup_path = f"{config_dst}.backup.{timestamp}"
+                log("info", f"Backing up existing .tmux.conf to: {backup_path}")
+                subprocess.run(["mv", str(config_dst), backup_path], check=True)
+                backup_paths["tmux_conf"] = backup_path
+                log("success", f"Backup created at: {backup_path}")
 
             config_dst.symlink_to(config_src)
-            progress_callback("Symbolic link created successfully.")
+            log("success", "Symbolic link created successfully")
 
-            # 复制本地配置文件
-            progress_callback("Copying local configuration file...")
-            local_config_src = tmux_dir / ".tmux.conf.local"
-            local_config_dst = Path.home() / ".tmux.conf.local"
+            # 备份并复制本地配置文件 .tmux.conf.local
+            log("info", "Copying local configuration file...")
+            local_src = tmux_dir / ".tmux.conf.local"
+            local_dst = Path.home() / ".tmux.conf.local"
 
-            if not local_config_dst.exists():
-                shutil.copy(str(local_config_src), str(local_config_dst))
-                progress_callback("Local configuration file copied.")
+            if local_dst.exists():
+                timestamp = int(datetime.now().timestamp())
+                backup_path = f"{local_dst}.backup.{timestamp}"
+                log("info", f"Backing up existing .tmux.conf.local to: {backup_path}")
+                subprocess.run(["mv", str(local_dst), backup_path], check=True)
+                backup_paths["tmux_local"] = backup_path
+                log("success", f"Backup created at: {backup_path}")
 
-            progress_callback("oh-my-tmux installed successfully!")
+            subprocess.run(["cp", str(local_src), str(local_dst)], check=True)
+            log("success", "Local configuration file copied")
+
+            log("success", "oh-my-tmux installed successfully!")
             logger.info("oh-my-tmux installation completed")
 
-            return {"success": True, "error": "", "output": "Installation completed"}
+            return {
+                "success": True,
+                "backup_paths": backup_paths,
+                "message": "Installation completed",
+                "logs": logs
+            }
 
         except Exception as exc:
             logger.error(f"oh-my-tmux installation failed: {exc}", exc_info=True)
-            return {"success": False, "error": str(exc), "output": ""}
+            return {
+                "success": False,
+                "backup_paths": backup_paths,
+                "message": str(exc),
+                "logs": logs
+            }
 
     async def uninstall_ohmytmux(
         self, progress_callback: Callable[[str], None]
@@ -1847,42 +1900,126 @@ source $ZSH/oh-my-zsh.sh
             progress_callback: 进度回调函数
 
         Returns:
-            dict: {"success": bool, "error": str, "output": str}
+            dict: {"success": bool, "backup_paths": dict, "message": str, "logs": list}
         """
+        logs = []
+        backup_paths = {}
+
+        def log(level, msg):
+            """Log helper function"""
+            logs.append(f"[{level.upper()}] {msg}")
+            progress_callback(msg)
+            if level == "info":
+                logger.info(msg)
+            elif level == "error":
+                logger.error(msg)
+
         try:
-            import shutil
+            log("info", "Starting oh-my-tmux uninstallation")
 
-            logger.info("Starting oh-my-tmux uninstallation")
+            # 生成统一的时间戳
+            timestamp = int(datetime.now().timestamp())
 
-            # 删除仓库目录
+            # 备份（而非删除）仓库目录
             tmux_dir = Path.home() / ".tmux"
             if tmux_dir.exists():
-                progress_callback("Removing oh-my-tmux repository...")
-                shutil.rmtree(str(tmux_dir))
-                logger.info("Repository removed")
+                backup_path = f"{tmux_dir}.removed.{timestamp}"
+                log("info", f"Removing oh-my-tmux (backed up to {backup_path})...")
+                subprocess.run(["mv", str(tmux_dir), backup_path], check=True)
+                backup_paths["tmux_dir"] = backup_path
+                log("success", "Repository removed")
 
-            # 删除符号链接
+            # 删除符号链接（符号链接可以直接删除）
             config_link = Path.home() / ".tmux.conf"
             if config_link.is_symlink():
-                progress_callback("Removing .tmux.conf symbolic link...")
+                log("info", "Removing .tmux.conf symbolic link...")
                 config_link.unlink()
-                logger.info("Symbolic link removed")
+                log("success", "Symbolic link removed")
 
-            # 删除本地配置文件
+            # 备份（而非删除）本地配置文件
             local_config = Path.home() / ".tmux.conf.local"
             if local_config.exists():
-                progress_callback("Removing .tmux.conf.local...")
-                local_config.unlink()
-                logger.info("Local config removed")
+                backup_path = f"{local_config}.removed.{timestamp}"
+                log("info", f"Removing .tmux.conf.local (backed up to {backup_path})...")
+                subprocess.run(["mv", str(local_config), backup_path], check=True)
+                backup_paths["tmux_local"] = backup_path
+                log("success", "Local config removed")
 
-            progress_callback("oh-my-tmux uninstalled successfully!")
+            log("success", "oh-my-tmux uninstalled successfully!")
             logger.info("oh-my-tmux uninstallation completed")
 
-            return {"success": True, "error": "", "output": "Uninstallation completed"}
+            return {
+                "success": True,
+                "backup_paths": backup_paths,
+                "message": "Uninstallation completed",
+                "logs": logs
+            }
 
         except Exception as exc:
             logger.error(f"oh-my-tmux uninstallation failed: {exc}", exc_info=True)
-            return {"success": False, "error": str(exc), "output": ""}
+            return {
+                "success": False,
+                "backup_paths": backup_paths,
+                "message": str(exc),
+                "logs": logs
+            }
+
+    @staticmethod
+    async def rollback_ohmytmux_installation(backup_paths: Dict[str, str]) -> Dict[str, any]:
+        """
+        回滚失败的 oh-my-tmux 安装。
+
+        Args:
+            backup_paths: 备份路径字典 {"tmux_dir": path1, "tmux_conf": path2, "tmux_local": path3}
+
+        Returns:
+            {"success": bool, "message": str}
+        """
+        from ..utils.logger import get_module_logger
+
+        logger = get_module_logger("zsh_manager")
+
+        if not backup_paths:
+            logger.warning("No backups to restore")
+            return {"success": False, "message": "No backup found"}
+
+        try:
+            restored = []
+
+            # 1. 清理失败的安装残留
+            tmux_dir = Path.home() / ".tmux"
+            if tmux_dir.exists():
+                subprocess.run(["rm", "-rf", str(tmux_dir)], check=True)
+
+            config_link = Path.home() / ".tmux.conf"
+            if config_link.exists() or config_link.is_symlink():
+                config_link.unlink()
+
+            # 2. 恢复 .tmux 目录备份
+            if "tmux_dir" in backup_paths and Path(backup_paths["tmux_dir"]).exists():
+                subprocess.run(["mv", backup_paths["tmux_dir"], str(tmux_dir)], check=True)
+                restored.append(".tmux")
+
+            # 3. 恢复 .tmux.conf 备份
+            if "tmux_conf" in backup_paths and Path(backup_paths["tmux_conf"]).exists():
+                subprocess.run(["mv", backup_paths["tmux_conf"], str(config_link)], check=True)
+                restored.append(".tmux.conf")
+
+            # 4. 恢复 .tmux.conf.local 备份
+            if "tmux_local" in backup_paths and Path(backup_paths["tmux_local"]).exists():
+                local_config = Path.home() / ".tmux.conf.local"
+                subprocess.run(["mv", backup_paths["tmux_local"], str(local_config)], check=True)
+                restored.append(".tmux.conf.local")
+
+            logger.info(f"Rollback successful: restored {', '.join(restored)}")
+            return {
+                "success": True,
+                "message": f"Configuration restored: {', '.join(restored)}"
+            }
+
+        except Exception as e:
+            logger.error(f"Rollback failed: {e}")
+            return {"success": False, "message": str(e)}
 
     async def _run_command(
         self,
