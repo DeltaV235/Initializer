@@ -1,5 +1,6 @@
 """Claude Code and Codex CLI management module."""
 
+import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,7 @@ class ClaudeCodeInfo:
     plugin_count: int = 0
     hook_count: int = 0
     global_memory_path: Optional[str] = None
+    installation_method: Optional[str] = None  # npm_global, manual, script, unknown
 
 
 @dataclass
@@ -36,10 +38,55 @@ class CodexInfo:
     agents_md_path: Optional[str] = None
     current_model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    installation_method: Optional[str] = None  # npm_global, manual, script, unknown
 
 
 class ClaudeCodexManager:
     """Claude Code and Codex CLI management."""
+
+    @staticmethod
+    async def _detect_installation_method(tool_name: str, cli_path: Optional[str]) -> str:
+        """检测工具的安装方式。
+
+        Args:
+            tool_name: 工具名称（claude 或 codex）
+            cli_path: CLI 可执行文件路径
+
+        Returns:
+            安装方式：npm_global, manual, script, unknown
+        """
+        if not cli_path:
+            return "unknown"
+
+        # npm 包名映射（CLI 名称 -> npm 包名）
+        npm_package_map = {
+            "claude": "@anthropic-ai/claude-code",
+            "codex": "@anthropics/codex"  # 注：需确认实际包名
+        }
+
+        # 检查是否通过 npm 全局安装
+        npm_package = npm_package_map.get(tool_name, tool_name)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "npm", "list", "-g", npm_package, "--depth=0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await process.communicate()
+            output = stdout.decode()
+            if process.returncode == 0 and npm_package in output:
+                logger.debug(f"{tool_name} installed via npm global ({npm_package})")
+                return "npm_global"
+        except Exception as e:
+            logger.debug(f"npm check failed: {e}")
+
+        # 检查路径是否在 node_modules 中
+        if "node_modules" in cli_path or "pnpm" in cli_path:
+            logger.debug(f"{tool_name} path contains node_modules/pnpm")
+            return "npm_global"
+
+        # 其他情况标记为手动安装
+        return "manual"
 
     @staticmethod
     async def detect_claude_code() -> ClaudeCodeInfo:
@@ -62,11 +109,18 @@ class ClaudeCodexManager:
 
         logger.debug(f"Claude Code detected: version={version}, path={path}")
 
-        # Step 2: Check config path
+        # Step 2: Detect installation method (before config check)
+        installation_method = await ClaudeCodexManager._detect_installation_method("claude", path)
+
+        # Step 3: Check config path
         config_path = Path.home() / ".claude"
         if not config_path.exists():
             logger.warning("Claude Code config directory not found")
-            return ClaudeCodeInfo(installed=True, version=version)
+            return ClaudeCodeInfo(
+                installed=True,
+                version=version,
+                installation_method=installation_method
+            )
 
         # Step 3: Read API Endpoint from settings.json
         api_endpoint = None
@@ -115,7 +169,8 @@ class ClaudeCodexManager:
 
         logger.info(
             f"Claude Code detection complete: version={version}, "
-            f"mcp={mcp_count}, agents={agent_count}, commands={command_count}"
+            f"mcp={mcp_count}, agents={agent_count}, commands={command_count}, "
+            f"install_method={installation_method}"
         )
 
         return ClaudeCodeInfo(
@@ -128,7 +183,8 @@ class ClaudeCodexManager:
             output_style_count=output_style_count,
             plugin_count=plugin_count,
             hook_count=hook_count,
-            global_memory_path=global_memory_path
+            global_memory_path=global_memory_path,
+            installation_method=installation_method
         )
 
     @staticmethod
@@ -152,11 +208,18 @@ class ClaudeCodexManager:
 
         logger.debug(f"Codex detected: version={version}, path={path}")
 
-        # Step 2: Check config path
+        # Step 2: Detect installation method (before config check)
+        installation_method = await ClaudeCodexManager._detect_installation_method("codex", path)
+
+        # Step 3: Check config path
         config_path = Path.home() / ".codex"
         if not config_path.exists():
             logger.warning("Codex config directory not found")
-            return CodexInfo(installed=True, version=version)
+            return CodexInfo(
+                installed=True,
+                version=version,
+                installation_method=installation_method
+            )
 
         # Step 3: Read configuration from config.toml
         api_endpoint = None
@@ -241,7 +304,8 @@ class ClaudeCodexManager:
 
         logger.info(
             f"Codex detection complete: version={version}, "
-            f"model={current_model}, mcp={mcp_count}"
+            f"model={current_model}, mcp={mcp_count}, "
+            f"install_method={installation_method}"
         )
 
         return CodexInfo(
@@ -251,7 +315,8 @@ class ClaudeCodexManager:
             mcp_count=mcp_count,
             agents_md_path=agents_md_path,
             current_model=current_model,
-            reasoning_effort=reasoning_effort
+            reasoning_effort=reasoning_effort,
+            installation_method=installation_method
         )
 
     @staticmethod

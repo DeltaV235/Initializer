@@ -16,7 +16,6 @@ from ...modules.claude_codex_manager import (
     CodexInfo
 )
 from ...utils.logger import get_ui_logger
-from ...utils.text_utils import truncate_text_two_lines
 
 logger = get_ui_logger("claude_codex_management")
 
@@ -31,20 +30,6 @@ ClaudeCodexManagementPanel {
     padding: 1;
     width: 100%;
     scrollbar-size-vertical: 1;
-}
-
-.tool-info-line {
-    color: $text;
-    margin: 0 0 0 0;
-    width: 100%;
-    text-wrap: wrap;
-}
-
-.tool-action {
-    color: $text;
-    margin: 0 0 0 0;
-    width: 100%;
-    text-wrap: wrap;
 }
 
 .loading-text {
@@ -223,8 +208,7 @@ class ClaudeCodexManagementPanel(Widget):
                 else:
                     for mcp in mcp_list:
                         mcp_info = f"{mcp['name']}: {mcp['command']}"
-                        truncated_mcp_info = truncate_text_two_lines(mcp_info, max_line_length=70)
-                        widgets.append(Label(f"    - {truncated_mcp_info}", classes="tool-info-line"))
+                        widgets.append(Label(f"    - {mcp_info}", classes="tool-info-line"))
 
             # 全局记忆 (CLAUDE.md)
             if self.claude_info.global_memory_path:
@@ -250,8 +234,7 @@ class ClaudeCodexManagementPanel(Widget):
                 else:
                     for agent in agents:
                         agent_info = f"{agent['name']}: {agent['description']}"
-                        truncated_agent_info = truncate_text_two_lines(agent_info, max_line_length=70)
-                        widgets.append(Label(f"    - {truncated_agent_info}", classes="tool-info-line"))
+                        widgets.append(Label(f"    - {agent_info}", classes="tool-info-line"))
 
             # Commands（可展开）
             command_text = f"Commands: {self.claude_info.command_count} [Press Enter]"
@@ -270,8 +253,7 @@ class ClaudeCodexManagementPanel(Widget):
                 else:
                     for cmd in commands:
                         command_info = f"{cmd['name']}: {cmd['description']}"
-                        truncated_command_info = truncate_text_two_lines(command_info, max_line_length=70)
-                        widgets.append(Label(f"    - {truncated_command_info}", classes="tool-info-line"))
+                        widgets.append(Label(f"    - {command_info}", classes="tool-info-line"))
 
             # Output Styles（可展开）
             output_style_text = f"Output Styles: {self.claude_info.output_style_count} [Press Enter]"
@@ -290,8 +272,7 @@ class ClaudeCodexManagementPanel(Widget):
                 else:
                     for style in output_styles:
                         style_info = f"{style['name']}: {style['description']}"
-                        truncated_style_info = truncate_text_two_lines(style_info, max_line_length=70)
-                        widgets.append(Label(f"    - {truncated_style_info}", classes="tool-info-line"))
+                        widgets.append(Label(f"    - {style_info}", classes="tool-info-line"))
 
             # Plugins
             plugin_text = f"  Plugins: {self.claude_info.plugin_count}"
@@ -353,8 +334,7 @@ class ClaudeCodexManagementPanel(Widget):
                 else:
                     for mcp in mcp_list:
                         mcp_info = f"{mcp['name']}: {mcp['command']}"
-                        truncated_mcp_info = truncate_text_two_lines(mcp_info, max_line_length=70)
-                        widgets.append(Label(f"    - {truncated_mcp_info}", classes="tool-info-line"))
+                        widgets.append(Label(f"    - {mcp_info}", classes="tool-info-line"))
 
             # AGENTS.md
             if self.codex_info.agents_md_path:
@@ -530,28 +510,24 @@ class ClaudeCodexManagementPanel(Widget):
         Args:
             tool_name: 工具名称（'claude' 或 'codex'）
         """
-        from .claude_codex_install_confirm import ClaudeCodexInstallConfirm
+        from .claude_codex_uninstall_info_modal import ClaudeCodexUninstallInfoModal
 
-        # 准备卸载命令
-        commands = [
-            f"# Remove {tool_name} configuration directory",
-            f"rm -rf ~/.{tool_name}",
-            f"# Note: You may need to manually remove the CLI binary"
-        ]
+        logger.debug(f"Opening uninstall information for {tool_name}")
 
-        logger.debug(f"Opening uninstall confirmation for {tool_name}")
+        # 获取工具信息以确定安装方式
+        tool_info = self.claude_info if tool_name == "claude" else self.codex_info
+        installation_method = tool_info.installation_method if tool_info else "unknown"
 
-        # 打开确认弹窗
-        confirm_modal = ClaudeCodexInstallConfirm(
+        # 打开信息展示弹窗，传递安装方式
+        info_modal = ClaudeCodexUninstallInfoModal(
             tool_name=tool_name,
-            operation="uninstall",
-            commands=commands
+            installation_method=installation_method
         )
 
         self.app.push_screen(
-            confirm_modal,
-            callback=lambda confirmed: self._handle_confirm(
-                confirmed, tool_name, "uninstall", commands
+            info_modal,
+            callback=lambda acknowledged: self._handle_uninstall_info_acknowledged(
+                acknowledged, tool_name
             )
         )
 
@@ -625,6 +601,22 @@ class ClaudeCodexManagementPanel(Widget):
         # 独立 Screen 模式下，使用 Panel 自有的加载逻辑
         logger.debug("Reloading tool status after operation (standalone mode)")
         self._load_status()
+
+    def _handle_uninstall_info_acknowledged(
+        self, acknowledged: bool, tool_name: str
+    ) -> None:
+        """处理卸载信息确认结果。
+
+        Args:
+            acknowledged: 用户是否已查看卸载信息
+            tool_name: 工具名称
+        """
+        if acknowledged:
+            logger.info(f"User acknowledged uninstall information for {tool_name}")
+            # 卸载信息已查看，刷新状态（因为配置目录未删除，状态可能没变化）
+            self._load_status()
+        else:
+            logger.info(f"User dismissed uninstall information for {tool_name}")
 
     def _toggle_expand(self, item_key: str) -> None:
         """切换展开/折叠状态。
