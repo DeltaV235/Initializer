@@ -124,20 +124,30 @@ class UIBuilders:
         # 第二层：检测数据缓存（避免重复检测）
         state = screen.segment_states.get_state("claude_codex_management")
         if state and state.is_loaded():
-            # 从缓存恢复检测数据
-            panel.load_from_cache(state.cache)
+            # 关键修复：使用 call_after_refresh 确保 DOM 完成挂载后再恢复缓存
+            # 这是为了避免第二次进入时 query_one 找不到节点的竞态问题
+            cache_data = state.cache
+
+            def restore_from_cache():
+                panel.load_from_cache(cache_data)
+                if screen.current_panel_focus == "right":
+                    panel.refresh_action_labels()
+
+            screen.call_after_refresh(restore_from_cache)
         elif state and state.is_loading():
             # 正在加载中，显示 loading 状态
             panel.is_loading = True
             panel._show_loading()
+            if screen.current_panel_focus == "right":
+                panel.refresh_action_labels()
         else:
             # 首次加载，启动异步检测
             screen.segment_states.start_loading("claude_codex_management")
             panel.is_loading = True
             panel._show_loading()
             screen._load_claude_codex_status()
-        if screen.current_panel_focus == "right":
-            panel.refresh_action_labels()
+            if screen.current_panel_focus == "right":
+                panel.refresh_action_labels()
 
     @staticmethod
     def build_app_settings(screen, container: ScrollableContainer) -> None:
