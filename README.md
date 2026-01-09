@@ -1,6 +1,8 @@
 # Linux System Initializer
 
-A modern, production-grade Terminal User Interface (TUI) application for comprehensive Linux system initialization and configuration. Built with Python Rich/Textual framework, featuring 9 fully implemented modules with 23,000+ lines of code.
+English | [简体中文](docs/README_zh-CN.md)
+
+A modern Terminal User Interface (TUI) application for comprehensive Linux system initialization and configuration. Built with Python Rich/Textual framework.
 
 ## 🌟 Features
 
@@ -93,20 +95,20 @@ The application is designed for **keyboard-first operation**:
 For non-WSL/macOS/Windows environments, sync and execute on remote Linux server:
 
 ```bash
-# Sync to default remote (root@192.168.0.33:~/Initializer)
+# Sync to default remote (user@192.168.1.100:~/Initializer)
 tools/sync-to-remote.sh
 
 # Dry run to preview changes
 tools/sync-to-remote.sh -n
 
 # Custom host/user/destination
-tools/sync-to-remote.sh -H 192.168.0.33 -u root -D ~/Initializer
+tools/sync-to-remote.sh -H 192.168.1.100 -u user -D ~/Initializer
 ```
 
 Then on the remote server:
 
 ```bash
-ssh root@192.168.0.33
+ssh user@192.168.1.100
 cd ~/Initializer
 ./install.sh
 ./run.sh
