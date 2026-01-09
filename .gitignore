@@ -96,7 +96,6 @@ dmypy.json
 
 # 开发临时目录
 developer/
-docs/
 
 # Node.js 文件（Python项目不需要）
 package-lock.json
